@@ -3,7 +3,7 @@ import { getScoresForPerformance } from '@/lib/data';
 
 export async function GET(
   request: Request,
-  { params }: { params: { performanceId: string } }
+  { params }: { params: Promise<{ performanceId: string }> }
 ) {
   try {
     const { performanceId } = await params;

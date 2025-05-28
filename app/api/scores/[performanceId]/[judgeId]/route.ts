@@ -3,7 +3,7 @@ import { db } from '@/lib/data';
 
 export async function GET(
   request: Request,
-  { params }: { params: { performanceId: string; judgeId: string } }
+  { params }: { params: Promise<{ performanceId: string; judgeId: string }> }
 ) {
   try {
     const { performanceId, judgeId } = await params;
