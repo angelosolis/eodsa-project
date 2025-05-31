@@ -2,29 +2,43 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { DANCE_STYLES } from '@/lib/types';
+
+interface DancerForm {
+  name: string;
+  age: string;
+  style: string;
+  nationalId: string;
+}
+
+interface RegistrationForm {
+  type: 'studio' | 'private';
+  name: string;
+  email: string;
+  phone: string;
+  studioName: string;
+  studioAddress: string;
+  studioContactPerson: string;
+  studioRegistrationNumber: string;
+  dancers: DancerForm[];
+}
 
 export default function RegisterPage() {
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<RegistrationForm>({
+    type: 'studio',
     name: '',
     email: '',
     phone: '',
-    type: 'studio' as 'studio' | 'private',
-    studioName: ''
+    studioName: '',
+    studioAddress: '',
+    studioContactPerson: '',
+    studioRegistrationNumber: '',
+    dancers: [{ name: '', age: '', style: '', nationalId: '' }]
   });
+  
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSubmitting(true);
-    
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    console.log('Registration data:', formData);
-    setSubmitted(true);
-    setIsSubmitting(false);
-  };
+  const [eodsaId, setEodsaId] = useState('');
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -32,6 +46,99 @@ export default function RegisterPage() {
       ...prev,
       [name]: value
     }));
+  };
+
+  const handleDancerChange = (index: number, field: keyof DancerForm, value: string) => {
+    setFormData(prev => ({
+      ...prev,
+      dancers: prev.dancers.map((dancer, i) => 
+        i === index ? { ...dancer, [field]: value } : dancer
+      )
+    }));
+  };
+
+  const addDancer = () => {
+    setFormData(prev => ({
+      ...prev,
+      dancers: [...prev.dancers, { name: '', age: '', style: '', nationalId: '' }]
+    }));
+  };
+
+  const removeDancer = (index: number) => {
+    if (formData.dancers.length > 1) {
+      setFormData(prev => ({
+        ...prev,
+        dancers: prev.dancers.filter((_, i) => i !== index)
+      }));
+    }
+  };
+
+  const handleTypeChange = (type: 'studio' | 'private') => {
+    setFormData(prev => ({
+      ...prev,
+      type,
+      dancers: type === 'private' ? [{ name: '', age: '', style: '', nationalId: '' }] : prev.dancers
+    }));
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    
+    try {
+      // Validate dancers
+      const validDancers = formData.dancers.filter(dancer => 
+        dancer.name && dancer.age && dancer.style && dancer.nationalId
+      );
+      
+      if (validDancers.length === 0) {
+        alert('Please add at least one dancer with complete information.');
+        setIsSubmitting(false);
+        return;
+      }
+
+      // Prepare registration data
+      const registrationData = {
+        name: formData.type === 'studio' ? formData.studioName : formData.name,
+        email: formData.email,
+        phone: formData.phone,
+        type: formData.type,
+        studioName: formData.type === 'studio' ? formData.studioName : undefined,
+        studioInfo: formData.type === 'studio' ? {
+          address: formData.studioAddress,
+          contactPerson: formData.studioContactPerson,
+          registrationNumber: formData.studioRegistrationNumber
+        } : undefined,
+        dancers: validDancers.map(dancer => ({
+          name: dancer.name,
+          age: parseInt(dancer.age),
+          style: dancer.style,
+          nationalId: dancer.nationalId
+        }))
+      };
+
+      const response = await fetch('/api/contestants', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(registrationData),
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        setEodsaId(result.eodsaId);
+        setSubmitted(true);
+      } else {
+        const error = await response.json();
+        alert(`Registration failed: ${error.error}`);
+      }
+    } catch (error) {
+      console.error('Registration error:', error);
+      alert('Registration failed. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   if (submitted) {
@@ -45,21 +152,37 @@ export default function RegisterPage() {
               </svg>
             </div>
             <h2 className="text-2xl font-bold text-gray-900 mb-2">Registration Successful!</h2>
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+              <p className="text-sm text-blue-800 font-medium">Your E-O-D-S-A ID:</p>
+              <p className="text-lg font-bold text-blue-900">{eodsaId}</p>
+              <p className="text-xs text-blue-600 mt-1">Please save this ID for future reference</p>
+            </div>
             <p className="text-gray-600 mb-6">
-              Thank you for registering. You will receive a confirmation email shortly.
+              Thank you for registering. You can now proceed to enter events using your E-O-D-S-A ID.
             </p>
             <div className="space-y-3">
               <Link 
-                href="/register" 
+                href={`/event-entry?eodsaId=${eodsaId}`}
                 className="block w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-center"
+              >
+                Enter Event Now
+              </Link>
+              <Link 
+                href="/register" 
+                className="block w-full px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-center"
                 onClick={() => {
                   setSubmitted(false);
+                  setEodsaId('');
                   setFormData({
+                    type: 'studio',
                     name: '',
                     email: '',
                     phone: '',
-                    type: 'studio',
-                    studioName: ''
+                    studioName: '',
+                    studioAddress: '',
+                    studioContactPerson: '',
+                    studioRegistrationNumber: '',
+                    dancers: [{ name: '', age: '', style: '', nationalId: '' }]
                   });
                 }}
               >
@@ -81,7 +204,7 @@ export default function RegisterPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
       <div className="container mx-auto px-4 py-16">
-        <div className="max-w-2xl mx-auto">
+        <div className="max-w-4xl mx-auto">
           <div className="text-center mb-8">
             <Link href="/" className="inline-flex items-center text-blue-600 hover:text-blue-700 mb-4">
               <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -93,97 +216,259 @@ export default function RegisterPage() {
               Contestant Registration
             </h1>
             <p className="text-xl text-gray-600">
-              Register for the competition by filling out the form below.
+              Register for the E-O-D-S-A competition and receive your permanent ID.
             </p>
           </div>
 
           <div className="bg-white rounded-xl shadow-lg p-8">
-            <form onSubmit={handleSubmit} className="space-y-6">
-              {/* Registration Type */}
+            <form onSubmit={handleSubmit} className="space-y-8">
+              {/* Registration Type Toggle */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-gray-700 mb-4">
                   Registration Type
                 </label>
-                <select
-                  name="type"
-                  value={formData.type}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  required
-                >
-                  <option value="studio">Studio Registration</option>
-                  <option value="private">Private Registration</option>
-                </select>
+                <div className="flex space-x-4">
+                  <button
+                    type="button"
+                    onClick={() => handleTypeChange('studio')}
+                    className={`flex-1 px-6 py-4 rounded-lg border-2 transition-colors ${
+                      formData.type === 'studio'
+                        ? 'border-blue-500 bg-blue-50 text-blue-700'
+                        : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400'
+                    }`}
+                  >
+                    <div className="text-center">
+                      <div className="text-lg font-semibold">Studio Registration</div>
+                      <div className="text-sm">Register multiple dancers from your studio</div>
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleTypeChange('private')}
+                    className={`flex-1 px-6 py-4 rounded-lg border-2 transition-colors ${
+                      formData.type === 'private'
+                        ? 'border-blue-500 bg-blue-50 text-blue-700'
+                        : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400'
+                    }`}
+                  >
+                    <div className="text-center">
+                      <div className="text-lg font-semibold">Private Registration</div>
+                      <div className="text-sm">Register as an individual dancer</div>
+                    </div>
+                  </button>
+                </div>
               </div>
 
-              {/* Name */}
-              <div>
-                <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">
-                  Full Name *
-                </label>
-                <input
-                  type="text"
-                  id="name"
-                  name="name"
-                  value={formData.name}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  required
-                />
-              </div>
-
-              {/* Email */}
-              <div>
-                <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
-                  Email Address *
-                </label>
-                <input
-                  type="email"
-                  id="email"
-                  name="email"
-                  value={formData.email}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  required
-                />
-              </div>
-
-              {/* Phone */}
-              <div>
-                <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-2">
-                  Phone Number *
-                </label>
-                <input
-                  type="tel"
-                  id="phone"
-                  name="phone"
-                  value={formData.phone}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  required
-                />
-              </div>
-
-              {/* Studio Name (conditional) */}
-              {formData.type === 'studio' && (
+              {/* Contact Information */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                  <label htmlFor="studioName" className="block text-sm font-medium text-gray-700 mb-2">
-                    Studio Name *
+                  <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
+                    Email Address *
+                  </label>
+                  <input
+                    type="email"
+                    id="email"
+                    name="email"
+                    value={formData.email}
+                    onChange={handleInputChange}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    required
+                  />
+                </div>
+                <div>
+                  <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-2">
+                    Phone Number *
+                  </label>
+                  <input
+                    type="tel"
+                    id="phone"
+                    name="phone"
+                    value={formData.phone}
+                    onChange={handleInputChange}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    required
+                  />
+                </div>
+              </div>
+
+              {/* Studio Information (if studio type) */}
+              {formData.type === 'studio' && (
+                <div className="space-y-6">
+                  <h3 className="text-lg font-semibold text-gray-900 border-b pb-2">Studio Information</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <label htmlFor="studioName" className="block text-sm font-medium text-gray-700 mb-2">
+                        Studio Name *
+                      </label>
+                      <input
+                        type="text"
+                        id="studioName"
+                        name="studioName"
+                        value={formData.studioName}
+                        onChange={handleInputChange}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        required={formData.type === 'studio'}
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="studioContactPerson" className="block text-sm font-medium text-gray-700 mb-2">
+                        Contact Person *
+                      </label>
+                      <input
+                        type="text"
+                        id="studioContactPerson"
+                        name="studioContactPerson"
+                        value={formData.studioContactPerson}
+                        onChange={handleInputChange}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        required={formData.type === 'studio'}
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label htmlFor="studioAddress" className="block text-sm font-medium text-gray-700 mb-2">
+                      Studio Address *
+                    </label>
+                    <input
+                      type="text"
+                      id="studioAddress"
+                      name="studioAddress"
+                      value={formData.studioAddress}
+                      onChange={handleInputChange}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      required={formData.type === 'studio'}
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="studioRegistrationNumber" className="block text-sm font-medium text-gray-700 mb-2">
+                      Studio Registration Number (Optional)
+                    </label>
+                    <input
+                      type="text"
+                      id="studioRegistrationNumber"
+                      name="studioRegistrationNumber"
+                      value={formData.studioRegistrationNumber}
+                      onChange={handleInputChange}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Private Registration Name */}
+              {formData.type === 'private' && (
+                <div>
+                  <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">
+                    Full Name *
                   </label>
                   <input
                     type="text"
-                    id="studioName"
-                    name="studioName"
-                    value={formData.studioName}
+                    id="name"
+                    name="name"
+                    value={formData.name}
                     onChange={handleInputChange}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    required={formData.type === 'studio'}
+                    required={formData.type === 'private'}
                   />
                 </div>
               )}
 
+              {/* Dancers Section */}
+              <div className="space-y-6">
+                <div className="flex justify-between items-center">
+                  <h3 className="text-lg font-semibold text-gray-900">
+                    {formData.type === 'studio' ? 'Dancers' : 'Dancer Information'}
+                  </h3>
+                  {formData.type === 'studio' && (
+                    <button
+                      type="button"
+                      onClick={addDancer}
+                      className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                    >
+                      Add Dancer
+                    </button>
+                  )}
+                </div>
+
+                {formData.dancers.map((dancer, index) => (
+                  <div key={index} className="border border-gray-200 rounded-lg p-6 space-y-4">
+                    <div className="flex justify-between items-center">
+                      <h4 className="font-medium text-gray-900">
+                        {formData.type === 'studio' ? `Dancer ${index + 1}` : 'Your Information'}
+                      </h4>
+                      {formData.type === 'studio' && formData.dancers.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => removeDancer(index)}
+                          className="text-red-600 hover:text-red-700"
+                        >
+                          Remove
+                        </button>
+                      )}
+                    </div>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Full Name *
+                        </label>
+                        <input
+                          type="text"
+                          value={dancer.name}
+                          onChange={(e) => handleDancerChange(index, 'name', e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Age *
+                        </label>
+                        <input
+                          type="number"
+                          min="3"
+                          max="99"
+                          value={dancer.age}
+                          onChange={(e) => handleDancerChange(index, 'age', e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Primary Dance Style *
+                        </label>
+                        <select
+                          value={dancer.style}
+                          onChange={(e) => handleDancerChange(index, 'style', e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          required
+                        >
+                          <option value="">Select a style</option>
+                          {DANCE_STYLES.map(style => (
+                            <option key={style} value={style}>{style}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          National ID Number *
+                        </label>
+                        <input
+                          type="text"
+                          value={dancer.nationalId}
+                          onChange={(e) => handleDancerChange(index, 'nationalId', e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          required
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
               {/* Submit Button */}
-              <div className="pt-4">
+              <div className="pt-6">
                 <button
                   type="submit"
                   disabled={isSubmitting}
@@ -198,7 +483,7 @@ export default function RegisterPage() {
                       Registering...
                     </div>
                   ) : (
-                    'Register for Competition'
+                    'Complete Registration & Get E-O-D-S-A ID'
                   )}
                 </button>
               </div>
