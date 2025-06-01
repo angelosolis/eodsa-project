@@ -1,191 +1,185 @@
+'use client';
+
 import Link from 'next/link';
+import { useState } from 'react';
 
 export default function HomePage() {
+  const [eodsaId, setEodsaId] = useState('');
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+    <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50">
+      {/* Header */}
+      <header className="bg-white/90 backdrop-blur-lg shadow-xl border-b border-indigo-100">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center py-6">
+            <div className="flex items-center space-x-4">
+              <div className="w-12 h-12 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center">
+                <span className="text-white text-xl font-bold">E</span>
+              </div>
+              <div>
+                <h1 className="text-2xl font-black bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">
+                  EODSA Competition System
+                </h1>
+                <p className="text-sm text-gray-600 font-medium">Excellence in Dance through Competition</p>
+              </div>
+            </div>
+            <Link 
+              href="/portal/judge"
+              className="inline-flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-gray-500 to-gray-700 text-white rounded-lg hover:from-gray-600 hover:to-gray-800 transition-all duration-200 font-medium"
+            >
+              <span>🎯</span>
+              <span>Judge Portal</span>
+            </Link>
+          </div>
+        </div>
+      </header>
+
       {/* Hero Section */}
-      <div className="container mx-auto px-4 py-16">
-        <div className="text-center mb-16">
-          <h1 className="text-5xl font-bold text-gray-900 mb-6">
-            E-O-D-S-A Competition System
-          </h1>
-          <p className="text-xl text-gray-600 mb-8 max-w-3xl mx-auto">
-            Welcome to the official E-O-D-S-A dance competition management system. 
-            Register contestants, enter events, and track performances across multiple regions.
-          </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link 
-              href="/register" 
-              className="px-8 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-lg font-semibold"
-            >
-              Register Now
-            </Link>
-            <Link 
-              href="/event-entry" 
-              className="px-8 py-3 border-2 border-blue-600 text-blue-600 rounded-lg hover:bg-blue-50 transition-colors text-lg font-semibold"
-            >
-              Enter Event
-            </Link>
-          </div>
-        </div>
-
-        {/* Phase 1 Features */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-16">
-          {/* Registration */}
-          <div className="bg-white rounded-xl shadow-lg p-8 hover:shadow-xl transition-shadow">
-            <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mb-6">
-              <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
-              </svg>
+      <div className="relative overflow-hidden">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+          <div className="text-center mb-16">
+            <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-full mb-8 shadow-xl">
+              <span className="text-white text-3xl">🏆</span>
             </div>
-            <h3 className="text-xl font-bold text-gray-900 mb-4">Contestant Registration</h3>
-            <p className="text-gray-600 mb-6">
-              Register as a studio or private contestant. Get your permanent E-O-D-S-A ID and add dancer details.
+            <h2 className="text-5xl font-black text-gray-900 mb-6">
+              Welcome to <span className="bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">EODSA</span>
+            </h2>
+            <p className="text-xl text-gray-600 max-w-3xl mx-auto leading-relaxed">
+              Eastern Online Dance Sports Association - The premier platform for dance competition management. 
+              Register as a new competitor or enter events with your existing EODSA ID.
             </p>
-            <Link 
-              href="/register" 
-              className="inline-flex items-center text-blue-600 hover:text-blue-700 font-semibold"
-            >
-              Register Now
-              <svg className="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
-            </Link>
           </div>
 
-          {/* Event Entry */}
-          <div className="bg-white rounded-xl shadow-lg p-8 hover:shadow-xl transition-shadow">
-            <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center mb-6">
-              <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-              </svg>
-            </div>
-            <h3 className="text-xl font-bold text-gray-900 mb-4">Event Entry</h3>
-            <p className="text-gray-600 mb-6">
-              Enter performances by region, select participants, choose age categories, and calculate fees automatically.
-            </p>
-            <Link 
-              href="/event-entry" 
-              className="inline-flex items-center text-green-600 hover:text-green-700 font-semibold"
-            >
-              Enter Event
-              <svg className="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
-            </Link>
-          </div>
-
-          {/* Judge Scoring */}
-          <div className="bg-white rounded-xl shadow-lg p-8 hover:shadow-xl transition-shadow">
-            <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center mb-6">
-              <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
-              </svg>
-            </div>
-            <h3 className="text-xl font-bold text-gray-900 mb-4">Judge Scoring</h3>
-            <p className="text-gray-600 mb-6">
-              Secure judge login with performance scoring. Prevents duplicate scoring and tracks submission history.
-            </p>
-            <Link 
-              href="/judge/login" 
-              className="inline-flex items-center text-purple-600 hover:text-purple-700 font-semibold"
-            >
-              Judge Login
-              <svg className="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
-            </Link>
-          </div>
-        </div>
-
-        {/* Regions Section */}
-        <div className="bg-white rounded-xl shadow-lg p-8 mb-16">
-          <h2 className="text-2xl font-bold text-gray-900 mb-6 text-center">Competition Regions</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <div className="text-center">
-              <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <svg className="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
+          {/* Choice Cards */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 max-w-5xl mx-auto">
+            {/* New Registration */}
+            <div className="bg-white/80 backdrop-blur-lg rounded-3xl shadow-2xl border border-white/50 p-8 hover:scale-105 transition-all duration-300">
+              <div className="text-center">
+                <div className="w-16 h-16 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg">
+                  <span className="text-white text-2xl">🆕</span>
+                </div>
+                <h3 className="text-2xl font-bold text-gray-900 mb-4">New to EODSA?</h3>
+                <p className="text-gray-600 mb-8 leading-relaxed">
+                  Get started by registering your studio or private dancers. You'll receive your unique EODSA ID 
+                  and can immediately start entering competitions.
+                </p>
+                <Link 
+                  href="/register"
+                  className="block w-full px-8 py-4 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-2xl hover:from-emerald-600 hover:to-teal-700 transition-all duration-300 font-semibold text-lg shadow-lg hover:shadow-xl transform hover:scale-105"
+                >
+                  Register New Account
+                </Link>
+                <div className="mt-6 p-4 bg-emerald-50 rounded-xl border border-emerald-200">
+                  <h4 className="font-semibold text-emerald-800 mb-2">What you'll get:</h4>
+                  <ul className="text-sm text-emerald-700 space-y-1">
+                    <li>• Unique EODSA ID for all competitions</li>
+                    <li>• Ability to register multiple dancers</li>
+                    <li>• Access to all regional events</li>
+                    <li>• Performance tracking and rankings</li>
+                  </ul>
+                </div>
               </div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">Gauteng</h3>
-              <p className="text-gray-600">Main metropolitan region with multiple venues and categories</p>
             </div>
-            <div className="text-center">
-              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
+
+            {/* Existing Member */}
+            <div className="bg-white/80 backdrop-blur-lg rounded-3xl shadow-2xl border border-white/50 p-8 hover:scale-105 transition-all duration-300">
+              <div className="text-center">
+                <div className="w-16 h-16 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg">
+                  <span className="text-white text-2xl">🎪</span>
+                </div>
+                <h3 className="text-2xl font-bold text-gray-900 mb-4">Already have EODSA ID?</h3>
+                <p className="text-gray-600 mb-8 leading-relaxed">
+                  Enter competitions directly using your existing EODSA ID. Browse available events 
+                  and submit your performance entries.
+                </p>
+                
+                {/* Quick Entry with EODSA ID */}
+                <div className="space-y-4 mb-6">
+                  <div className="flex gap-3">
+                    <input
+                      type="text"
+                      value={eodsaId}
+                      onChange={(e) => setEodsaId(e.target.value)}
+                      placeholder="Enter your EODSA ID"
+                      className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 font-medium"
+                    />
+                    <Link 
+                      href={eodsaId ? `/event-entry?eodsaId=${eodsaId}` : '/event-entry'}
+                      className={`px-6 py-3 rounded-xl font-medium transition-all duration-200 ${
+                        eodsaId 
+                          ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white hover:from-indigo-600 hover:to-purple-700 shadow-lg hover:shadow-xl transform hover:scale-105' 
+                          : 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                      }`}
+                    >
+                      Go
+                    </Link>
+                  </div>
+                  <p className="text-xs text-gray-500">Or browse events first:</p>
+                  <Link 
+                    href="/event-entry"
+                    className="block w-full px-8 py-4 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-2xl hover:from-indigo-600 hover:to-purple-700 transition-all duration-300 font-semibold text-lg shadow-lg hover:shadow-xl transform hover:scale-105"
+                  >
+                    Browse & Enter Events
+                  </Link>
+                </div>
+
+                <div className="p-4 bg-indigo-50 rounded-xl border border-indigo-200">
+                  <h4 className="font-semibold text-indigo-800 mb-2">Competition Features:</h4>
+                  <ul className="text-sm text-indigo-700 space-y-1">
+                    <li>• Solo, Duet, Trio & Group categories</li>
+                    <li>• Multiple age groups and skill levels</li>
+                    <li>• Professional judging and scoring</li>
+                    <li>• Live rankings and results</li>
+                  </ul>
+                </div>
               </div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">Free State</h3>
-              <p className="text-gray-600">Central region hosting regional championships</p>
-            </div>
-            <div className="text-center">
-              <div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <svg className="w-8 h-8 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
-              </div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">Mpumalanga</h3>
-              <p className="text-gray-600">Eastern region with growing dance community</p>
             </div>
           </div>
-        </div>
 
-        {/* Performance Types */}
-        <div className="bg-white rounded-xl shadow-lg p-8 mb-16">
-          <h2 className="text-2xl font-bold text-gray-900 mb-6 text-center">Performance Categories</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <div className="text-center p-6 border border-gray-200 rounded-lg">
-              <div className="text-3xl mb-3">🕺</div>
-              <h3 className="font-semibold text-gray-900 mb-2">Solo</h3>
-              <p className="text-sm text-gray-600">Individual performances</p>
-            </div>
-            <div className="text-center p-6 border border-gray-200 rounded-lg">
-              <div className="text-3xl mb-3">👯</div>
-              <h3 className="font-semibold text-gray-900 mb-2">Duet</h3>
-              <p className="text-sm text-gray-600">Two-person performances</p>
-            </div>
-            <div className="text-center p-6 border border-gray-200 rounded-lg">
-              <div className="text-3xl mb-3">🎭</div>
-              <h3 className="font-semibold text-gray-900 mb-2">Trio</h3>
-              <p className="text-sm text-gray-600">Three-person performances</p>
-            </div>
-            <div className="text-center p-6 border border-gray-200 rounded-lg">
-              <div className="text-3xl mb-3">👥</div>
-              <h3 className="font-semibold text-gray-900 mb-2">Group</h3>
-              <p className="text-sm text-gray-600">4-30 person performances</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Admin Section */}
-        <div className="bg-gray-900 rounded-xl shadow-lg p-8 text-white">
-          <div className="text-center">
-            <h2 className="text-2xl font-bold mb-4">Administration</h2>
-            <p className="text-gray-300 mb-6">
-              Access admin features for managing competitions, viewing rankings, and system administration.
-            </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Link 
-                href="/admin/rankings" 
-                className="px-6 py-3 bg-white text-gray-900 rounded-lg hover:bg-gray-100 transition-colors font-semibold"
-              >
-                View Rankings
-              </Link>
-              <Link 
-                href="/judge/login" 
-                className="px-6 py-3 border border-white text-white rounded-lg hover:bg-white hover:text-gray-900 transition-colors font-semibold"
-              >
-                Judge Portal
-              </Link>
+          {/* Features Section */}
+          <div className="mt-20">
+            <h3 className="text-3xl font-bold text-center text-gray-900 mb-12">Why Choose EODSA?</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+              <div className="text-center">
+                <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-cyan-600 rounded-xl flex items-center justify-center mx-auto mb-4">
+                  <span className="text-white text-xl">🌍</span>
+                </div>
+                <h4 className="text-lg font-bold text-gray-900 mb-2">Regional Coverage</h4>
+                <p className="text-gray-600">Competitions across Gauteng, Free State, and Mpumalanga with standardized judging.</p>
+              </div>
+              <div className="text-center">
+                <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-600 rounded-xl flex items-center justify-center mx-auto mb-4">
+                  <span className="text-white text-xl">⚡</span>
+                </div>
+                <h4 className="text-lg font-bold text-gray-900 mb-2">Real-time Results</h4>
+                <p className="text-gray-600">Live scoring, instant rankings, and immediate feedback from professional judges.</p>
+              </div>
+              <div className="text-center">
+                <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl flex items-center justify-center mx-auto mb-4">
+                  <span className="text-white text-xl">🏅</span>
+                </div>
+                <h4 className="text-lg font-bold text-gray-900 mb-2">Professional Standards</h4>
+                <p className="text-gray-600">Certified judges, standardized scoring, and comprehensive performance tracking.</p>
+              </div>
             </div>
           </div>
         </div>
       </div>
+
+      {/* Footer */}
+      <footer className="bg-white/90 backdrop-blur-lg border-t border-indigo-100 mt-16">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="text-center">
+            <p className="text-gray-600 font-medium">
+              © 2024 Eastern Online Dance Sports Association. Excellence in Motion.
+            </p>
+            <div className="flex items-center justify-center mt-4 space-x-2">
+              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+              <span className="text-xs text-gray-500">System Online & Ready</span>
+            </div>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }

@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server';
-import { getAllJudges, addJudge } from '@/lib/data';
+import { db } from '@/lib/database';
 import bcrypt from 'bcryptjs';
 
 export async function GET() {
   try {
-    const judges = await getAllJudges();
+    const judges = await db.getAllJudges();
     
     return NextResponse.json({
       success: true,
@@ -41,10 +41,9 @@ export async function POST(request: Request) {
     }
 
     // Check if email already exists
-    const existingJudges = await getAllJudges();
-    const emailExists = existingJudges.some(judge => judge.email.toLowerCase() === email.toLowerCase());
+    const existingJudge = await db.getJudgeByEmail(email.toLowerCase().trim());
     
-    if (emailExists) {
+    if (existingJudge) {
       return NextResponse.json(
         { success: false, error: 'A judge with this email already exists' },
         { status: 400 }
@@ -55,11 +54,13 @@ export async function POST(request: Request) {
     const hashedPassword = await bcrypt.hash(password, 10);
 
     // Create the judge
-    const newJudge = await addJudge({
+    const newJudge = await db.createJudge({
       name: name.trim(),
       email: email.toLowerCase().trim(),
       password: hashedPassword,
-      isAdmin: Boolean(isAdmin)
+      isAdmin: Boolean(isAdmin),
+      specialization: [],
+      createdAt: new Date().toISOString()
     });
 
     // Return success without password

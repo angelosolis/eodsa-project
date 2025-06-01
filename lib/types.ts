@@ -27,33 +27,57 @@ export interface Contestant {
   eventEntries: EventEntry[];
 }
 
+// NEW: Events are competitions created by admin
+export interface Event {
+  id: string;
+  name: string; // e.g. "EODSA Regional Championships 2024 - Gauteng"
+  description: string;
+  region: 'Gauteng' | 'Free State' | 'Mpumalanga';
+  ageCategory: string;
+  performanceType: 'Solo' | 'Duet' | 'Trio' | 'Group';
+  eventDate: string;
+  registrationDeadline: string;
+  venue: string;
+  status: 'upcoming' | 'registration_open' | 'registration_closed' | 'in_progress' | 'completed';
+  maxParticipants?: number;
+  entryFee: number;
+  createdBy: string; // admin id
+  createdAt: string;
+}
+
 export interface EventEntry {
   id: string;
+  eventId: string; // NOW LINKS TO A SPECIFIC EVENT
   contestantId: string;
   eodsaId: string;
-  region: 'Gauteng' | 'Free State' | 'Mpumalanga';
-  performanceType: 'Solo' | 'Duet' | 'Trio' | 'Group';
   participantIds: string[]; // E-O-D-S-A-IDs of participating dancers
-  ageCategory: string;
   calculatedFee: number;
   paymentStatus: 'pending' | 'paid' | 'failed';
   paymentMethod?: 'credit_card' | 'bank_transfer';
   submittedAt: string;
   approved: boolean;
+  // EODSA Regional Entry Form fields
+  itemName: string;
+  choreographer: string;
+  mastery: string;
+  itemStyle: string;
+  estimatedDuration: number; // in minutes
 }
 
 export interface Performance {
   id: string;
+  eventId: string; // NOW LINKS TO EVENT
   eventEntryId: string;
   contestantId: string;
-  title: string;
-  region: string;
-  performanceType: string;
-  ageCategory: string;
+  title: string; // This maps to itemName
   participantNames: string[];
-  duration: number; // in minutes
+  duration: number; // in minutes (maps to estimatedDuration)
   scheduledTime?: string;
   status: 'scheduled' | 'in_progress' | 'completed' | 'cancelled';
+  // EODSA Regional Entry Form fields
+  choreographer: string;
+  mastery: string;
+  itemStyle: string;
 }
 
 export interface Judge {
@@ -62,8 +86,18 @@ export interface Judge {
   email: string;
   password: string; // hashed
   isAdmin: boolean;
-  region?: string;
   specialization?: string[];
+  createdAt: string;
+}
+
+// NEW: Direct judge-event assignments
+export interface JudgeEventAssignment {
+  id: string;
+  judgeId: string;
+  eventId: string;
+  assignedBy: string; // admin id who made the assignment
+  assignedAt: string;
+  status: 'active' | 'inactive';
 }
 
 export interface Score {
@@ -96,10 +130,8 @@ export interface FeeSchedule {
 
 export interface Ranking {
   id: string;
+  eventId: string;
   performanceId: string;
-  region: string;
-  ageCategory: string;
-  performanceType: string;
   totalScore: number;
   averageScore: number;
   rank: number;
@@ -139,5 +171,35 @@ export const DANCE_STYLES = [
   'Commercial',
   'Lyrical',
   'Acro',
+  'Other'
+];
+
+// EODSA Regional Entry Form Constants
+export const MASTERY_LEVELS = [
+  'Beginner',
+  'Intermediate', 
+  'Advanced',
+  'Open',
+  'Professional'
+];
+
+export const ITEM_STYLES = [
+  'Ballet - Classical Variation',
+  'Ballet - Contemporary Ballet',
+  'Ballet - Demi Character',
+  'Contemporary - Lyrical',
+  'Contemporary - Modern',
+  'Jazz - Commercial',
+  'Jazz - Musical Theatre',
+  'Jazz - Funk',
+  'Hip Hop - Old School',
+  'Hip Hop - New School',
+  'Hip Hop - Commercial',
+  'Tap - Traditional',
+  'Tap - Contemporary',
+  'Musical Theatre',
+  'Commercial Dance',
+  'Acrobatic Dance',
+  'Cultural/Traditional',
   'Other'
 ]; 

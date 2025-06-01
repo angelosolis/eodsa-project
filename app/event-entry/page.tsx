@@ -7,11 +7,17 @@ import { REGIONS, PERFORMANCE_TYPES, AGE_CATEGORIES } from '@/lib/types';
 
 interface EventEntryForm {
   eodsaId: string;
+  eventId: string;
   region: string;
   performanceType: string;
   participantIds: string[];
   ageCategory: string;
   paymentMethod: 'credit_card' | 'bank_transfer';
+  itemName: string;
+  choreographer: string;
+  mastery: string;
+  itemStyle: string;
+  estimatedDuration: number;
 }
 
 interface Contestant {
@@ -19,32 +25,94 @@ interface Contestant {
   eodsaId: string;
   name: string;
   email: string;
+  phone: string;
   type: 'studio' | 'private';
-  dancers: Array<{
+  studioName?: string;
+  dancers: {
     id: string;
     name: string;
     age: number;
     style: string;
-  }>;
+    nationalId: string;
+  }[];
 }
+
+interface Event {
+  id: string;
+  name: string;
+  description: string;
+  region: string;
+  ageCategory: string;
+  performanceType: string;
+  eventDate: string;
+  registrationDeadline: string;
+  venue: string;
+  status: string;
+  maxParticipants?: number;
+  entryFee: number;
+}
+
+// Mastery levels for EODSA competitions
+const MASTERY_LEVELS = [
+  'Beginner',
+  'Intermediate', 
+  'Advanced',
+  'Open',
+  'Professional'
+];
+
+// More specific item styles for EODSA
+const ITEM_STYLES = [
+  'Ballet - Classical Variation',
+  'Ballet - Contemporary Ballet',
+  'Ballet - Demi Character',
+  'Contemporary - Lyrical',
+  'Contemporary - Modern',
+  'Jazz - Commercial',
+  'Jazz - Musical Theatre',
+  'Jazz - Funk',
+  'Hip Hop - Old School',
+  'Hip Hop - New School',
+  'Hip Hop - Commercial',
+  'Tap - Traditional',
+  'Tap - Contemporary',
+  'Musical Theatre',
+  'Commercial Dance',
+  'Acrobatic Dance',
+  'Cultural/Traditional',
+  'Other'
+];
 
 export default function EventEntryPage() {
   const searchParams = useSearchParams();
   const [formData, setFormData] = useState<EventEntryForm>({
     eodsaId: searchParams?.get('eodsaId') || '',
+    eventId: '',
     region: '',
     performanceType: '',
     participantIds: [],
     ageCategory: '',
-    paymentMethod: 'credit_card'
+    paymentMethod: 'credit_card',
+    itemName: '',
+    choreographer: '',
+    mastery: '',
+    itemStyle: '',
+    estimatedDuration: 3
   });
   
   const [contestant, setContestant] = useState<Contestant | null>(null);
+  const [events, setEvents] = useState<Event[]>([]);
+  const [availableEvents, setAvailableEvents] = useState<Event[]>([]);
   const [calculatedFee, setCalculatedFee] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState('');
+
+  // Load events on component mount
+  useEffect(() => {
+    loadEvents();
+  }, []);
 
   // Load contestant data when E-O-D-S-A ID is provided
   useEffect(() => {
@@ -53,12 +121,55 @@ export default function EventEntryPage() {
     }
   }, [formData.eodsaId]);
 
-  // Calculate fee when relevant fields change
+  // Filter available events when contestant data changes
   useEffect(() => {
-    if (formData.ageCategory && formData.performanceType) {
-      calculateFee();
+    if (contestant && events.length > 0) {
+      filterAvailableEvents();
     }
-  }, [formData.ageCategory, formData.performanceType]);
+  }, [contestant, events]);
+
+  // Calculate fee when event is selected
+  useEffect(() => {
+    if (formData.eventId) {
+      const selectedEvent = events.find(e => e.id === formData.eventId);
+      if (selectedEvent) {
+        setCalculatedFee(selectedEvent.entryFee);
+        // Auto-populate fields from selected event
+        setFormData(prev => ({
+          ...prev,
+          region: selectedEvent.region,
+          ageCategory: selectedEvent.ageCategory,
+          performanceType: selectedEvent.performanceType
+        }));
+      }
+    }
+  }, [formData.eventId, events]);
+
+  const loadEvents = async () => {
+    try {
+      const response = await fetch('/api/events');
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          // Filter to only show events that are open for registration
+          const openEvents = data.events.filter((event: Event) => 
+            event.status === 'registration_open' || event.status === 'upcoming'
+          );
+          setEvents(openEvents);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load events:', error);
+    }
+  };
+
+  const filterAvailableEvents = () => {
+    if (!contestant) return;
+    
+    // For now, show all open events
+    // In the future, you might want to filter based on contestant's dancer ages, etc.
+    setAvailableEvents(events);
+  };
 
   const loadContestant = async (eodsaId: string) => {
     setIsLoading(true);
@@ -83,18 +194,6 @@ export default function EventEntryPage() {
       setError('Failed to load contestant data. Please try again.');
     } finally {
       setIsLoading(false);
-    }
-  };
-
-  const calculateFee = async () => {
-    try {
-      const response = await fetch(`/api/fee-calculation?ageCategory=${formData.ageCategory}&performanceType=${formData.performanceType}`);
-      if (response.ok) {
-        const data = await response.json();
-        setCalculatedFee(data.fee);
-      }
-    } catch (error) {
-      console.error('Failed to calculate fee:', error);
     }
   };
 
@@ -174,16 +273,19 @@ export default function EventEntryPage() {
       }
 
       const eventEntryData = {
+        eventId: formData.eventId,
         contestantId: contestant!.id,
         eodsaId: formData.eodsaId,
-        region: formData.region,
-        performanceType: formData.performanceType,
         participantIds: formData.participantIds,
-        ageCategory: formData.ageCategory,
         calculatedFee,
         paymentStatus: 'pending',
         paymentMethod: formData.paymentMethod,
-        approved: false
+        approved: false,
+        itemName: formData.itemName,
+        choreographer: formData.choreographer,
+        mastery: formData.mastery,
+        itemStyle: formData.itemStyle,
+        estimatedDuration: formData.estimatedDuration
       };
 
       const response = await fetch('/api/event-entries', {
@@ -220,9 +322,18 @@ export default function EventEntryPage() {
             <h2 className="text-2xl font-bold text-gray-900 mb-2">Event Entry Submitted!</h2>
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
               <p className="text-sm text-blue-800 font-medium">Entry Details:</p>
-              <p className="text-sm text-blue-900">{formData.region} - {formData.performanceType}</p>
-              <p className="text-sm text-blue-900">{formData.ageCategory}</p>
+              {(() => {
+                const selectedEvent = events.find(e => e.id === formData.eventId);
+                return selectedEvent ? (
+                  <>
+                    <p className="text-sm text-blue-900">{selectedEvent.name}</p>
+                    <p className="text-sm text-blue-900">{selectedEvent.region} - {selectedEvent.performanceType} ({selectedEvent.ageCategory})</p>
               <p className="text-lg font-bold text-blue-900">Fee: R{calculatedFee.toFixed(2)}</p>
+                  </>
+                ) : (
+                  <p className="text-sm text-blue-900">Event details not available</p>
+                );
+              })()}
             </div>
             <p className="text-gray-600 mb-6">
               Your event entry is pending approval. You will be contacted regarding payment and scheduling.
@@ -316,48 +427,46 @@ export default function EventEntryPage() {
             {/* Event Entry Form */}
             {contestant && (
               <form onSubmit={handleSubmit} className="space-y-8">
-                {/* Region Selection */}
+                {/* Event Selection */}
                 <div>
-                  <label htmlFor="region" className="block text-sm font-medium text-gray-700 mb-2">
-                    Region *
+                  <label htmlFor="eventId" className="block text-sm font-medium text-gray-700 mb-2">
+                    Select Event *
                   </label>
                   <select
-                    id="region"
-                    name="region"
-                    value={formData.region}
+                    id="eventId"
+                    name="eventId"
+                    value={formData.eventId}
                     onChange={handleInputChange}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     required
                   >
-                    <option value="">Select a region</option>
-                    {REGIONS.map(region => (
-                      <option key={region} value={region}>{region}</option>
+                    <option value="">Choose an event to enter</option>
+                    {availableEvents.map(event => (
+                      <option key={event.id} value={event.id}>
+                        {event.name} - {event.region} - {event.performanceType} ({event.ageCategory}) - R{event.entryFee}
+                      </option>
                     ))}
                   </select>
+                  {formData.eventId && (
+                    <div className="mt-2 p-3 bg-blue-50 rounded-lg">
+                      {(() => {
+                        const selectedEvent = availableEvents.find(e => e.id === formData.eventId);
+                        return selectedEvent ? (
+                          <div className="text-sm">
+                            <p><strong>Event:</strong> {selectedEvent.name}</p>
+                            <p><strong>Date:</strong> {new Date(selectedEvent.eventDate).toLocaleDateString()}</p>
+                            <p><strong>Venue:</strong> {selectedEvent.venue}</p>
+                            <p><strong>Registration Deadline:</strong> {new Date(selectedEvent.registrationDeadline).toLocaleDateString()}</p>
+                            <p><strong>Entry Fee:</strong> R{selectedEvent.entryFee.toFixed(2)}</p>
+                          </div>
+                        ) : null;
+                      })()}
                 </div>
-
-                {/* Performance Type */}
-                <div>
-                  <label htmlFor="performanceType" className="block text-sm font-medium text-gray-700 mb-2">
-                    Performance Type *
-                  </label>
-                  <select
-                    id="performanceType"
-                    name="performanceType"
-                    value={formData.performanceType}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    required
-                  >
-                    <option value="">Select performance type</option>
-                    {PERFORMANCE_TYPES.map(type => (
-                      <option key={type} value={type}>{type}</option>
-                    ))}
-                  </select>
+                  )}
                 </div>
 
                 {/* Participant Selection */}
-                {formData.performanceType && (
+                {formData.eventId && (
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Select Participants * 
@@ -384,24 +493,95 @@ export default function EventEntryPage() {
                   </div>
                 )}
 
-                {/* Age Category */}
+                {/* Item Name */}
                 <div>
-                  <label htmlFor="ageCategory" className="block text-sm font-medium text-gray-700 mb-2">
-                    Age Category *
+                  <label htmlFor="itemName" className="block text-sm font-medium text-gray-700 mb-2">
+                    Item Name *
+                  </label>
+                  <input
+                    type="text"
+                    id="itemName"
+                    name="itemName"
+                    value={formData.itemName}
+                    onChange={handleInputChange}
+                    placeholder="Enter item name"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    required
+                  />
+                </div>
+
+                {/* Choreographer */}
+                <div>
+                  <label htmlFor="choreographer" className="block text-sm font-medium text-gray-700 mb-2">
+                    Choreographer *
+                  </label>
+                  <input
+                    type="text"
+                    id="choreographer"
+                    name="choreographer"
+                    value={formData.choreographer}
+                    onChange={handleInputChange}
+                    placeholder="Enter choreographer name"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    required
+                  />
+                </div>
+
+                {/* Mastery */}
+                <div>
+                  <label htmlFor="mastery" className="block text-sm font-medium text-gray-700 mb-2">
+                    Mastery *
                   </label>
                   <select
-                    id="ageCategory"
-                    name="ageCategory"
-                    value={formData.ageCategory}
+                    id="mastery"
+                    name="mastery"
+                    value={formData.mastery}
                     onChange={handleInputChange}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     required
                   >
-                    <option value="">Select age category</option>
-                    {AGE_CATEGORIES.map(category => (
-                      <option key={category} value={category}>{category}</option>
+                    <option value="">Select mastery level</option>
+                    {MASTERY_LEVELS.map(level => (
+                      <option key={level} value={level}>{level}</option>
                     ))}
                   </select>
+                </div>
+
+                {/* Item Style */}
+                <div>
+                  <label htmlFor="itemStyle" className="block text-sm font-medium text-gray-700 mb-2">
+                    Item Style *
+                  </label>
+                  <select
+                    id="itemStyle"
+                    name="itemStyle"
+                    value={formData.itemStyle}
+                    onChange={handleInputChange}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    required
+                  >
+                    <option value="">Select item style</option>
+                    {ITEM_STYLES.map(style => (
+                      <option key={style} value={style}>{style}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Estimated Duration */}
+                <div>
+                  <label htmlFor="estimatedDuration" className="block text-sm font-medium text-gray-700 mb-2">
+                    Estimated Duration *
+                  </label>
+                  <input
+                    type="number"
+                    id="estimatedDuration"
+                    name="estimatedDuration"
+                    value={formData.estimatedDuration}
+                    onChange={handleInputChange}
+                    placeholder="Enter estimated duration in minutes"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    required
+                  />
                 </div>
 
                 {/* Fee Display */}
@@ -409,9 +589,14 @@ export default function EventEntryPage() {
                   <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
                     <h3 className="font-semibold text-blue-900 mb-2">Entry Fee</h3>
                     <p className="text-2xl font-bold text-blue-900">R{calculatedFee.toFixed(2)}</p>
+                    {(() => {
+                      const selectedEvent = events.find(e => e.id === formData.eventId);
+                      return selectedEvent ? (
                     <p className="text-sm text-blue-700">
-                      {formData.ageCategory} - {formData.performanceType}
+                          {selectedEvent.region} - {selectedEvent.performanceType} ({selectedEvent.ageCategory})
                     </p>
+                      ) : null;
+                    })()}
                   </div>
                 )}
 
@@ -454,12 +639,11 @@ export default function EventEntryPage() {
                     className="w-full px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
                     {isSubmitting ? (
-                      <div className="flex items-center justify-center">
-                        <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                        Submitting...
+                      <div className="flex items-center justify-center space-x-3">
+                        <div className="relative w-5 h-5">
+                          <div className="absolute inset-0 border-2 border-white/30 rounded-full"></div>
+                        </div>
+                        <span>Submitting...</span>
                       </div>
                     ) : (
                       `Submit Entry - R${calculatedFee.toFixed(2)}`

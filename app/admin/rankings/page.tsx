@@ -81,10 +81,10 @@ export default function AdminRankingsPage() {
 
   const getRankBadgeColor = (rank: number) => {
     switch (rank) {
-      case 1: return 'bg-yellow-100 text-yellow-800 border-yellow-300';
-      case 2: return 'bg-gray-100 text-gray-800 border-gray-300';
-      case 3: return 'bg-orange-100 text-orange-800 border-orange-300';
-      default: return 'bg-blue-100 text-blue-800 border-blue-300';
+      case 1: return 'bg-gradient-to-r from-yellow-400 to-yellow-600 text-white border-yellow-300 shadow-lg';
+      case 2: return 'bg-gradient-to-r from-gray-300 to-gray-500 text-white border-gray-400 shadow-lg';
+      case 3: return 'bg-gradient-to-r from-orange-400 to-orange-600 text-white border-orange-300 shadow-lg';
+      default: return 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white border-indigo-300 shadow-md';
     }
   };
 
@@ -119,58 +119,139 @@ export default function AdminRankingsPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading rankings...</p>
+          <div className="relative mb-8">
+            {/* Modern Spinner */}
+            <div className="w-16 h-16 mx-auto">
+              <div className="absolute inset-0 rounded-full border-4 border-indigo-100"></div>
+            </div>
+            {/* Floating Dots */}
+            <div className="absolute -top-6 -left-6 w-3 h-3 bg-indigo-400 rounded-full animate-bounce" style={{animationDelay: '0s'}}></div>
+            <div className="absolute -top-6 -right-6 w-3 h-3 bg-purple-400 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
+            <div className="absolute -bottom-6 -left-6 w-3 h-3 bg-pink-400 rounded-full animate-bounce" style={{animationDelay: '0.4s'}}></div>
+            <div className="absolute -bottom-6 -right-6 w-3 h-3 bg-indigo-400 rounded-full animate-bounce" style={{animationDelay: '0.6s'}}></div>
+          </div>
+          
+          {/* Loading Text */}
+          <div className="space-y-3">
+            <h2 className="text-2xl font-bold bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">
+              Loading Rankings
+            </h2>
+            <p className="text-gray-600 font-medium animate-pulse">Calculating results...</p>
+            
+            {/* Progress Dots */}
+            <div className="flex justify-center space-x-2 mt-6">
+              <div className="w-2 h-2 bg-indigo-400 rounded-full animate-pulse" style={{animationDelay: '0s'}}></div>
+              <div className="w-2 h-2 bg-purple-400 rounded-full animate-pulse" style={{animationDelay: '0.3s'}}></div>
+              <div className="w-2 h-2 bg-pink-400 rounded-full animate-pulse" style={{animationDelay: '0.6s'}}></div>
+            </div>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="container mx-auto px-4 py-8">
-        {/* Header */}
-        <div className="mb-8">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">Competition Rankings</h1>
-              <p className="text-gray-600">Automated tabulation and rankings (Admin Only)</p>
+    <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50">
+      {/* Enhanced Header */}
+      <header className="bg-white/90 backdrop-blur-lg shadow-xl border-b border-indigo-100">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between py-8 gap-4">
+            <div className="flex items-center space-x-4">
+              <div className="w-12 h-12 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center">
+                <span className="text-white text-xl">📊</span>
+              </div>
+              <div>
+                <h1 className="text-3xl font-black bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">
+                  Competition Rankings
+                </h1>
+                <p className="text-gray-600 font-medium">Live scoring and leaderboards</p>
+              </div>
             </div>
-            <div className="flex space-x-4">
+            <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-4">
               <button
                 onClick={loadRankings}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                className="inline-flex items-center space-x-2 px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-xl hover:from-emerald-600 hover:to-teal-700 transition-all duration-200 transform hover:scale-105 shadow-lg font-medium"
               >
-                Refresh Rankings
+                <span>🔄</span>
+                <span>Refresh Rankings</span>
               </button>
               <Link
                 href="/admin"
-                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                className="inline-flex items-center space-x-2 px-5 py-2.5 bg-gradient-to-r from-gray-500 to-gray-700 text-white rounded-xl hover:from-gray-600 hover:to-gray-800 transition-all duration-200 transform hover:scale-105 shadow-lg font-medium text-center"
               >
-                Back to Admin
+                <span>←</span>
+                <span>Back to Admin</span>
               </Link>
             </div>
           </div>
           
           {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
-              {error}
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-6">
+              <div className="bg-red-50 border-2 border-red-200 text-red-700 px-4 py-3 rounded-xl font-medium animate-slideIn">
+                <div className="flex items-center space-x-2">
+                  <span>❌</span>
+                  <span>{error}</span>
+                </div>
+              </div>
             </div>
           )}
         </div>
+      </header>
 
-        {/* Filters */}
-        <div className="bg-white rounded-lg shadow-sm p-6 mb-8">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Filter Rankings</h2>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Enhanced Statistics Overview */}
+        {filteredRankings.length > 0 && (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+            <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-6 shadow-xl border border-indigo-100 hover:shadow-2xl transition-all duration-300 transform hover:scale-105">
+              <div className="text-center">
+                <div className="text-2xl font-bold text-indigo-600">{filteredRankings.length}</div>
+                <div className="text-sm text-gray-600 font-medium">Performances</div>
+              </div>
+            </div>
+            <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-6 shadow-xl border border-purple-100 hover:shadow-2xl transition-all duration-300 transform hover:scale-105">
+              <div className="text-center">
+                <div className="text-2xl font-bold text-purple-600">
+                  {new Set(filteredRankings.map(r => r.region)).size}
+                </div>
+                <div className="text-sm text-gray-600 font-medium">Regions</div>
+              </div>
+            </div>
+            <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-6 shadow-xl border border-pink-100 hover:shadow-2xl transition-all duration-300 transform hover:scale-105">
+              <div className="text-center">
+                <div className="text-2xl font-bold text-pink-600">
+                  {new Set(filteredRankings.map(r => r.ageCategory)).size}
+                </div>
+                <div className="text-sm text-gray-600 font-medium">Categories</div>
+              </div>
+            </div>
+            <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-6 shadow-xl border border-teal-100 hover:shadow-2xl transition-all duration-300 transform hover:scale-105">
+              <div className="text-center">
+                <div className="text-2xl font-bold text-teal-600">
+                  {new Set(filteredRankings.map(r => r.performanceType)).size}
+                </div>
+                <div className="text-sm text-gray-600 font-medium">Types</div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Enhanced Filters */}
+        <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl p-6 mb-8 border border-indigo-100">
+          <div className="flex items-center space-x-3 mb-6">
+            <div className="w-8 h-8 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-lg flex items-center justify-center">
+              <span className="text-white text-sm">🔍</span>
+            </div>
+            <h2 className="text-xl font-bold text-gray-900">Filter Rankings</h2>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Region</label>
+              <label className="block text-sm font-semibold text-gray-700 mb-3">Region</label>
               <select
                 value={selectedRegion}
                 onChange={(e) => setSelectedRegion(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 font-medium"
               >
                 <option value="">All Regions</option>
                 {REGIONS.map(region => (
@@ -180,11 +261,11 @@ export default function AdminRankingsPage() {
             </div>
             
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Age Category</label>
+              <label className="block text-sm font-semibold text-gray-700 mb-3">Age Category</label>
               <select
                 value={selectedAgeCategory}
                 onChange={(e) => setSelectedAgeCategory(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 font-medium"
               >
                 <option value="">All Ages</option>
                 {AGE_CATEGORIES.map(category => (
@@ -194,11 +275,11 @@ export default function AdminRankingsPage() {
             </div>
             
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Performance Type</label>
+              <label className="block text-sm font-semibold text-gray-700 mb-3">Performance Type</label>
               <select
                 value={selectedPerformanceType}
                 onChange={(e) => setSelectedPerformanceType(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 font-medium"
               >
                 <option value="">All Types</option>
                 {PERFORMANCE_TYPES.map(type => (
@@ -210,7 +291,7 @@ export default function AdminRankingsPage() {
             <div className="flex items-end">
               <button
                 onClick={clearFilters}
-                className="w-full px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                className="w-full px-4 py-3 bg-gradient-to-r from-gray-500 to-gray-700 text-white rounded-xl hover:from-gray-600 hover:to-gray-800 transition-all duration-200 transform hover:scale-105 shadow-lg font-medium"
               >
                 Clear Filters
               </button>
@@ -218,84 +299,95 @@ export default function AdminRankingsPage() {
           </div>
         </div>
 
-        {/* Rankings Display */}
+        {/* Enhanced Rankings Display */}
         {Object.keys(groupedRankings).length === 0 ? (
-          <div className="bg-white rounded-lg shadow-sm p-8 text-center">
-            <div className="text-gray-400 mb-4">
-              <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-              </svg>
+          <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl p-8 text-center border border-indigo-100">
+            <div className="w-20 h-20 mx-auto mb-6 bg-gradient-to-br from-indigo-100 to-purple-100 rounded-full flex items-center justify-center">
+              <span className="text-3xl">🏆</span>
             </div>
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No Rankings Available</h3>
-            <p className="text-gray-600">
+            <h3 className="text-xl font-bold text-gray-900 mb-3">No Rankings Available</h3>
+            <p className="text-gray-600 max-w-md mx-auto">
               Rankings will appear here once performances have been scored by judges.
+              Make sure you have assigned judges to events and they have submitted scores.
             </p>
           </div>
         ) : (
-          <div className="space-y-8">
+          <div className="space-y-8 animate-fadeIn">
             {Object.values(groupedRankings).map((group, index) => (
-              <div key={index} className="bg-white rounded-lg shadow-sm overflow-hidden">
-                <div className="bg-gray-50 px-6 py-4 border-b border-gray-200">
-                  <h3 className="text-lg font-semibold text-gray-900">
-                    {group.region} - {group.ageCategory} - {group.performanceType}
-                  </h3>
-                  <p className="text-sm text-gray-600">
-                    {group.rankings.length} performance{group.rankings.length !== 1 ? 's' : ''}
-                  </p>
+              <div key={index} className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl overflow-hidden border border-indigo-100">
+                {/* Enhanced Category Header */}
+                <div className="bg-gradient-to-r from-indigo-500/10 to-purple-500/10 px-6 py-4 border-b border-indigo-100">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-xl font-bold text-gray-900">
+                      {group.region} - {group.ageCategory} - {group.performanceType}
+                    </h3>
+                    <div className="px-3 py-1 bg-indigo-100 text-indigo-800 rounded-full text-sm font-medium">
+                      {group.rankings.length} performance{group.rankings.length !== 1 ? 's' : ''}
+                    </div>
+                  </div>
                 </div>
                 
+                {/* Enhanced Rankings Table */}
                 <div className="overflow-x-auto">
                   <table className="w-full">
-                    <thead className="bg-gray-50">
+                    <thead className="bg-gray-50/80">
                       <tr>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <th className="px-6 py-4 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">
                           Rank
                         </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <th className="px-6 py-4 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">
                           Contestant
                         </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <th className="px-6 py-4 text-left text-xs font-bold text-gray-600 uppercase tracking-wider hidden sm:table-cell">
                           Performance
                         </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Total Score
+                        <th className="px-6 py-4 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">
+                          Score
                         </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Average Score
+                        <th className="px-6 py-4 text-left text-xs font-bold text-gray-600 uppercase tracking-wider hidden md:table-cell">
+                          Average
                         </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <th className="px-6 py-4 text-left text-xs font-bold text-gray-600 uppercase tracking-wider hidden lg:table-cell">
                           Judges
                         </th>
                       </tr>
                     </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
+                    <tbody className="bg-white/50 divide-y divide-gray-200">
                       {group.rankings.map((ranking) => (
-                        <tr key={ranking.performanceId} className="hover:bg-gray-50">
+                        <tr key={ranking.performanceId} className="hover:bg-indigo-50/50 transition-colors duration-200">
                           <td className="px-6 py-4 whitespace-nowrap">
-                            <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium border ${getRankBadgeColor(ranking.rank)}`}>
+                            <span className={`inline-flex items-center px-3 py-2 rounded-xl text-sm font-bold border-2 ${getRankBadgeColor(ranking.rank)}`}>
                               {getRankIcon(ranking.rank)}
                             </span>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm font-medium text-gray-900">
-                              {ranking.contestantName}
+                          <td className="px-6 py-4">
+                            <div>
+                              <div className="text-sm font-bold text-gray-900">
+                                {ranking.contestantName}
+                              </div>
+                              <div className="text-xs text-gray-500 sm:hidden">
+                                {ranking.title}
+                              </div>
                             </div>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm text-gray-900">{ranking.title}</div>
+                          <td className="px-6 py-4 whitespace-nowrap hidden sm:table-cell">
+                            <div className="text-sm font-medium text-gray-900">{ranking.title}</div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm font-medium text-gray-900">
+                            <div className="text-sm font-bold text-gray-900">
                               {ranking.totalScore.toFixed(1)}
                             </div>
+                            <div className="text-xs text-gray-500 md:hidden">
+                              Avg: {ranking.averageScore.toFixed(1)}
+                            </div>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm text-gray-900">
+                          <td className="px-6 py-4 whitespace-nowrap hidden md:table-cell">
+                            <div className="text-sm font-medium text-gray-900">
                               {ranking.averageScore.toFixed(2)}
                             </div>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm text-gray-500">
+                          <td className="px-6 py-4 whitespace-nowrap hidden lg:table-cell">
+                            <div className="text-sm text-gray-600 font-medium">
                               {ranking.judgeCount} judge{ranking.judgeCount !== 1 ? 's' : ''}
                             </div>
                           </td>
@@ -308,38 +400,28 @@ export default function AdminRankingsPage() {
             ))}
           </div>
         )}
-
-        {/* Summary Stats */}
-        {filteredRankings.length > 0 && (
-          <div className="mt-8 bg-white rounded-lg shadow-sm p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Summary Statistics</h3>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div className="text-center">
-                <div className="text-2xl font-bold text-blue-600">{filteredRankings.length}</div>
-                <div className="text-sm text-gray-600">Total Performances</div>
-              </div>
-              <div className="text-center">
-                <div className="text-2xl font-bold text-green-600">
-                  {new Set(filteredRankings.map(r => r.region)).size}
-                </div>
-                <div className="text-sm text-gray-600">Regions</div>
-              </div>
-              <div className="text-center">
-                <div className="text-2xl font-bold text-purple-600">
-                  {new Set(filteredRankings.map(r => r.ageCategory)).size}
-                </div>
-                <div className="text-sm text-gray-600">Age Categories</div>
-              </div>
-              <div className="text-center">
-                <div className="text-2xl font-bold text-orange-600">
-                  {new Set(filteredRankings.map(r => r.performanceType)).size}
-                </div>
-                <div className="text-sm text-gray-600">Performance Types</div>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
+
+      {/* Custom CSS for animations */}
+      <style jsx global>{`
+        @keyframes fadeIn {
+          from { opacity: 0; transform: translateY(20px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        
+        @keyframes slideIn {
+          from { opacity: 0; transform: translateX(-20px); }
+          to { opacity: 1; transform: translateX(0); }
+        }
+        
+        .animate-fadeIn {
+          animation: fadeIn 0.5s ease-out;
+        }
+        
+        .animate-slideIn {
+          animation: slideIn 0.3s ease-out;
+        }
+      `}</style>
     </div>
   );
 } 

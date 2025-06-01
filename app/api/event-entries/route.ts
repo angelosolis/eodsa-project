@@ -32,12 +32,13 @@ export async function POST(request: NextRequest) {
     
     // Validate required fields
     const requiredFields = [
-      'contestantId', 'eodsaId', 'region', 'performanceType', 
-      'participantIds', 'ageCategory', 'calculatedFee', 'paymentMethod'
+      'eventId', 'contestantId', 'eodsaId', 
+      'participantIds', 'calculatedFee', 'paymentMethod',
+      'itemName', 'choreographer', 'mastery', 'itemStyle', 'estimatedDuration'
     ];
     
     for (const field of requiredFields) {
-      if (!body[field]) {
+      if (!body[field] && body[field] !== 0) { // Allow 0 for estimatedDuration
         return NextResponse.json(
           { error: `Missing required field: ${field}` },
           { status: 400 }
@@ -53,9 +54,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Get event details to validate participant limits
+    const event = await db.getEventById(body.eventId);
+    if (!event) {
+      return NextResponse.json(
+        { error: 'Event not found' },
+        { status: 400 }
+      );
+    }
+
     // Validate performance type participant limits
     const participantCount = body.participantIds.length;
-    const performanceType = body.performanceType;
+    const performanceType = event.performanceType;
     
     const limits = {
       'Solo': { min: 1, max: 1 },
@@ -67,7 +77,7 @@ export async function POST(request: NextRequest) {
     const limit = limits[performanceType as keyof typeof limits];
     if (!limit) {
       return NextResponse.json(
-        { error: 'Invalid performance type' },
+        { error: 'Invalid performance type in event' },
         { status: 400 }
       );
     }
@@ -81,16 +91,19 @@ export async function POST(request: NextRequest) {
 
     // Create event entry
     const eventEntry = await db.createEventEntry({
+      eventId: body.eventId,
       contestantId: body.contestantId,
       eodsaId: body.eodsaId,
-      region: body.region,
-      performanceType: body.performanceType,
       participantIds: body.participantIds,
-      ageCategory: body.ageCategory,
       calculatedFee: body.calculatedFee,
       paymentStatus: body.paymentStatus || 'pending',
       paymentMethod: body.paymentMethod,
-      approved: body.approved || false
+      approved: body.approved || false,
+      itemName: body.itemName,
+      choreographer: body.choreographer,
+      mastery: body.mastery,
+      itemStyle: body.itemStyle,
+      estimatedDuration: body.estimatedDuration
     });
 
     return NextResponse.json(eventEntry, { status: 201 });
