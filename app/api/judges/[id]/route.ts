@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getAllJudges } from '@/lib/data';
+import { db } from '@/lib/data';
 
 export async function GET(
   request: Request,
@@ -15,8 +15,7 @@ export async function GET(
       );
     }
 
-    const judges = await getAllJudges();
-    const judge = judges.find(j => j.id === id);
+    const judge = await db.getJudgeById(id);
 
     if (!judge) {
       return NextResponse.json(

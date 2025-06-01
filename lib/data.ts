@@ -1,4 +1,4 @@
-import { Contestant, Performance, Judge, Score } from './types';
+import { Contestant, Performance, Judge, Score, Event } from './types';
 import { db, initializeDatabase } from './database';
 
 // Initialize database on first import
@@ -12,55 +12,60 @@ const ensureDbInitialized = async () => {
 };
 
 // Helper functions that use the database
-export async function addContestant(contestant: Omit<Contestant, 'id' | 'registrationDate' | 'performances'>) {
+export const getRecentContestants = async (limit = 10) => {
   await ensureDbInitialized();
-  return await db.createContestant(contestant);
-}
+  return db.getAllContestants();
+};
 
-export async function addScore(score: Omit<Score, 'id' | 'submittedAt'>) {
+export const getRecentPerformances = async (limit = 10) => {
   await ensureDbInitialized();
-  return await db.createScore(score);
-}
+  return db.getAllPerformances();
+};
 
-export async function getContestantById(id: string) {
+export const getTopRankings = async (limit = 10) => {
   await ensureDbInitialized();
-  return await db.getContestantById(id);
-}
+  return db.calculateRankings();
+};
 
-export async function getAllContestants() {
+export const getJudgeStats = async () => {
   await ensureDbInitialized();
-  return await db.getAllContestants();
-}
+  return db.getAllJudges();
+};
 
-export async function getAllPerformances() {
+export const getEventSummary = async () => {
   await ensureDbInitialized();
-  return await db.getAllPerformances();
-}
+  return db.getAllEvents();
+};
 
-export async function getJudgeByEmail(email: string) {
+export const getContestantCount = async () => {
   await ensureDbInitialized();
-  return await db.getJudgeByEmail(email);
-}
+  const contestants = await db.getAllContestants();
+  return contestants.length;
+};
 
-export async function getAllJudges() {
+export const getPerformanceCount = async () => {
   await ensureDbInitialized();
-  return await db.getAllJudges();
-}
+  const performances = await db.getAllPerformances();
+  return performances.length;
+};
 
-export async function getScoresForPerformance(performanceId: string) {
+export const getJudgeCount = async () => {
   await ensureDbInitialized();
-  return await db.getScoresByPerformance(performanceId);
-}
+  const judges = await db.getAllJudges();
+  return judges.length;
+};
 
-export async function addPerformance(performance: Omit<Performance, 'id'>) {
+export const getEventCount = async () => {
   await ensureDbInitialized();
-  return await db.createPerformance(performance);
-}
+  const events = await db.getAllEvents();
+  return events.length;
+};
 
-export async function addJudge(judge: Omit<Judge, 'id'>) {
+export const getTotalEventEntries = async () => {
   await ensureDbInitialized();
-  return await db.createJudge(judge);
-}
+  const entries = await db.getAllEventEntries();
+  return entries.length;
+};
 
 // Export the database instance for direct access if needed
 export { db }; 

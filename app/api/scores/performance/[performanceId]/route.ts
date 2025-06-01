@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getScoresForPerformance } from '@/lib/data';
+import { db } from '@/lib/data';
 
 export async function GET(
   request: Request,
@@ -15,7 +15,7 @@ export async function GET(
       );
     }
 
-    const scores = await getScoresForPerformance(performanceId);
+    const scores = await db.getScoresByPerformance(performanceId);
 
     return NextResponse.json({
       success: true,

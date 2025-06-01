@@ -29,15 +29,48 @@ interface Performance {
   duration: number;
   status: string;
   scheduledTime?: string;
+  choreographer?: string;
+  itemStyle?: string;
+  mastery?: string;
+}
+
+interface Score {
+  technique: number;
+  artistry: number;
+  presentation: number;
+  overall: number;
+  comments: string;
+}
+
+interface PerformanceWithScore extends Performance {
+  hasScore?: boolean;
+  judgeScore?: any;
 }
 
 export default function JudgeDashboard() {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
-  const [performances, setPerformances] = useState<Performance[]>([]);
+  const [performances, setPerformances] = useState<PerformanceWithScore[]>([]);
   const [selectedEventId, setSelectedEventId] = useState<string>('');
-  const [filteredPerformances, setFilteredPerformances] = useState<Performance[]>([]);
+  const [selectedPerformance, setSelectedPerformance] = useState<PerformanceWithScore | null>(null);
+  const [filteredPerformances, setFilteredPerformances] = useState<PerformanceWithScore[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [judgeName, setJudgeName] = useState('');
+  const [judgeId, setJudgeId] = useState('');
+  const [viewMode, setViewMode] = useState<'list' | 'scoring'>('list');
+  const [currentScore, setCurrentScore] = useState<Score>({
+    technique: 0,
+    artistry: 0,
+    presentation: 0,
+    overall: 0,
+    comments: ''
+  });
+  const [isSubmittingScore, setIsSubmittingScore] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
+  const [filterStatus, setFilterStatus] = useState<'all' | 'not_scored' | 'scored'>('all');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [performancesPerPage] = useState(6);
+  const [searchTerm, setSearchTerm] = useState('');
   const router = useRouter();
 
   useEffect(() => {
@@ -54,16 +87,17 @@ export default function JudgeDashboard() {
     }
     
     setJudgeName(judgeData.name);
+    setJudgeId(judgeData.id);
     loadJudgeData(judgeData.id);
   }, [router]);
 
   useEffect(() => {
     if (selectedEventId) {
-      setFilteredPerformances(performances.filter(p => p.eventId === selectedEventId));
+      filterAndLoadPerformances();
     } else {
       setFilteredPerformances([]);
     }
-  }, [selectedEventId, performances]);
+  }, [selectedEventId, performances, filterStatus, searchTerm]);
 
   const loadJudgeData = async (judgeId: string) => {
     setIsLoading(true);
@@ -74,21 +108,142 @@ export default function JudgeDashboard() {
         const assignmentsData = await assignmentsResponse.json();
         setAssignments(assignmentsData.assignments || []);
         
-        // Load performances for all assigned events
-        const allPerformances: Performance[] = [];
+        // Load performances for all assigned events with score status
+        const allPerformances: PerformanceWithScore[] = [];
         for (const assignment of assignmentsData.assignments || []) {
           const performancesResponse = await fetch(`/api/events/${assignment.eventId}/performances`);
           if (performancesResponse.ok) {
             const performancesData = await performancesResponse.json();
-            allPerformances.push(...(performancesData.performances || []));
+            
+            // Check score status for each performance
+            for (const performance of performancesData.performances || []) {
+              const scoreResponse = await fetch(`/api/scores/${performance.id}/${judgeId}`);
+              const scoreData = await scoreResponse.json();
+              
+              allPerformances.push({
+                ...performance,
+                hasScore: scoreData.success && scoreData.score,
+                judgeScore: scoreData.score
+              });
+            }
           }
         }
         setPerformances(allPerformances);
       }
     } catch (error) {
       console.error('Error loading judge data:', error);
+      setErrorMessage('Failed to load judge data. Please refresh the page.');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const filterAndLoadPerformances = () => {
+    let filtered = performances.filter(p => p.eventId === selectedEventId);
+    
+    // Apply status filter
+    if (filterStatus === 'scored') {
+      filtered = filtered.filter(p => p.hasScore);
+    } else if (filterStatus === 'not_scored') {
+      filtered = filtered.filter(p => !p.hasScore);
+    }
+
+    // Apply search term filter
+    if (searchTerm) {
+      const lowerSearchTerm = searchTerm.toLowerCase();
+      filtered = filtered.filter(p => 
+        p.title.toLowerCase().includes(lowerSearchTerm) ||
+        p.contestantName.toLowerCase().includes(lowerSearchTerm) ||
+        (p.participantNames && p.participantNames.some(name => name.toLowerCase().includes(lowerSearchTerm)))
+      );
+    }
+    
+    setFilteredPerformances(filtered);
+    setCurrentPage(1); // Reset to first page when filtering
+  };
+
+  const handleStartScoring = (performance: PerformanceWithScore) => {
+    setSelectedPerformance(performance);
+    setViewMode('scoring');
+    
+    // Pre-populate with existing score if available
+    if (performance.judgeScore) {
+      setCurrentScore({
+        technique: performance.judgeScore.technicalScore || 0,
+        artistry: performance.judgeScore.artisticScore || 0,
+        presentation: performance.judgeScore.overallScore ? 
+          Math.round((performance.judgeScore.overallScore * 3 - performance.judgeScore.technicalScore - performance.judgeScore.artisticScore)) : 0,
+        overall: performance.judgeScore.overallScore || 0,
+        comments: performance.judgeScore.comments || ''
+      });
+    } else {
+      setCurrentScore({
+        technique: 0,
+        artistry: 0,
+        presentation: 0,
+        overall: 0,
+        comments: ''
+      });
+    }
+  };
+
+  const handleScoreChange = (category: keyof Score, value: number | string) => {
+    setCurrentScore(prev => {
+      const newScore = { ...prev, [category]: value };
+      
+      // Auto-calculate overall score when individual scores change
+      if (category !== 'overall' && category !== 'comments') {
+        const avg = (newScore.technique + newScore.artistry + newScore.presentation) / 3;
+        newScore.overall = Math.round(avg * 10) / 10;
+      }
+      
+      return newScore;
+    });
+  };
+
+  const handleSubmitScore = async () => {
+    if (!selectedPerformance) return;
+    
+    setIsSubmittingScore(true);
+    setErrorMessage('');
+    
+    try {
+      const response = await fetch('/api/scores', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          performanceId: selectedPerformance.id,
+          judgeId: judgeId,
+          technique: currentScore.technique,
+          artistry: currentScore.artistry,
+          presentation: currentScore.presentation,
+          overall: currentScore.overall,
+          comments: currentScore.comments
+        }),
+      });
+
+      const result = await response.json();
+      
+      if (response.ok) {
+        setSuccessMessage(`Score ${selectedPerformance.hasScore ? 'updated' : 'submitted'} successfully for "${selectedPerformance.title}"`);
+        setViewMode('list');
+        setSelectedPerformance(null);
+        
+        // Refresh performances to update score status
+        await loadJudgeData(judgeId);
+        
+        // Clear success message after 5 seconds
+        setTimeout(() => setSuccessMessage(''), 5000);
+      } else {
+        setErrorMessage(result.error || 'Failed to submit score. Please try again.');
+      }
+    } catch (error) {
+      console.error('Error submitting score:', error);
+      setErrorMessage('Network error. Please check your connection and try again.');
+    } finally {
+      setIsSubmittingScore(false);
     }
   };
 
@@ -97,34 +252,205 @@ export default function JudgeDashboard() {
     router.push('/portal/judge');
   };
 
+  // Pagination logic
+  const indexOfLastPerformance = currentPage * performancesPerPage;
+  const indexOfFirstPerformance = indexOfLastPerformance - performancesPerPage;
+  const currentPerformances = filteredPerformances.slice(indexOfFirstPerformance, indexOfLastPerformance);
+  const totalPages = Math.ceil(filteredPerformances.length / performancesPerPage);
+
+  const getCompletionStats = () => {
+    const eventPerformances = performances.filter(p => p.eventId === selectedEventId);
+    const scored = eventPerformances.filter(p => p.hasScore).length;
+    const total = eventPerformances.length;
+    return { scored, total, percentage: total > 0 ? Math.round((scored / total) * 100) : 0 };
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="relative mb-8">
-            {/* Modern Spinner */}
-            <div className="w-16 h-16 mx-auto">
-              <div className="absolute inset-0 rounded-full border-4 border-indigo-100"></div>
-            </div>
-            {/* Floating Dots */}
-            <div className="absolute -top-6 -left-6 w-3 h-3 bg-indigo-400 rounded-full animate-bounce" style={{animationDelay: '0s'}}></div>
-            <div className="absolute -top-6 -right-6 w-3 h-3 bg-purple-400 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
-            <div className="absolute -bottom-6 -left-6 w-3 h-3 bg-pink-400 rounded-full animate-bounce" style={{animationDelay: '0.4s'}}></div>
-            <div className="absolute -bottom-6 -right-6 w-3 h-3 bg-indigo-400 rounded-full animate-bounce" style={{animationDelay: '0.6s'}}></div>
+          <div className="w-20 h-20 bg-gradient-to-br from-purple-500 to-pink-600 rounded-full mx-auto mb-6 flex items-center justify-center animate-pulse">
+            <span className="text-white text-2xl">⚖️</span>
           </div>
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">Loading Judge Dashboard</h2>
+          <p className="text-gray-600">Preparing your judging assignments...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (viewMode === 'scoring' && selectedPerformance) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50">
+        {/* Scoring Header */}
+        <header className="bg-white/95 backdrop-blur-lg shadow-lg border-b border-purple-200">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+            <div className="flex justify-between items-center">
+              <div className="flex items-center space-x-4">
+                <button
+                  onClick={() => setViewMode('list')}
+                  className="p-2 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors"
+                >
+                  <span className="text-xl">←</span>
+                </button>
+                <div>
+                  <h1 className="text-2xl font-bold text-gray-900">
+                    {selectedPerformance.hasScore ? 'Update Score' : 'Score Performance'}
+                  </h1>
+                  <p className="text-gray-600">{selectedPerformance.title}</p>
+                </div>
+              </div>
+              <div className="text-right">
+                <p className="text-sm text-gray-600">Judge: {judgeName}</p>
+                <p className="text-sm text-gray-600">Duration: {selectedPerformance.duration} min</p>
+                {selectedPerformance.hasScore && (
+                  <span className="inline-block px-2 py-1 bg-green-100 text-green-800 text-xs font-bold rounded-full mt-1">
+                    Previously Scored
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+        </header>
+
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="grid lg:grid-cols-2 gap-8">
+            {/* Video Section */}
+            <div className="space-y-6">
+              <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
+                <div className="bg-gradient-to-r from-purple-500 to-pink-600 px-6 py-4">
+                  <h3 className="text-white font-bold text-lg">Performance Video</h3>
+                </div>
+                <div className="p-6">
+                  {/* Video Placeholder */}
+                  <div className="aspect-video bg-gray-900 rounded-xl flex items-center justify-center mb-4">
+                    <div className="text-center text-white">
+                      <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <span className="text-2xl">▶️</span>
+                      </div>
+                      <p className="text-lg font-medium">Performance Video</p>
+                      <p className="text-sm opacity-75">Video will be available during live judging</p>
+                    </div>
+                  </div>
+                  
+                  {/* Performance Details */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <span className="text-gray-600">Contestant:</span>
+                      <p className="font-medium text-gray-900">{selectedPerformance.contestantName || 'Loading...'}</p>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">Participants:</span>
+                      <p className="font-medium text-gray-900">{selectedPerformance.participantNames?.join(', ') || 'Loading...'}</p>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">Style:</span>
+                      <p className="font-medium text-gray-900">{selectedPerformance.itemStyle || 'Not specified'}</p>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">Mastery:</span>
+                      <p className="font-medium text-gray-900">{selectedPerformance.mastery || 'Not specified'}</p>
+                    </div>
+                    <div className="col-span-2">
+                      <span className="text-gray-600">Choreographer:</span>
+                      <p className="font-medium text-gray-900">{selectedPerformance.choreographer || 'Not specified'}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Scoring Section */}
+            <div className="space-y-6">
+              <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
+                <div className="bg-gradient-to-r from-blue-500 to-indigo-600 px-6 py-4">
+                  <h3 className="text-white font-bold text-lg">Score Performance</h3>
+                </div>
+                <div className="p-6 space-y-6">
+                  {/* Scoring Categories */}
+                  {[
+                    { key: 'technique', label: 'Technique', description: 'Execution, precision, skill level' },
+                    { key: 'artistry', label: 'Artistry', description: 'Creativity, interpretation, expression' },
+                    { key: 'presentation', label: 'Presentation', description: 'Stage presence, costume, confidence' }
+                  ].map(({ key, label, description }) => (
+                    <div key={key} className="space-y-3">
+                      <div>
+                        <label className="block text-sm font-bold text-gray-900 mb-1">
+                          {label}
+                        </label>
+                        <p className="text-xs text-gray-600">{description}</p>
+                      </div>
+                      
+                      {/* Score Buttons */}
+                      <div className="flex flex-wrap gap-2">
+                        {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(score => (
+                          <button
+                            key={score}
+                            onClick={() => handleScoreChange(key as keyof Score, score)}
+                            className={`px-3 py-2 rounded-lg font-medium transition-all ${
+                              currentScore[key as keyof Score] === score
+                                ? 'bg-gradient-to-br from-purple-500 to-pink-600 text-white shadow-lg transform scale-110'
+                                : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+                            }`}
+                          >
+                            {score}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="text-right">
+                        <span className="text-sm text-gray-600">
+                          Selected: <span className="font-bold text-purple-600">{currentScore[key as keyof Score] || 'None'}</span>
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+
+                  {/* Overall Score Display */}
+                  <div className="bg-gradient-to-r from-purple-50 to-pink-50 rounded-xl p-4 border border-purple-200">
+                    <label className="block text-sm font-bold text-gray-900 mb-2">Overall Score</label>
+                    <div className="text-3xl font-bold text-purple-600">
+                      {currentScore.overall.toFixed(1)} / 10
+                    </div>
+                    <p className="text-xs text-gray-600 mt-1">Automatically calculated from above scores</p>
+                  </div>
+
+                  {/* Comments */}
+                  <div>
+                    <label className="block text-sm font-bold text-gray-900 mb-2">
+                      Comments (Optional)
+                    </label>
+                    <textarea
+                      value={currentScore.comments}
+                      onChange={(e) => handleScoreChange('comments', e.target.value)}
+                      className="w-full h-24 px-3 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 resize-none text-gray-900"
+                      placeholder="Add constructive feedback for the participant..."
+                    />
+                  </div>
           
-          {/* Loading Text */}
-          <div className="space-y-3">
-            <h2 className="text-2xl font-bold bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">
-              Loading Judge Dashboard
-            </h2>
-            <p className="text-gray-600 font-medium animate-pulse">Preparing your events...</p>
-            
-            {/* Progress Dots */}
-            <div className="flex justify-center space-x-2 mt-6">
-              <div className="w-2 h-2 bg-indigo-400 rounded-full animate-pulse" style={{animationDelay: '0s'}}></div>
-              <div className="w-2 h-2 bg-purple-400 rounded-full animate-pulse" style={{animationDelay: '0.3s'}}></div>
-              <div className="w-2 h-2 bg-pink-400 rounded-full animate-pulse" style={{animationDelay: '0.6s'}}></div>
+                  {/* Error Message */}
+                  {errorMessage && (
+                    <div className="p-3 bg-red-50 border border-red-200 rounded-xl">
+                      <p className="text-red-800 text-sm">{errorMessage}</p>
+                    </div>
+                  )}
+
+                  {/* Submit Button */}
+                  <button
+                    onClick={handleSubmitScore}
+                    disabled={isSubmittingScore || currentScore.technique === 0 || currentScore.artistry === 0 || currentScore.presentation === 0}
+                    className="w-full py-4 bg-gradient-to-r from-green-500 to-emerald-600 text-white font-bold rounded-xl hover:from-green-600 hover:to-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all transform hover:scale-105 shadow-lg"
+                  >
+                    {isSubmittingScore ? (
+                      <div className="flex items-center justify-center space-x-2">
+                        <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                        <span>{selectedPerformance.hasScore ? 'Updating Score...' : 'Submitting Score...'}</span>
+                      </div>
+                    ) : (
+                      selectedPerformance.hasScore ? 'Update Score' : 'Submit Score'
+                    )}
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -135,141 +461,288 @@ export default function JudgeDashboard() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50">
         {/* Header */}
-      <header className="bg-white/90 backdrop-blur-lg shadow-xl border-b border-indigo-100">
+      <header className="bg-white/95 backdrop-blur-lg shadow-lg border-b border-purple-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-8">
+          <div className="flex justify-between items-center py-6">
             <div className="flex items-center space-x-4">
-              <div className="w-12 h-12 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center">
-                <span className="text-white text-xl">👨‍⚖️</span>
+              <div className="w-14 h-14 bg-gradient-to-br from-purple-500 to-pink-600 rounded-xl flex items-center justify-center shadow-lg">
+                <span className="text-white text-2xl">⚖️</span>
               </div>
             <div>
-                <h1 className="text-3xl font-black bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">
+                <h1 className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
                   Judge Dashboard
                 </h1>
-                <p className="text-gray-600 mt-1 font-medium">Welcome, {judgeName}</p>
+                <p className="text-gray-600 font-medium">Welcome, {judgeName}</p>
               </div>
             </div>
               <button
                 onClick={handleLogout}
-              className="inline-flex items-center space-x-2 px-5 py-2.5 bg-gradient-to-r from-red-500 to-pink-600 text-white rounded-xl hover:from-red-600 hover:to-pink-700 transition-all duration-200 transform hover:scale-105 shadow-lg"
+              className="inline-flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-red-500 to-pink-600 text-white rounded-xl hover:from-red-600 hover:to-pink-700 transition-all transform hover:scale-105 shadow-lg font-medium"
               >
               <span>🚪</span>
-              <span className="font-medium">Logout</span>
+              <span>Logout</span>
               </button>
           </div>
         </div>
       </header>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Performances to Judge - Reorganized with Event Selection */}
-        <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl overflow-hidden border border-purple-100">
-          <div className="px-6 py-4 bg-gradient-to-r from-purple-500/10 to-pink-500/10 border-b border-purple-100">
-            <div className="flex items-center space-x-3">
-              <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-pink-600 rounded-lg flex items-center justify-center">
-                <span className="text-white text-sm">🎭</span>
-                          </div>
-              <h2 className="text-xl font-bold text-gray-900">Performances to Judge</h2>
+        {/* Success Message */}
+        {successMessage && (
+          <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-xl">
+            <div className="flex items-center">
+              <span className="text-green-600 mr-2">✅</span>
+              <p className="text-green-800 font-medium">{successMessage}</p>
             </div>
           </div>
+        )}
 
-          <div className="p-6">
-            {/* Event Selection Dropdown */}
-            <div className="mb-6">
-              <label className="block text-sm font-semibold text-gray-700 mb-3">Select Event to Judge</label>
+        {/* Event Selection */}
+        <div className="bg-white/90 backdrop-blur-sm rounded-2xl shadow-xl p-6 mb-8 border border-purple-100">
+          <div className="flex items-center space-x-3 mb-6">
+            <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center">
+              <span className="text-white">🎯</span>
+            </div>
+            <h2 className="text-xl font-bold text-gray-900">Select Event to Judge</h2>
+          </div>
+
               <select
                 value={selectedEventId}
                 onChange={(e) => setSelectedEventId(e.target.value)}
-                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200 text-base font-medium"
+                className="w-full bg-white px-4 py-3 border-2 border-gray-200 hover:border-purple-400 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all text-lg font-medium text-gray-900"
               >
                 <option value="">Choose an event to judge...</option>
                 {assignments.map((assignment) => (
                   <option key={assignment.eventId} value={assignment.eventId}>
-                    {assignment.event.name} - {new Date(assignment.event.eventDate).toLocaleDateString()}
+                {assignment.event.name} - {new Date(assignment.event.eventDate).toLocaleDateString()} - {assignment.event.venue}
                   </option>
                 ))}
               </select>
               
               {assignments.length === 0 && (
-                <p className="text-sm text-gray-500 mt-2">
-                  No events assigned yet. Please contact an administrator.
-                </p>
+            <div className="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-xl">
+              <p className="text-amber-800 font-medium">No events assigned yet.</p>
+              <p className="text-amber-700 text-sm">Please contact an administrator to get assigned to events.</p>
+            </div>
               )}
             </div>
             
-            {/* Performances List */}
-            {selectedEventId ? (
-              filteredPerformances.length > 0 ? (
-                <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50/80">
-                      <tr>
-                        <th className="px-6 py-4 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">Performance</th>
-                        <th className="px-6 py-4 text-left text-xs font-bold text-gray-600 uppercase tracking-wider hidden sm:table-cell">Participants</th>
-                        <th className="px-6 py-4 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">Duration</th>
-                        <th className="px-6 py-4 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">Status</th>
-                        <th className="px-6 py-4 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white/50 divide-y divide-gray-200">
-                      {filteredPerformances.map((performance) => (
-                        <tr key={performance.id} className="hover:bg-purple-50/50 transition-colors duration-200">
-                          <td className="px-6 py-4">
-                            <div>
-                              <div className="text-sm font-bold text-gray-900">{performance.title}</div>
-                              <div className="text-sm text-gray-600">{performance.contestantName}</div>
-              </div>
-                          </td>
-                          <td className="px-6 py-4 hidden sm:table-cell">
-                            <div className="text-sm text-gray-600">
-                              {performance.participantNames.join(', ')}
+        {/* Performances to Judge */}
+        {selectedEventId && (
+          <div className="bg-white/90 backdrop-blur-sm rounded-2xl shadow-xl overflow-hidden border border-purple-100">
+            <div className="bg-gradient-to-r from-purple-500/10 to-pink-500/10 px-6 py-4 border-b border-purple-100">
+              <div className="flex justify-between items-center">
+                <div className="flex items-center space-x-3">
+                  <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-600 rounded-lg flex items-center justify-center">
+                    <span className="text-white">🎭</span>
                   </div>
-                          </td>
-                          <td className="px-6 py-4">
-                            <div className="text-sm font-medium text-gray-900">{performance.duration} min</div>
-                          </td>
-                          <td className="px-6 py-4">
-                            <span className={`inline-flex px-3 py-1 text-xs font-bold rounded-full border ${
-                              performance.status === 'scheduled' ? 'bg-blue-100 text-blue-800 border-blue-200' :
-                              performance.status === 'in_progress' ? 'bg-yellow-100 text-yellow-800 border-yellow-200' :
-                              performance.status === 'completed' ? 'bg-green-100 text-green-800 border-green-200' :
-                              'bg-gray-100 text-gray-800 border-gray-200'
+                            <div>
+                    <h2 className="text-xl font-bold text-gray-900">Performances Ready for Judging</h2>
+                    {(() => {
+                      const stats = getCompletionStats();
+                      return (
+                        <p className="text-sm text-gray-600">
+                          Progress: {stats.scored}/{stats.total} completed ({stats.percentage}%)
+                        </p>
+                      );
+                    })()}
+                  </div>
+                </div>
+                
+                {/* Progress Bar */}
+                {(() => {
+                  const stats = getCompletionStats();
+                  return (
+                    <div className="w-32">
+                      <div className="bg-gray-200 rounded-full h-2">
+                        <div 
+                          className="bg-gradient-to-r from-green-500 to-emerald-600 h-2 rounded-full transition-all duration-300"
+                          style={{ width: `${stats.percentage}%` }}
+                        ></div>
+                      </div>
+                      <p className="text-xs text-gray-600 mt-1 text-center">{stats.percentage}%</p>
+                    </div>
+                  );
+                })()}
+              </div>
+            </div>
+
+            <div className="p-6">
+              {/* Filter Controls and Search */}
+              <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
+                {/* Filter Buttons */}
+                <div className="flex space-x-2 flex-wrap justify-center">
+                  <button
+                    onClick={() => setFilterStatus('all')}
+                    className={`px-4 py-2 rounded-lg font-medium transition-all ${
+                      filterStatus === 'all' 
+                        ? 'bg-purple-600 text-white' 
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    All ({filteredPerformances.length})
+                  </button>
+                  <button
+                    onClick={() => setFilterStatus('not_scored')}
+                    className={`px-4 py-2 rounded-lg font-medium transition-all ${
+                      filterStatus === 'not_scored' 
+                        ? 'bg-orange-600 text-white' 
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    Not Scored ({performances.filter(p => p.eventId === selectedEventId && !p.hasScore).length})
+                  </button>
+                  <button
+                    onClick={() => setFilterStatus('scored')}
+                    className={`px-4 py-2 rounded-lg font-medium transition-all ${
+                      filterStatus === 'scored' 
+                        ? 'bg-green-600 text-white' 
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    Scored ({performances.filter(p => p.eventId === selectedEventId && p.hasScore).length})
+                  </button>
+                </div>
+
+                {/* Search Input */}
+                <div className="w-full md:w-auto">
+                  <input 
+                    type="text"
+                    placeholder="Search by title, contestant..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full md:w-72 px-4 py-2 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all text-sm"
+                  />
+                </div>
+              </div>
+
+              {/* Pagination Info (moved slightly for better layout with search) */}
+              {totalPages > 1 && (
+                  <div className="text-sm text-gray-600 mb-4 text-center md:text-right">
+                    Page {currentPage} of {totalPages}
+                  </div>
+              )}
+
+              {currentPerformances.length > 0 ? (
+                <>
+                  <div className="grid gap-4 mb-6">
+                    {currentPerformances.map((performance) => (
+                      <div key={performance.id} className={`bg-gradient-to-r rounded-xl p-6 border-2 hover:shadow-lg transition-all ${
+                        performance.hasScore 
+                          ? 'from-green-50 to-emerald-50 border-green-200' 
+                          : 'from-white to-purple-50 border-purple-200'
+                      }`}>
+                        <div className="flex justify-between items-start">
+                          <div className="flex-1">
+                            <div className="flex items-center space-x-3 mb-3">
+                              <h3 className="text-lg font-bold text-gray-900">{performance.title}</h3>
+                              <div className="flex space-x-2">
+                                <span className={`px-3 py-1 text-xs font-bold rounded-full ${
+                                  performance.status === 'scheduled' ? 'bg-blue-100 text-blue-800' :
+                                  performance.status === 'in_progress' ? 'bg-yellow-100 text-yellow-800' :
+                                  performance.status === 'completed' ? 'bg-green-100 text-green-800' :
+                                  'bg-gray-100 text-gray-800'
                             }`}>
                               {performance.status.replace('_', ' ').toUpperCase()}
                             </span>
-                          </td>
-                          <td className="px-6 py-4">
-                            <Link
-                              href={`/judge/score/${performance.id}`}
-                              className="text-sm font-medium text-purple-600 hover:text-purple-700 bg-purple-50 hover:bg-purple-100 px-3 py-1 rounded-lg transition-colors"
+                                {performance.hasScore && (
+                                  <span className="px-3 py-1 text-xs font-bold rounded-full bg-green-100 text-green-800">
+                                    ✅ SCORED
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            
+                            <div className="grid md:grid-cols-2 gap-4 text-sm mb-4">
+                              <div>
+                                <span className="text-gray-600">Contestant:</span>
+                                <p className="font-medium text-gray-900">{performance.contestantName}</p>
+                              </div>
+                              <div>
+                                <span className="text-gray-600">Duration:</span>
+                                <p className="font-medium text-gray-900">{performance.duration} minutes</p>
+                              </div>
+                              <div className="md:col-span-2">
+                                <span className="text-gray-600">Participants:</span>
+                                <p className="font-medium text-gray-900">{performance.participantNames?.join(', ') || 'Loading...'}</p>
+                              </div>
+                            </div>
+                          </div>
+                          
+                          <div className="ml-6">
+                            <button
+                              onClick={() => handleStartScoring(performance)}
+                              className={`px-6 py-3 font-bold rounded-xl transition-all transform hover:scale-105 shadow-lg ${
+                                performance.hasScore
+                                  ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white hover:from-blue-600 hover:to-indigo-700'
+                                  : 'bg-gradient-to-r from-purple-500 to-pink-600 text-white hover:from-purple-600 hover:to-pink-700'
+                              }`}
                             >
-                              Score Performance
-                            </Link>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                <div className="text-center py-12 text-gray-500">
-                  <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
-                    <span className="text-2xl">🎭</span>
+                              {performance.hasScore ? 'Update Score' : 'Start Judging'}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                  <h3 className="text-lg font-medium mb-2">No performances for this event</h3>
-                  <p className="text-sm">Performances will appear here once entries are approved and converted to performances.</p>
+
+                  {/* Pagination */}
+                  {totalPages > 1 && (
+                    <div className="flex justify-center space-x-2">
+                      <button
+                        onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                        disabled={currentPage === 1}
+                        className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                        Previous
+                      </button>
+                      
+                      {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                        <button
+                          key={page}
+                          onClick={() => setCurrentPage(page)}
+                          className={`px-4 py-2 rounded-lg font-medium ${
+                            currentPage === page
+                              ? 'bg-purple-600 text-white'
+                              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                          }`}
+                        >
+                          {page}
+                        </button>
+                      ))}
+                      
+                      <button
+                        onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                        disabled={currentPage === totalPages}
+                        className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Next
+                      </button>
                 </div>
-              )
-            ) : (
-              <div className="text-center py-12 text-gray-500">
-                <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
-                  <span className="text-2xl">🎯</span>
-                </div>
-                <h3 className="text-lg font-medium mb-2">Select an event to begin judging</h3>
-                <p className="text-sm">Choose an event from the dropdown above to see performances ready for scoring.</p>
+                  )}
+                </>
+              ) : (
+                <div className="text-center py-16">
+                  <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                    <span className="text-3xl">🎭</span>
+                  </div>
+                  <h3 className="text-xl font-bold text-gray-900 mb-2">
+                    {filterStatus === 'all' && !searchTerm ? 'No Performances Yet' : 
+                     filterStatus === 'scored' && !searchTerm ? 'No Scored Performances' :
+                     filterStatus === 'not_scored' && !searchTerm ? 'All Performances Scored!' :
+                     'No performances match your criteria'}
+                  </h3>
+                  <p className="text-gray-600">
+                    {filterStatus === 'all' && !searchTerm ? 'Performances will appear here once entries are approved and ready for judging.' :
+                     filterStatus === 'scored' && !searchTerm ? 'Scored performances will appear here.' :
+                     filterStatus === 'not_scored' && !searchTerm ? 'Great job! You have scored all available performances.' :
+                     'Try adjusting your search or filter.'}
+                  </p>
                 </div>
             )}
           </div>
         </div>
+        )}
       </div>
     </div>
   );

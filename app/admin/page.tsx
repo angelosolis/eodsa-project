@@ -395,7 +395,7 @@ export default function AdminDashboard() {
             <h2 className="text-2xl font-bold bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">
               Loading EODSA Admin
             </h2>
-            <p className="text-gray-600 font-medium animate-pulse">Preparing your dashboard...</p>
+            <p className="text-gray-700 font-medium animate-pulse">Preparing your dashboard...</p>
             
             {/* Progress Dots */}
             <div className="flex justify-center space-x-2 mt-6">
@@ -423,7 +423,7 @@ export default function AdminDashboard() {
                 <h1 className="text-xl sm:text-2xl lg:text-3xl font-black bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 bg-clip-text text-transparent leading-tight">
                   EODSA Admin
                 </h1>
-                <p className="text-gray-600 text-xs sm:text-sm lg:text-base font-medium">Competition Management System</p>
+                <p className="text-gray-700 text-xs sm:text-sm lg:text-base font-medium">Competition Management System</p>
               </div>
             </div>
             <div className="flex items-center space-x-2 sm:space-x-4">
@@ -560,12 +560,12 @@ export default function AdminDashboard() {
                   <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50/80">
                       <tr>
-                        <th className="px-3 sm:px-6 py-3 sm:py-4 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">Event</th>
-                        <th className="px-3 sm:px-6 py-3 sm:py-4 text-left text-xs font-bold text-gray-600 uppercase tracking-wider hidden sm:table-cell">Region</th>
-                        <th className="px-3 sm:px-6 py-3 sm:py-4 text-left text-xs font-bold text-gray-600 uppercase tracking-wider hidden md:table-cell">Type</th>
-                        <th className="px-3 sm:px-6 py-3 sm:py-4 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">Date</th>
-                        <th className="px-3 sm:px-6 py-3 sm:py-4 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">Status</th>
-                        <th className="px-3 sm:px-6 py-3 sm:py-4 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">Actions</th>
+                        <th className="px-3 sm:px-6 py-3 sm:py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Event</th>
+                        <th className="px-3 sm:px-6 py-3 sm:py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider hidden sm:table-cell">Region</th>
+                        <th className="px-3 sm:px-6 py-3 sm:py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider hidden md:table-cell">Type</th>
+                        <th className="px-3 sm:px-6 py-3 sm:py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Date</th>
+                        <th className="px-3 sm:px-6 py-3 sm:py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Status</th>
+                        <th className="px-3 sm:px-6 py-3 sm:py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="bg-white/50 divide-y divide-gray-200">
@@ -574,7 +574,7 @@ export default function AdminDashboard() {
                           <td className="px-3 sm:px-6 py-3 sm:py-4">
                             <div>
                               <div className="text-xs sm:text-sm font-bold text-gray-900 leading-tight">{event.name}</div>
-                              <div className="text-xs sm:text-sm text-gray-600 font-medium mt-1">{event.venue}</div>
+                              <div className="text-xs sm:text-sm text-gray-700 font-medium mt-1">{event.venue}</div>
                               <div className="text-xs text-gray-500 sm:hidden mt-1">
                                 {event.region} • {event.performanceType} • {event.ageCategory}
                 </div>
@@ -583,7 +583,7 @@ export default function AdminDashboard() {
                           <td className="px-3 sm:px-6 py-3 sm:py-4 text-xs sm:text-sm font-medium text-gray-900 hidden sm:table-cell">{event.region}</td>
                           <td className="px-3 sm:px-6 py-3 sm:py-4 hidden md:table-cell">
                             <div className="text-xs sm:text-sm font-medium text-gray-900">{event.performanceType}</div>
-                            <div className="text-xs sm:text-sm text-gray-600">{event.ageCategory}</div>
+                            <div className="text-xs sm:text-sm text-gray-700">{event.ageCategory}</div>
                           </td>
                           <td className="px-3 sm:px-6 py-3 sm:py-4 text-xs sm:text-sm font-medium text-gray-900">
                             <div className="hidden sm:block">
@@ -676,10 +676,10 @@ export default function AdminDashboard() {
                 <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50/80">
                       <tr>
-                        <th className="px-6 py-4 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">Name</th>
-                        <th className="px-6 py-4 text-left text-xs font-bold text-gray-600 uppercase tracking-wider hidden sm:table-cell">Email</th>
-                        <th className="px-6 py-4 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">Role</th>
-                        <th className="px-6 py-4 text-left text-xs font-bold text-gray-600 uppercase tracking-wider hidden md:table-cell">Created</th>
+                        <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Name</th>
+                        <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider hidden sm:table-cell">Email</th>
+                        <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Role</th>
+                        <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider hidden md:table-cell">Created</th>
                     </tr>
                   </thead>
                     <tbody className="bg-white/50 divide-y divide-gray-200">
@@ -688,7 +688,7 @@ export default function AdminDashboard() {
                           <td className="px-6 py-4">
                             <div>
                               <div className="text-sm font-bold text-gray-900">{judge.name}</div>
-                              <div className="text-sm text-gray-600 font-medium sm:hidden">{judge.email}</div>
+                              <div className="text-sm text-gray-700 font-medium sm:hidden">{judge.email}</div>
                           </div>
                         </td>
                           <td className="px-6 py-4 text-sm font-medium text-gray-900 hidden sm:table-cell">{judge.email}</td>
@@ -759,9 +759,9 @@ export default function AdminDashboard() {
                 <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50/80">
                       <tr>
-                        <th className="px-6 py-4 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">Judge</th>
-                        <th className="px-6 py-4 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">Event</th>
-                        <th className="px-6 py-4 text-left text-xs font-bold text-gray-600 uppercase tracking-wider hidden sm:table-cell">Email</th>
+                        <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Judge</th>
+                        <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Event</th>
+                        <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider hidden sm:table-cell">Email</th>
                     </tr>
                   </thead>
                     <tbody className="bg-white/50 divide-y divide-gray-200">
@@ -770,7 +770,7 @@ export default function AdminDashboard() {
                           <td className="px-6 py-4">
                             <div>
                               <div className="text-sm font-bold text-gray-900">{assignment.judgeName}</div>
-                              <div className="text-sm text-gray-600 font-medium sm:hidden">{assignment.judgeEmail}</div>
+                              <div className="text-sm text-gray-700 font-medium sm:hidden">{assignment.judgeEmail}</div>
                             </div>
                         </td>
                           <td className="px-6 py-4 text-sm font-medium text-gray-900">{assignment.eventName}</td>
@@ -816,7 +816,7 @@ export default function AdminDashboard() {
                       type="text"
                     value={newEvent.name}
                     onChange={(e) => setNewEvent(prev => ({ ...prev, name: e.target.value }))}
-                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 text-base font-medium placeholder-gray-400"
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 text-base font-medium text-gray-900 placeholder-gray-400"
                     required
                     placeholder="e.g., EODSA Regional Championships 2024"
                   />
@@ -828,7 +828,7 @@ export default function AdminDashboard() {
                     type="text"
                     value={newEvent.venue}
                     onChange={(e) => setNewEvent(prev => ({ ...prev, venue: e.target.value }))}
-                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 text-base font-medium placeholder-gray-400"
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 text-base font-medium text-gray-900 placeholder-gray-400"
                     required
                     placeholder="e.g., Johannesburg Civic Theatre"
                   />
@@ -839,7 +839,7 @@ export default function AdminDashboard() {
                   <textarea
                     value={newEvent.description}
                     onChange={(e) => setNewEvent(prev => ({ ...prev, description: e.target.value }))}
-                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 text-base font-medium placeholder-gray-400"
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 text-base font-medium text-gray-900 placeholder-gray-400"
                     rows={3}
                     required
                     placeholder="Describe the event..."
@@ -851,7 +851,7 @@ export default function AdminDashboard() {
                   <select
                     value={newEvent.region}
                     onChange={(e) => setNewEvent(prev => ({ ...prev, region: e.target.value }))}
-                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 text-base font-medium"
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 text-base font-medium text-gray-900"
                     required
                   >
                     <option value="">Select Region</option>
@@ -866,7 +866,7 @@ export default function AdminDashboard() {
                   <select
                     value={newEvent.performanceType}
                     onChange={(e) => setNewEvent(prev => ({ ...prev, performanceType: e.target.value }))}
-                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 text-base font-medium"
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 text-base font-medium text-gray-900"
                     required
                   >
                     <option value="">Select Type</option>
@@ -881,7 +881,7 @@ export default function AdminDashboard() {
                   <select
                     value={newEvent.ageCategory}
                     onChange={(e) => setNewEvent(prev => ({ ...prev, ageCategory: e.target.value }))}
-                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 text-base font-medium"
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 text-base font-medium text-gray-900"
                     required
                   >
                     <option value="">Select Age Category</option>
@@ -899,7 +899,7 @@ export default function AdminDashboard() {
                     step="0.01"
                     value={newEvent.entryFee}
                     onChange={(e) => setNewEvent(prev => ({ ...prev, entryFee: e.target.value }))}
-                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 text-base font-medium placeholder-gray-400"
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 text-base font-medium text-gray-900 placeholder-gray-400"
                     required
                     placeholder="300.00"
                   />
@@ -911,7 +911,7 @@ export default function AdminDashboard() {
                     type="datetime-local"
                     value={newEvent.eventDate}
                     onChange={(e) => setNewEvent(prev => ({ ...prev, eventDate: e.target.value }))}
-                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 text-base font-medium"
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 text-base font-medium text-gray-900"
                     required
                   />
                 </div>
@@ -922,7 +922,7 @@ export default function AdminDashboard() {
                     type="datetime-local"
                     value={newEvent.registrationDeadline}
                     onChange={(e) => setNewEvent(prev => ({ ...prev, registrationDeadline: e.target.value }))}
-                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 text-base font-medium"
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 text-base font-medium text-gray-900"
                     required
                   />
                 </div>
@@ -933,7 +933,7 @@ export default function AdminDashboard() {
                     type="number"
                     value={newEvent.maxParticipants}
                     onChange={(e) => setNewEvent(prev => ({ ...prev, maxParticipants: e.target.value }))}
-                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 text-base font-medium placeholder-gray-400"
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 text-base font-medium text-gray-900 placeholder-gray-400"
                     placeholder="50"
                   />
                 </div>
@@ -1014,7 +1014,7 @@ export default function AdminDashboard() {
                     type="text"
                       value={newJudge.name}
                       onChange={(e) => setNewJudge(prev => ({ ...prev, name: e.target.value }))}
-                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200 text-base font-medium placeholder-gray-400"
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200 text-base font-medium text-gray-900 placeholder-gray-400"
                       required
                     placeholder="Full Name"
                     />
@@ -1026,7 +1026,7 @@ export default function AdminDashboard() {
                       type="email"
                       value={newJudge.email}
                       onChange={(e) => setNewJudge(prev => ({ ...prev, email: e.target.value }))}
-                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200 text-base font-medium placeholder-gray-400"
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200 text-base font-medium text-gray-900 placeholder-gray-400"
                       required
                     placeholder="judge@email.com"
                     />
@@ -1038,7 +1038,7 @@ export default function AdminDashboard() {
                       type="password"
                       value={newJudge.password}
                       onChange={(e) => setNewJudge(prev => ({ ...prev, password: e.target.value }))}
-                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200 text-base font-medium placeholder-gray-400"
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200 text-base font-medium text-gray-900 placeholder-gray-400"
                       required
                       minLength={6}
                       placeholder="Minimum 6 characters"
@@ -1091,7 +1091,7 @@ export default function AdminDashboard() {
                     <>
                       <div className="relative w-5 h-5">
                         <div className="absolute inset-0 border-2 border-white/30 rounded-full"></div>
-                      </div>
+            </div>
                       <span>Creating...</span>
                     </>
                   ) : (
@@ -1135,7 +1135,7 @@ export default function AdminDashboard() {
                   <select
                     value={assignment.judgeId}
                     onChange={(e) => setAssignment(prev => ({ ...prev, judgeId: e.target.value }))}
-                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-pink-500 transition-all duration-200 text-base font-medium"
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-pink-500 transition-all duration-200 text-base font-medium text-gray-900"
                     required
                   >
                     <option value="">Choose a judge</option>
@@ -1150,7 +1150,7 @@ export default function AdminDashboard() {
                   <select
                     value={assignment.eventId}
                     onChange={(e) => setAssignment(prev => ({ ...prev, eventId: e.target.value }))}
-                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-pink-500 transition-all duration-200 text-base font-medium"
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-pink-500 transition-all duration-200 text-base font-medium text-gray-900"
                     required
                   >
                     <option value="">Choose an event</option>

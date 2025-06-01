@@ -28,7 +28,7 @@ export default function JudgeLogin() {
     setError('');
 
     try {
-      const response = await fetch('/api/auth/login', {
+      const response = await fetch('/api/auth/judge', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -79,14 +79,14 @@ export default function JudgeLogin() {
           <h1 className="text-4xl font-black bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 bg-clip-text text-transparent mb-2">
             EODSA Portal
           </h1>
-          <p className="text-gray-600 font-medium text-lg">Competition Management System</p>
+          <p className="text-gray-700 font-medium text-lg">Competition Management System</p>
       </div>
 
         {/* Enhanced Login Card */}
-        <div className="bg-white/90 backdrop-blur-lg rounded-3xl shadow-2xl border border-white/50 overflow-hidden">
+        <div className="bg-white/90 backdrop-blur-xl rounded-2xl shadow-2xl overflow-hidden border border-white/30">
           <div className="bg-gradient-to-r from-indigo-500/10 to-purple-500/10 px-8 py-6 border-b border-indigo-100">
             <h2 className="text-2xl font-bold text-gray-900 text-center">Sign In</h2>
-            <p className="text-gray-600 text-center mt-1">Access your judging dashboard</p>
+            <p className="text-gray-700 text-center mt-1">Access your judging dashboard</p>
           </div>
 
           <div className="p-8">
@@ -101,7 +101,7 @@ export default function JudgeLogin() {
                     name="email"
                     value={formData.email}
                     onChange={handleInputChange}
-                  className="w-full px-4 py-4 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 text-base font-medium placeholder-gray-400"
+                  className="w-full px-4 py-4 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 text-base font-medium text-gray-900 placeholder-gray-400"
                     placeholder="judge@competition.com"
                     required
                   />
@@ -117,7 +117,7 @@ export default function JudgeLogin() {
                     name="password"
                     value={formData.password}
                     onChange={handleInputChange}
-                  className="w-full px-4 py-4 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 text-base font-medium placeholder-gray-400"
+                  className="w-full px-4 py-4 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 text-base font-medium text-gray-900 placeholder-gray-400"
                   placeholder="Enter your password"
                     required
                   />
@@ -158,12 +158,12 @@ export default function JudgeLogin() {
 
         {/* Enhanced Footer */}
           <div className="text-center mt-8">
-          <p className="text-gray-500 text-sm font-medium">
+          <p className="text-gray-700 text-sm font-medium">
             Secure competition management for EODSA
             </p>
           <div className="flex items-center justify-center mt-4 space-x-2">
             <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-            <span className="text-xs text-gray-500">System Online</span>
+            <span className="text-xs text-gray-700">System Online</span>
           </div>
         </div>
       </div>
@@ -171,8 +171,8 @@ export default function JudgeLogin() {
       {/* Custom CSS for animations */}
       <style jsx global>{`
         @keyframes slideIn {
-          from { opacity: 0; transform: translateY(-10px); }
-          to { opacity: 1; transform: translateY(0); }
+          from { opacity: 0; transform: translateX(-20px); }
+          to { opacity: 1; transform: translateX(0); }
         }
         
         .animate-slideIn {

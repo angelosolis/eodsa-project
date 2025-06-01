@@ -55,12 +55,12 @@ export async function POST(request: Request) {
 
     // Create the judge
     const newJudge = await db.createJudge({
+      id: `judge-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       name: name.trim(),
       email: email.toLowerCase().trim(),
       password: hashedPassword,
       isAdmin: Boolean(isAdmin),
-      specialization: [],
-      createdAt: new Date().toISOString()
+      specialization: []
     });
 
     // Return success without password

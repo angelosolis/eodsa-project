@@ -42,10 +42,19 @@ export default function RegisterPage() {
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
+    setFormData(prev => {
+      const newFormData = { ...prev, [name]: value };
+      
+      // For private registration, auto-populate dancer information from personal details
+      if (prev.type === 'private' && name === 'name' && prev.dancers.length > 0) {
+        newFormData.dancers = [{
+          ...prev.dancers[0],
+          name: value
+        }];
+      }
+      
+      return newFormData;
+    });
   };
 
   const handleDancerChange = (index: number, field: keyof DancerForm, value: string) => {
@@ -65,19 +74,21 @@ export default function RegisterPage() {
   };
 
   const removeDancer = (index: number) => {
-    if (formData.dancers.length > 1) {
-      setFormData(prev => ({
-        ...prev,
-        dancers: prev.dancers.filter((_, i) => i !== index)
-      }));
-    }
+    setFormData(prev => ({
+      ...prev,
+      dancers: prev.dancers.filter((_, i) => i !== index)
+    }));
   };
 
   const handleTypeChange = (type: 'studio' | 'private') => {
     setFormData(prev => ({
       ...prev,
       type,
-      dancers: type === 'private' ? [{ name: '', age: '', style: '', nationalId: '' }] : prev.dancers
+      dancers: type === 'private' 
+        ? [{ name: prev.name || '', age: '', style: '', nationalId: '' }] // Auto-populate name for private
+        : prev.dancers.length === 0 
+          ? [{ name: '', age: '', style: '', nationalId: '' }] 
+          : prev.dancers
     }));
   };
 
@@ -169,14 +180,14 @@ export default function RegisterPage() {
               <div className="text-xs text-purple-600">⚠️ Save this ID - you'll need it for event entries</div>
             </div>
             
-            <p className="text-gray-600 mb-8 leading-relaxed">
+            <p className="text-gray-700 mb-8 leading-relaxed">
               Congratulations! You're now registered in the E-O-D-S-A competition system. 
               Use your ID to enter competitions and track your performances.
             </p>
             
             <div className="space-y-4">
               <Link 
-                href={`/event-entry?eodsaId=${eodsaId}`}
+                href={`/event-dashboard?eodsaId=${eodsaId}`}
                 className="block w-full px-6 py-4 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-2xl hover:from-purple-600 hover:to-pink-600 transition-all duration-300 font-semibold shadow-lg hover:shadow-xl transform hover:scale-105"
               >
                 🎪 Enter Your First Competition
@@ -246,10 +257,10 @@ export default function RegisterPage() {
               <h1 className="text-4xl lg:text-5xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent mb-4">
                 Join E-O-D-S-A
             </h1>
-              <p className="text-xl text-gray-600 max-w-2xl mx-auto">
+              <p className="text-xl text-gray-700 max-w-2xl mx-auto">
                 Register your dancers and become part of South Africa's premier dance competition community.
             </p>
-          </div>
+            </div>
 
             <div className="bg-white/80 backdrop-blur-xl rounded-3xl shadow-2xl border border-white/20 p-6 lg:p-12">
               <form onSubmit={handleSubmit} className="space-y-8">
@@ -274,8 +285,8 @@ export default function RegisterPage() {
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
                           </svg>
                         </div>
-                        <h4 className="font-bold text-lg mb-2">Dance Studio</h4>
-                        <p className="text-sm text-gray-600">Register multiple dancers from your studio</p>
+                        <h4 className="font-bold text-lg mb-2 text-gray-900">Dance Studio</h4>
+                        <p className="text-sm text-gray-700">Register multiple dancers from your studio</p>
               </div>
                     </button>
 
@@ -296,8 +307,8 @@ export default function RegisterPage() {
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                           </svg>
                         </div>
-                        <h4 className="font-bold text-lg mb-2">Individual Dancer</h4>
-                        <p className="text-sm text-gray-600">Register as a private contestant</p>
+                        <h4 className="font-bold text-lg mb-2 text-gray-900">Individual Dancer</h4>
+                        <p className="text-sm text-gray-700">Register as a private contestant</p>
                       </div>
                     </button>
                   </div>
@@ -322,7 +333,7 @@ export default function RegisterPage() {
                   name="email"
                   value={formData.email}
                   onChange={handleInputChange}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all bg-white"
+                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all bg-white text-gray-900"
                   required
                 />
               </div>
@@ -336,7 +347,7 @@ export default function RegisterPage() {
                   name="phone"
                   value={formData.phone}
                   onChange={handleInputChange}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all bg-white"
+                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all bg-white text-gray-900"
                   required
                 />
                     </div>
@@ -363,7 +374,7 @@ export default function RegisterPage() {
                     name="studioName"
                     value={formData.studioName}
                     onChange={handleInputChange}
-                          className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all bg-white"
+                          className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all bg-white text-gray-900"
                           required={formData.type === 'studio'}
                         />
                       </div>
@@ -377,7 +388,7 @@ export default function RegisterPage() {
                           name="studioContactPerson"
                           value={formData.studioContactPerson}
                           onChange={handleInputChange}
-                          className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all bg-white"
+                          className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all bg-white text-gray-900"
                           required={formData.type === 'studio'}
                         />
                       </div>
@@ -392,7 +403,7 @@ export default function RegisterPage() {
                         name="studioAddress"
                         value={formData.studioAddress}
                         onChange={handleInputChange}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all bg-white"
+                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all bg-white text-gray-900"
                     required={formData.type === 'studio'}
                   />
                     </div>
@@ -406,7 +417,7 @@ export default function RegisterPage() {
                         name="studioRegistrationNumber"
                         value={formData.studioRegistrationNumber}
                         onChange={handleInputChange}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all bg-white"
+                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all bg-white text-gray-900"
                       />
                     </div>
                   </div>
@@ -431,7 +442,7 @@ export default function RegisterPage() {
                         name="name"
                         value={formData.name}
                         onChange={handleInputChange}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-pink-500 transition-all bg-white"
+                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-pink-500 transition-all bg-white text-gray-900"
                         required={formData.type === 'private'}
                       />
                     </div>
@@ -441,12 +452,19 @@ export default function RegisterPage() {
                 {/* Dancers Section */}
                 <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl p-6 border border-blue-200">
                   <div className="flex justify-between items-center mb-6">
-                    <h3 className="text-lg font-semibold text-gray-900 flex items-center">
-                      <svg className="w-5 h-5 mr-2 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                      </svg>
-                      {formData.type === 'studio' ? 'Studio Dancers' : 'Dancer Information'}
-                    </h3>
+                    <div>
+                      <h3 className="text-lg font-semibold text-gray-900 flex items-center">
+                        <svg className="w-5 h-5 mr-2 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                        </svg>
+                        {formData.type === 'studio' ? 'Studio Dancers' : 'Dancer Information'}
+                      </h3>
+                      {formData.type === 'private' && (
+                        <p className="text-sm text-gray-600 mt-1">
+                          Complete your dancer profile for competition registration
+                        </p>
+                      )}
+                    </div>
                     {formData.type === 'studio' && (
                       <button
                         type="button"
@@ -486,13 +504,34 @@ export default function RegisterPage() {
                             <label className="block text-sm font-medium text-gray-700 mb-2">
                               Full Name *
                             </label>
-                            <input
-                              type="text"
-                              value={dancer.name}
-                              onChange={(e) => handleDancerChange(index, 'name', e.target.value)}
-                              className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
-                              required
-                            />
+                            {formData.type === 'private' ? (
+                              <div className="relative">
+                                <input
+                                  type="text"
+                                  value={dancer.name}
+                                  className="w-full px-4 py-3 border border-gray-300 rounded-xl bg-gray-50 text-gray-700 cursor-not-allowed"
+                                  readOnly
+                                />
+                                <div className="absolute inset-y-0 right-0 flex items-center pr-3">
+                                  <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                                  </svg>
+                                </div>
+                              </div>
+                            ) : (
+                              <input
+                                type="text"
+                                value={dancer.name}
+                                onChange={(e) => handleDancerChange(index, 'name', e.target.value)}
+                                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-gray-900"
+                                required
+                              />
+                            )}
+                            {formData.type === 'private' && (
+                              <p className="text-xs text-gray-500 mt-1">
+                                💡 Auto-filled from your personal details above
+                              </p>
+                            )}
                           </div>
                           <div>
                             <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -504,7 +543,7 @@ export default function RegisterPage() {
                               max="99"
                               value={dancer.age}
                               onChange={(e) => handleDancerChange(index, 'age', e.target.value)}
-                              className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                              className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-gray-900"
                               required
                             />
                           </div>
@@ -515,7 +554,7 @@ export default function RegisterPage() {
                             <select
                               value={dancer.style}
                               onChange={(e) => handleDancerChange(index, 'style', e.target.value)}
-                              className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                              className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-gray-900"
                               required
                             >
                               <option value="">Select a style</option>
@@ -532,7 +571,7 @@ export default function RegisterPage() {
                               type="text"
                               value={dancer.nationalId}
                               onChange={(e) => handleDancerChange(index, 'nationalId', e.target.value)}
-                              className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                              className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-gray-900"
                               required
                             />
                           </div>

@@ -15,16 +15,26 @@ export async function GET(
       );
     }
 
-    const score = await db.getScoreByJudgeAndPerformance(judgeId, performanceId);
+    // Check if this judge has already scored this performance
+    const existingScore = await db.getScoreByJudgeAndPerformance(judgeId, performanceId);
 
-    return NextResponse.json({
-      success: true,
-      score: score || null
-    });
+    if (existingScore) {
+      return NextResponse.json({
+        success: true,
+        score: existingScore,
+        message: 'Score found'
+      });
+    } else {
+      return NextResponse.json({
+        success: false,
+        score: null,
+        message: 'No score found for this judge and performance'
+      });
+    }
   } catch (error) {
-    console.error('Error fetching score:', error);
+    console.error('Error checking score:', error);
     return NextResponse.json(
-      { success: false, error: 'Failed to fetch score' },
+      { success: false, error: 'Failed to check score' },
       { status: 500 }
     );
   }

@@ -251,19 +251,19 @@ export default function EventParticipantsPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
               <div>
                 <p className="font-semibold text-gray-700">Date</p>
-                <p className="text-gray-600">{new Date(event.eventDate).toLocaleDateString()}</p>
+                <p className="text-gray-700">{new Date(event.eventDate).toLocaleDateString()}</p>
               </div>
               <div>
                 <p className="font-semibold text-gray-700">Venue</p>
-                <p className="text-gray-600">{event.venue}</p>
+                <p className="text-gray-700">{event.venue}</p>
               </div>
               <div>
                 <p className="font-semibold text-gray-700">Entry Fee</p>
-                <p className="text-gray-600">R{event.entryFee.toFixed(2)}</p>
+                <p className="text-gray-700">R{event.entryFee.toFixed(2)}</p>
               </div>
               <div>
                 <p className="font-semibold text-gray-700">Participants</p>
-                <p className="text-gray-600">{entries.length} entries</p>
+                <p className="text-gray-700">{entries.length} entries</p>
               </div>
             </div>
           </div>
@@ -293,12 +293,12 @@ export default function EventParticipantsPage() {
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50/80">
                   <tr>
-                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">Contestant</th>
-                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-600 uppercase tracking-wider hidden sm:table-cell">Performance</th>
-                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">Payment</th>
-                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-600 uppercase tracking-wider hidden md:table-cell">Submitted</th>
-                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">Status</th>
-                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">Actions</th>
+                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Contestant</th>
+                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider hidden sm:table-cell">Performance</th>
+                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Payment</th>
+                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider hidden md:table-cell">Submitted</th>
+                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Status</th>
+                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white/50 divide-y divide-gray-200">
@@ -307,7 +307,7 @@ export default function EventParticipantsPage() {
                       <td className="px-6 py-4">
                         <div>
                           <div className="text-sm font-bold text-gray-900">{entry.contestantName || 'Loading...'}</div>
-                          <div className="text-sm text-gray-600">{entry.eodsaId}</div>
+                          <div className="text-sm text-gray-700">{entry.eodsaId}</div>
                           <div className="text-xs text-gray-500 sm:hidden mt-1">
                             {entry.itemName} • {entry.mastery}
                           </div>
@@ -316,7 +316,7 @@ export default function EventParticipantsPage() {
                       <td className="px-6 py-4 hidden sm:table-cell">
                         <div>
                           <div className="text-sm font-medium text-gray-900">{entry.itemName}</div>
-                          <div className="text-sm text-gray-600">{entry.choreographer}</div>
+                          <div className="text-sm text-gray-700">{entry.choreographer}</div>
                           <div className="text-xs text-gray-500">{entry.mastery} • {entry.itemStyle}</div>
                         </div>
                       </td>
@@ -328,7 +328,7 @@ export default function EventParticipantsPage() {
                           </span>
                         </div>
                       </td>
-                      <td className="px-6 py-4 text-sm text-gray-600 hidden md:table-cell">
+                      <td className="px-6 py-4 text-sm text-gray-700 hidden md:table-cell">
                         {new Date(entry.submittedAt).toLocaleDateString()}
                       </td>
                       <td className="px-6 py-4">
@@ -402,11 +402,11 @@ export default function EventParticipantsPage() {
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50/80">
                   <tr>
-                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">Performance</th>
-                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-600 uppercase tracking-wider hidden sm:table-cell">Participants</th>
-                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">Duration</th>
-                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-600 uppercase tracking-wider hidden md:table-cell">Choreographer</th>
-                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">Status</th>
+                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Performance</th>
+                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider hidden sm:table-cell">Participants</th>
+                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Duration</th>
+                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider hidden md:table-cell">Choreographer</th>
+                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Status</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white/50 divide-y divide-gray-200">
@@ -415,19 +415,19 @@ export default function EventParticipantsPage() {
                       <td className="px-6 py-4">
                         <div>
                           <div className="text-sm font-bold text-gray-900">{performance.title}</div>
-                          <div className="text-sm text-gray-600">{performance.contestantName}</div>
+                          <div className="text-sm text-gray-700">{performance.contestantName}</div>
                           <div className="text-xs text-gray-500">{performance.mastery} • {performance.itemStyle}</div>
                         </div>
                       </td>
                       <td className="px-6 py-4 hidden sm:table-cell">
-                        <div className="text-sm text-gray-600">
+                        <div className="text-sm text-gray-700">
                           {performance.participantNames.join(', ')}
                         </div>
                       </td>
                       <td className="px-6 py-4">
                         <div className="text-sm font-medium text-gray-900">{performance.duration} min</div>
                       </td>
-                      <td className="px-6 py-4 text-sm text-gray-600 hidden md:table-cell">
+                      <td className="px-6 py-4 text-sm text-gray-700 hidden md:table-cell">
                         {performance.choreographer}
                       </td>
                       <td className="px-6 py-4">

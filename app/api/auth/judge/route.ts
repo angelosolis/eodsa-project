@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getJudgeByEmail } from '@/lib/data';
+import { db } from '@/lib/database';
 import bcrypt from 'bcryptjs';
 
 export async function POST(request: Request) {
@@ -14,8 +14,8 @@ export async function POST(request: Request) {
       );
     }
 
-    // Find judge by email
-    const judge = await getJudgeByEmail(email);
+    // Find judge by email using database
+    const judge = await db.getJudgeByEmail(email);
     if (!judge) {
       return NextResponse.json(
         { success: false, error: 'Invalid email or password' },

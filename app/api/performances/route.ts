@@ -1,20 +1,22 @@
 import { NextResponse } from 'next/server';
-import { getAllPerformances } from '@/lib/data';
+import { db } from '@/lib/data';
 
 export async function GET() {
   try {
-    const performancesData = await getAllPerformances();
+    const performancesData = await db.getAllPerformances();
     
     // Map database fields to match dashboard interface
     const performances = performancesData.map(performance => ({
       id: performance.id,
+      eventId: performance.eventId,
       contestantId: performance.contestantId,
       title: performance.title,
-      region: performance.region,
-      performanceType: performance.performanceType,
-      ageCategory: performance.ageCategory,
-      category: performance.ageCategory, // Keep this for admin dashboard compatibility
       duration: performance.duration,
+      participantNames: performance.participantNames,
+      choreographer: performance.choreographer,
+      mastery: performance.mastery,
+      itemStyle: performance.itemStyle,
+      status: performance.status,
       contestantName: performance.contestantName
     }));
     

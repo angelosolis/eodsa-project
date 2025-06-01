@@ -1,13 +1,13 @@
 import { NextResponse } from 'next/server';
-import { addScore, db } from '@/lib/data';
+import { db } from '@/lib/data';
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { judgeId, performanceId, technicalScore, artisticScore, overallScore, comments } = body;
+    const { judgeId, performanceId, technique, artistry, presentation, overall, comments } = body;
 
     // Validate required fields
-    if (!judgeId || !performanceId || !technicalScore || !artisticScore || !overallScore) {
+    if (!judgeId || !performanceId || !technique || !artistry || !presentation || !overall) {
       return NextResponse.json(
         { success: false, error: 'Missing required fields' },
         { status: 400 }
@@ -15,9 +15,10 @@ export async function POST(request: Request) {
     }
 
     // Validate score ranges
-    if (technicalScore < 1 || technicalScore > 10 || 
-        artisticScore < 1 || artisticScore > 10 || 
-        overallScore < 1 || overallScore > 10) {
+    if (technique < 1 || technique > 10 || 
+        artistry < 1 || artistry > 10 || 
+        presentation < 1 || presentation > 10 ||
+        overall < 1 || overall > 10) {
       return NextResponse.json(
         { success: false, error: 'Scores must be between 1 and 10' },
         { status: 400 }
@@ -31,17 +32,17 @@ export async function POST(request: Request) {
     if (existingScore) {
       // Update existing score
       await db.updateScore(existingScore.id, {
-        technicalScore: Number(technicalScore),
-        artisticScore: Number(artisticScore),
-        overallScore: Number(overallScore),
+        technicalScore: Number(technique),
+        artisticScore: Number(artistry),
+        overallScore: Number(overall),
         comments: comments || ''
       });
       
       score = {
         ...existingScore,
-        technicalScore: Number(technicalScore),
-        artisticScore: Number(artisticScore),
-        overallScore: Number(overallScore),
+        technicalScore: Number(technique),
+        artisticScore: Number(artistry),
+        overallScore: Number(overall),
         comments: comments || ''
       };
       
@@ -52,12 +53,12 @@ export async function POST(request: Request) {
       });
     } else {
       // Create new score
-      score = await addScore({
+      score = await db.createScore({
         judgeId,
         performanceId,
-        technicalScore: Number(technicalScore),
-        artisticScore: Number(artisticScore),
-        overallScore: Number(overallScore),
+        technicalScore: Number(technique),
+        artisticScore: Number(artistry),
+        overallScore: Number(overall),
         comments: comments || ''
       });
       

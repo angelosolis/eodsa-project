@@ -138,7 +138,7 @@ export default function AdminRankingsPage() {
             <h2 className="text-2xl font-bold bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">
               Loading Rankings
             </h2>
-            <p className="text-gray-600 font-medium animate-pulse">Calculating results...</p>
+            <p className="text-gray-700 font-medium animate-pulse">Calculating results...</p>
             
             {/* Progress Dots */}
             <div className="flex justify-center space-x-2 mt-6">
@@ -166,7 +166,7 @@ export default function AdminRankingsPage() {
                 <h1 className="text-3xl font-black bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">
                   Competition Rankings
                 </h1>
-                <p className="text-gray-600 font-medium">Live scoring and leaderboards</p>
+                <p className="text-gray-700 font-medium">Live scoring and leaderboards</p>
               </div>
             </div>
             <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-4">
@@ -207,7 +207,7 @@ export default function AdminRankingsPage() {
             <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-6 shadow-xl border border-indigo-100 hover:shadow-2xl transition-all duration-300 transform hover:scale-105">
               <div className="text-center">
                 <div className="text-2xl font-bold text-indigo-600">{filteredRankings.length}</div>
-                <div className="text-sm text-gray-600 font-medium">Performances</div>
+                <div className="text-sm text-gray-700 font-medium">Performances</div>
               </div>
             </div>
             <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-6 shadow-xl border border-purple-100 hover:shadow-2xl transition-all duration-300 transform hover:scale-105">
@@ -215,7 +215,7 @@ export default function AdminRankingsPage() {
                 <div className="text-2xl font-bold text-purple-600">
                   {new Set(filteredRankings.map(r => r.region)).size}
                 </div>
-                <div className="text-sm text-gray-600 font-medium">Regions</div>
+                <div className="text-sm text-gray-700 font-medium">Regions</div>
               </div>
             </div>
             <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-6 shadow-xl border border-pink-100 hover:shadow-2xl transition-all duration-300 transform hover:scale-105">
@@ -223,7 +223,7 @@ export default function AdminRankingsPage() {
                 <div className="text-2xl font-bold text-pink-600">
                   {new Set(filteredRankings.map(r => r.ageCategory)).size}
                 </div>
-                <div className="text-sm text-gray-600 font-medium">Categories</div>
+                <div className="text-sm text-gray-700 font-medium">Categories</div>
               </div>
             </div>
             <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-6 shadow-xl border border-teal-100 hover:shadow-2xl transition-all duration-300 transform hover:scale-105">
@@ -231,7 +231,7 @@ export default function AdminRankingsPage() {
                 <div className="text-2xl font-bold text-teal-600">
                   {new Set(filteredRankings.map(r => r.performanceType)).size}
                 </div>
-                <div className="text-sm text-gray-600 font-medium">Types</div>
+                <div className="text-sm text-gray-700 font-medium">Types</div>
               </div>
             </div>
           </div>
@@ -251,7 +251,7 @@ export default function AdminRankingsPage() {
               <select
                 value={selectedRegion}
                 onChange={(e) => setSelectedRegion(e.target.value)}
-                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 font-medium"
+                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 font-medium text-gray-900"
               >
                 <option value="">All Regions</option>
                 {REGIONS.map(region => (
@@ -265,7 +265,7 @@ export default function AdminRankingsPage() {
               <select
                 value={selectedAgeCategory}
                 onChange={(e) => setSelectedAgeCategory(e.target.value)}
-                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 font-medium"
+                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 font-medium text-gray-900"
               >
                 <option value="">All Ages</option>
                 {AGE_CATEGORIES.map(category => (
@@ -279,7 +279,7 @@ export default function AdminRankingsPage() {
               <select
                 value={selectedPerformanceType}
                 onChange={(e) => setSelectedPerformanceType(e.target.value)}
-                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 font-medium"
+                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 font-medium text-gray-900"
               >
                 <option value="">All Types</option>
                 {PERFORMANCE_TYPES.map(type => (
@@ -306,7 +306,7 @@ export default function AdminRankingsPage() {
               <span className="text-3xl">🏆</span>
             </div>
             <h3 className="text-xl font-bold text-gray-900 mb-3">No Rankings Available</h3>
-            <p className="text-gray-600 max-w-md mx-auto">
+            <p className="text-gray-700 max-w-md mx-auto">
               Rankings will appear here once performances have been scored by judges.
               Make sure you have assigned judges to events and they have submitted scores.
             </p>
@@ -332,22 +332,22 @@ export default function AdminRankingsPage() {
                   <table className="w-full">
                     <thead className="bg-gray-50/80">
                       <tr>
-                        <th className="px-6 py-4 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">
+                        <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
                           Rank
                         </th>
-                        <th className="px-6 py-4 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">
+                        <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
                           Contestant
                         </th>
-                        <th className="px-6 py-4 text-left text-xs font-bold text-gray-600 uppercase tracking-wider hidden sm:table-cell">
+                        <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider hidden sm:table-cell">
                           Performance
                         </th>
-                        <th className="px-6 py-4 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">
+                        <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
                           Score
                         </th>
-                        <th className="px-6 py-4 text-left text-xs font-bold text-gray-600 uppercase tracking-wider hidden md:table-cell">
+                        <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider hidden md:table-cell">
                           Average
                         </th>
-                        <th className="px-6 py-4 text-left text-xs font-bold text-gray-600 uppercase tracking-wider hidden lg:table-cell">
+                        <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider hidden lg:table-cell">
                           Judges
                         </th>
                       </tr>
@@ -387,7 +387,7 @@ export default function AdminRankingsPage() {
                             </div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap hidden lg:table-cell">
-                            <div className="text-sm text-gray-600 font-medium">
+                            <div className="text-sm text-gray-700 font-medium">
                               {ranking.judgeCount} judge{ranking.judgeCount !== 1 ? 's' : ''}
                             </div>
                           </td>

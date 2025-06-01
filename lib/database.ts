@@ -644,9 +644,9 @@ export const db = {
   },
 
   // Keep existing methods for judges and scores...
-  async createJudge(judge: Omit<Judge, 'id'>) {
+  async createJudge(judge: Omit<Judge, 'createdAt'> & { id?: string }) {
     const sqlClient = getSql();
-    const id = Date.now().toString();
+    const id = judge.id || Date.now().toString();
     
     await sqlClient`
       INSERT INTO judges (id, name, email, password, is_admin, specialization)
