@@ -35,6 +35,7 @@ interface EventEntry {
   mastery: string;
   itemStyle: string;
   estimatedDuration: number;
+  itemNumber?: number;
   contestantName?: string;
   contestantEmail?: string;
   participantNames?: string[];
@@ -67,6 +68,7 @@ export default function EventParticipantsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [approvingEntries, setApprovingEntries] = useState<Set<string>>(new Set());
+  const [isExporting, setIsExporting] = useState(false);
 
   useEffect(() => {
     const session = localStorage.getItem('judgeSession');
@@ -175,6 +177,63 @@ export default function EventParticipantsPage() {
     return badges[status as keyof typeof badges] || badges.pending;
   };
 
+  const exportToExcel = async () => {
+    setIsExporting(true);
+    try {
+      // Prepare data for export
+      const exportData = entries.map((entry) => ({
+        'Item Number': entry.itemNumber || 'Not Assigned',
+        'EODSA ID': entry.eodsaId,
+        'Name': entry.contestantName,
+        'Performance Type': event?.performanceType || '',
+        'Mastery Level': entry.mastery,
+        'Style': entry.itemStyle,
+        'Age Category': event?.ageCategory || '',
+        'Fee': `R${entry.calculatedFee.toFixed(2)}`,
+        'Qualified for Nationals': entry.approved && entry.paymentStatus === 'paid' ? 'Yes' : 'No',
+        'Payment Status': entry.paymentStatus.toUpperCase(),
+        'Entry Status': entry.approved ? 'APPROVED' : 'PENDING',
+        'Choreographer': entry.choreographer,
+        'Duration (minutes)': entry.estimatedDuration || 'N/A',
+        'Submitted Date': new Date(entry.submittedAt).toLocaleDateString()
+      }));
+
+      // Convert to CSV format
+      if (exportData.length === 0) {
+        alert('No data to export');
+        return;
+      }
+
+      const headers = Object.keys(exportData[0]);
+      const csvContent = [
+        headers.join(','),
+        ...exportData.map(row => 
+          headers.map(header => {
+            const value = row[header as keyof typeof row];
+            // Handle values that might contain commas by wrapping in quotes
+            return typeof value === 'string' && value.includes(',') ? `"${value}"` : value;
+          }).join(',')
+        )
+      ].join('\n');
+
+      // Create and download file
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', `${event?.name || 'Event'}_Participants_${new Date().toISOString().split('T')[0]}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (error) {
+      console.error('Export failed:', error);
+      alert('Failed to export data. Please try again.');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 flex items-center justify-center">
@@ -242,11 +301,22 @@ export default function EventParticipantsPage() {
         {/* Event Details Card */}
         {event && (
           <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl p-6 mb-8 border border-indigo-100">
-            <div className="flex items-center space-x-3 mb-4">
-              <div className="w-8 h-8 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-lg flex items-center justify-center">
-                <span className="text-white text-sm">🏆</span>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center space-x-3">
+                <div className="w-8 h-8 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-lg flex items-center justify-center">
+                  <span className="text-white text-sm">🏆</span>
+                </div>
+                <h2 className="text-xl font-bold text-gray-900">Event Details</h2>
               </div>
-              <h2 className="text-xl font-bold text-gray-900">Event Details</h2>
+              {/* Excel Export Button */}
+              <button
+                onClick={exportToExcel}
+                disabled={isExporting || entries.length === 0}
+                className="inline-flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-xl hover:from-emerald-600 hover:to-teal-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 transform hover:scale-105 shadow-lg font-medium"
+              >
+                <span>📊</span>
+                <span>{isExporting ? 'Exporting...' : 'Download to Excel'}</span>
+              </button>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
               <div>
@@ -270,16 +340,24 @@ export default function EventParticipantsPage() {
         )}
 
         {/* Participants List */}
-        <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl overflow-hidden border border-indigo-100">
+        <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl overflow-hidden border border-indigo-100 mb-8">
           <div className="px-6 py-4 bg-gradient-to-r from-indigo-500/10 to-purple-500/10 border-b border-indigo-100">
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-bold text-gray-900">Participants & Entries</h2>
-              <div className="px-3 py-1 bg-indigo-100 text-indigo-800 rounded-full text-sm font-medium">
-                {entries.length} entries
+              <div className="flex items-center space-x-3">
+                <div className="px-3 py-1 bg-indigo-100 text-indigo-800 rounded-full text-sm font-medium">
+                  {entries.length} entries
+                </div>
+                {entries.length > 0 && (
+                  <div className="px-3 py-1 bg-emerald-100 text-emerald-800 rounded-full text-sm font-medium">
+                    {entries.filter(e => e.approved && e.paymentStatus === 'paid').length} qualified
+                  </div>
+                )}
               </div>
             </div>
           </div>
 
+          {/* Table with Item Number column */}
           {entries.length === 0 ? (
             <div className="text-center py-12 text-gray-500">
               <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
@@ -293,6 +371,7 @@ export default function EventParticipantsPage() {
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50/80">
                   <tr>
+                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Item #</th>
                     <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Contestant</th>
                     <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider hidden sm:table-cell">Performance</th>
                     <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Payment</th>
@@ -304,6 +383,14 @@ export default function EventParticipantsPage() {
                 <tbody className="bg-white/50 divide-y divide-gray-200">
                   {entries.map((entry) => (
                     <tr key={entry.id} className="hover:bg-indigo-50/50 transition-colors duration-200">
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm font-bold text-gray-900">
+                          {entry.itemNumber || 'TBA'}
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          Program Order
+                        </div>
+                      </td>
                       <td className="px-6 py-4">
                         <div>
                           <div className="text-sm font-bold text-gray-900">{entry.contestantName || 'Loading...'}</div>
@@ -331,37 +418,28 @@ export default function EventParticipantsPage() {
                       <td className="px-6 py-4 text-sm text-gray-700 hidden md:table-cell">
                         {new Date(entry.submittedAt).toLocaleDateString()}
                       </td>
-                      <td className="px-6 py-4">
-                        <span className={`inline-flex px-3 py-1 text-xs font-bold rounded-full border ${
-                          entry.approved ? 'bg-green-100 text-green-800 border-green-200' : 'bg-yellow-100 text-yellow-800 border-yellow-200'
-                        }`}>
-                          {entry.approved ? 'APPROVED' : 'PENDING'}
-                        </span>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex flex-col space-y-1">
+                          <span className={`inline-flex px-3 py-1 text-xs font-bold rounded-full border ${
+                            entry.approved ? 'bg-green-100 text-green-800 border-green-200' : 'bg-yellow-100 text-yellow-800 border-yellow-200'
+                          }`}>
+                            {entry.approved ? 'APPROVED' : 'PENDING'}
+                          </span>
+                          {entry.approved && entry.paymentStatus === 'paid' && (
+                            <span className="inline-flex px-2 py-1 text-xs font-medium rounded-full bg-purple-100 text-purple-800 border border-purple-200">
+                              QUALIFIED
+                            </span>
+                          )}
+                        </div>
                       </td>
-                      <td className="px-6 py-4">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                         {!entry.approved && (
                           <button
                             onClick={() => approveEntry(entry.id)}
                             disabled={approvingEntries.has(entry.id)}
-                            className={`inline-flex items-center space-x-1 text-sm font-medium px-3 py-1 rounded-lg transition-colors ${
-                              approvingEntries.has(entry.id)
-                                ? 'text-gray-400 bg-gray-100 cursor-not-allowed'
-                                : 'text-green-600 hover:text-green-700 bg-green-50 hover:bg-green-100'
-                            }`}
+                            className="text-green-600 hover:text-green-900 disabled:opacity-50 font-medium"
                           >
-                            {approvingEntries.has(entry.id) ? (
-                              <>
-                                <div className="relative w-3 h-3">
-                                  <div className="absolute inset-0 border-2 border-gray-200 rounded-full"></div>
-                                </div>
-                                <span>Approving...</span>
-                              </>
-                            ) : (
-                              <>
-                                <span>✓</span>
-                                <span>Approve</span>
-                              </>
-                            )}
+                            {approvingEntries.has(entry.id) ? 'Approving...' : 'Approve'}
                           </button>
                         )}
                       </td>

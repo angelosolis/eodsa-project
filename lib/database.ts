@@ -16,11 +16,18 @@ const getSql = () => {
   return sql;
 };
 
-// Generate E-O-D-S-A-ID
+// Generate E-O-D-S-A-ID in new format: letter + 6 digits (e.g. "E123456")
 export const generateEODSAId = () => {
-  const timestamp = Date.now().toString();
-  const random = Math.random().toString(36).substring(2, 8).toUpperCase();
-  return `EODSA-${timestamp.slice(-6)}-${random}`;
+  const letter = 'E';
+  const digits = Math.floor(100000 + Math.random() * 900000); // 6 digits
+  return `${letter}${digits}`;
+};
+
+// Generate Studio Registration Number: letter + 6 digits (e.g. "S123456")
+export const generateStudioRegistrationId = () => {
+  const letter = 'S';
+  const digits = Math.floor(100000 + Math.random() * 900000); // 6 digits
+  return `${letter}${digits}`;
 };
 
 // Initialize database tables for Phase 1
@@ -40,7 +47,7 @@ export const initializeDatabase = async () => {
     
     console.log('🔄 Initializing database tables...');
     
-    // Create contestants table with E-O-D-S-A-ID
+    // Create contestants table with updated fields
     await sqlClient`
       CREATE TABLE IF NOT EXISTS contestants (
         id TEXT PRIMARY KEY,
@@ -49,6 +56,12 @@ export const initializeDatabase = async () => {
         email TEXT UNIQUE NOT NULL,
         phone TEXT NOT NULL,
         type TEXT CHECK(type IN ('studio', 'private')) NOT NULL,
+        date_of_birth TEXT NOT NULL,
+        guardian_name TEXT,
+        guardian_email TEXT,
+        guardian_cell TEXT,
+        privacy_policy_accepted BOOLEAN NOT NULL DEFAULT FALSE,
+        privacy_policy_accepted_at TEXT,
         studio_name TEXT,
         studio_address TEXT,
         studio_contact_person TEXT,
@@ -58,13 +71,14 @@ export const initializeDatabase = async () => {
       )
     `;
 
-    // Create dancers table for individual dancer details
+    // Create dancers table with updated fields
     await sqlClient`
       CREATE TABLE IF NOT EXISTS dancers (
         id TEXT PRIMARY KEY,
         contestant_id TEXT NOT NULL,
         name TEXT NOT NULL,
         age INTEGER NOT NULL,
+        date_of_birth TEXT NOT NULL,
         style TEXT NOT NULL,
         national_id TEXT NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -122,7 +136,7 @@ export const initializeDatabase = async () => {
       )
     `;
 
-    // Create event_entries table
+    // Create event_entries table with item_number field
     await sqlClient`
       CREATE TABLE IF NOT EXISTS event_entries (
         id TEXT PRIMARY KEY,
@@ -135,6 +149,7 @@ export const initializeDatabase = async () => {
         payment_method TEXT CHECK(payment_method IN ('credit_card', 'bank_transfer')),
         submitted_at TEXT NOT NULL,
         approved BOOLEAN DEFAULT FALSE,
+        item_number INTEGER,
         item_name TEXT NOT NULL,
         choreographer TEXT NOT NULL,
         mastery TEXT NOT NULL,
@@ -146,7 +161,7 @@ export const initializeDatabase = async () => {
       )
     `;
 
-    // Create performances table
+    // Create performances table with item_number field
     await sqlClient`
       CREATE TABLE IF NOT EXISTS performances (
         id TEXT PRIMARY KEY,
@@ -156,6 +171,7 @@ export const initializeDatabase = async () => {
         title TEXT NOT NULL,
         participant_names TEXT NOT NULL, -- JSON array of participant names
         duration INTEGER NOT NULL,
+        item_number INTEGER,
         choreographer TEXT NOT NULL,
         mastery TEXT NOT NULL,
         item_style TEXT NOT NULL,
@@ -245,11 +261,14 @@ export const initializeDatabase = async () => {
       INSERT INTO fee_schedule (id, age_category, solo_fee, duet_fee, trio_fee, group_fee)
       VALUES 
         ('fee_under6', 'Under 6', 150.00, 250.00, 350.00, 450.00),
-        ('fee_6_8', '6-8 years', 200.00, 300.00, 400.00, 500.00),
-        ('fee_9_11', '9-11 years', 250.00, 350.00, 450.00, 550.00),
-        ('fee_12_14', '12-14 years', 300.00, 400.00, 500.00, 600.00),
-        ('fee_15_17', '15-17 years', 350.00, 450.00, 550.00, 650.00),
-        ('fee_18_plus', '18+ years', 400.00, 500.00, 600.00, 700.00)
+        ('fee_7_9', '7-9', 200.00, 300.00, 400.00, 500.00),
+        ('fee_10_12', '10-12', 250.00, 350.00, 450.00, 550.00),
+        ('fee_13_14', '13-14', 300.00, 400.00, 500.00, 600.00),
+        ('fee_15_17', '15-17', 350.00, 450.00, 550.00, 650.00),
+        ('fee_18_24', '18-24', 400.00, 500.00, 600.00, 700.00),
+        ('fee_25_39', '25-39', 400.00, 500.00, 600.00, 700.00),
+        ('fee_40_plus', '40+', 400.00, 500.00, 600.00, 700.00),
+        ('fee_60_plus', '60+', 350.00, 450.00, 550.00, 650.00)
       `;
       console.log('Default fee schedule inserted');
     }
@@ -310,26 +329,41 @@ export const db = {
     const id = Date.now().toString();
     const eodsaId = generateEODSAId();
     const registrationDate = new Date().toISOString();
+    const privacyPolicyAcceptedAt = contestant.privacyPolicyAccepted ? new Date().toISOString() : null;
     
     await sqlClient`
-      INSERT INTO contestants (id, eodsa_id, name, email, phone, type, studio_name, 
-                              studio_address, studio_contact_person, studio_registration_number, registration_date)
+      INSERT INTO contestants (id, eodsa_id, name, email, phone, type, date_of_birth, 
+                              guardian_name, guardian_email, guardian_cell, 
+                              privacy_policy_accepted, privacy_policy_accepted_at,
+                              studio_name, studio_address, studio_contact_person, 
+                              studio_registration_number, registration_date)
       VALUES (${id}, ${eodsaId}, ${contestant.name}, ${contestant.email}, ${contestant.phone}, 
-              ${contestant.type}, ${contestant.studioName || null}, 
+              ${contestant.type}, ${contestant.dateOfBirth},
+              ${contestant.guardianInfo?.name || null}, ${contestant.guardianInfo?.email || null}, 
+              ${contestant.guardianInfo?.cell || null}, ${contestant.privacyPolicyAccepted}, 
+              ${privacyPolicyAcceptedAt}, ${contestant.studioName || null}, 
               ${contestant.studioInfo?.address || null}, ${contestant.studioInfo?.contactPerson || null},
               ${contestant.studioInfo?.registrationNumber || null}, ${registrationDate})
     `;
     
-    // Insert dancers
+    // Insert dancers with date of birth
     for (const dancer of contestant.dancers) {
       const dancerId = Date.now().toString() + Math.random().toString(36).substring(2, 8);
       await sqlClient`
-        INSERT INTO dancers (id, contestant_id, name, age, style, national_id)
-        VALUES (${dancerId}, ${id}, ${dancer.name}, ${dancer.age}, ${dancer.style}, ${dancer.nationalId})
+        INSERT INTO dancers (id, contestant_id, name, age, date_of_birth, style, national_id)
+        VALUES (${dancerId}, ${id}, ${dancer.name}, ${dancer.age}, ${dancer.dateOfBirth}, 
+                ${dancer.style}, ${dancer.nationalId})
       `;
     }
     
-    return { ...contestant, id, eodsaId, registrationDate, eventEntries: [] };
+    return { 
+      ...contestant, 
+      id, 
+      eodsaId, 
+      registrationDate, 
+      eventEntries: [],
+      privacyPolicyAcceptedAt
+    };
   },
 
   async getContestantById(id: string) {
@@ -348,6 +382,14 @@ export const db = {
       email: contestant.email,
       phone: contestant.phone,
       type: contestant.type,
+      dateOfBirth: contestant.date_of_birth,
+      guardianInfo: contestant.guardian_name ? {
+        name: contestant.guardian_name,
+        email: contestant.guardian_email,
+        cell: contestant.guardian_cell
+      } : undefined,
+      privacyPolicyAccepted: contestant.privacy_policy_accepted,
+      privacyPolicyAcceptedAt: contestant.privacy_policy_accepted_at,
       studioName: contestant.studio_name,
       studioInfo: contestant.studio_address ? {
         address: contestant.studio_address,
@@ -358,6 +400,7 @@ export const db = {
         id: d.id,
         name: d.name,
         age: d.age,
+        dateOfBirth: d.date_of_birth,
         style: d.style,
         nationalId: d.national_id
       })),
@@ -373,6 +416,7 @@ export const db = {
         paymentMethod: e.payment_method,
         submittedAt: e.submitted_at,
         approved: e.approved,
+        itemNumber: e.item_number,
         itemName: e.item_name,
         choreographer: e.choreographer,
         mastery: e.mastery,
@@ -392,6 +436,14 @@ export const db = {
       email: row.email,
       phone: row.phone,
       type: row.type,
+      dateOfBirth: row.date_of_birth,
+      guardianInfo: row.guardian_name ? {
+        name: row.guardian_name,
+        email: row.guardian_email,
+        cell: row.guardian_cell
+      } : undefined,
+      privacyPolicyAccepted: row.privacy_policy_accepted,
+      privacyPolicyAcceptedAt: row.privacy_policy_accepted_at,
       studioName: row.studio_name,
       studioInfo: row.studio_address ? {
         address: row.studio_address,
@@ -411,8 +463,8 @@ export const db = {
     const submittedAt = new Date().toISOString();
     
     await sqlClient`
-      INSERT INTO event_entries (id, event_id, contestant_id, eodsa_id, participant_ids, calculated_fee, payment_status, submitted_at, approved, item_name, choreographer, mastery, item_style, estimated_duration)
-      VALUES (${id}, ${eventEntry.eventId}, ${eventEntry.contestantId}, ${eventEntry.eodsaId}, ${JSON.stringify(eventEntry.participantIds)}, ${eventEntry.calculatedFee}, ${eventEntry.paymentStatus}, ${submittedAt}, ${eventEntry.approved}, ${eventEntry.itemName}, ${eventEntry.choreographer}, ${eventEntry.mastery}, ${eventEntry.itemStyle}, ${eventEntry.estimatedDuration})
+      INSERT INTO event_entries (id, event_id, contestant_id, eodsa_id, participant_ids, calculated_fee, payment_status, submitted_at, approved, item_number, item_name, choreographer, mastery, item_style, estimated_duration)
+      VALUES (${id}, ${eventEntry.eventId}, ${eventEntry.contestantId}, ${eventEntry.eodsaId}, ${JSON.stringify(eventEntry.participantIds)}, ${eventEntry.calculatedFee}, ${eventEntry.paymentStatus}, ${submittedAt}, ${eventEntry.approved}, ${eventEntry.itemNumber || null}, ${eventEntry.itemName}, ${eventEntry.choreographer}, ${eventEntry.mastery}, ${eventEntry.itemStyle}, ${eventEntry.estimatedDuration})
     `;
     
     return { ...eventEntry, id, submittedAt };

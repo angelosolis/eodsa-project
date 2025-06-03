@@ -32,6 +32,7 @@ interface Performance {
   choreographer?: string;
   itemStyle?: string;
   mastery?: string;
+  itemNumber?: number;
 }
 
 interface Score {
@@ -71,6 +72,7 @@ export default function JudgeDashboard() {
   const [currentPage, setCurrentPage] = useState(1);
   const [performancesPerPage] = useState(6);
   const [searchTerm, setSearchTerm] = useState('');
+  const [itemNumberSearch, setItemNumberSearch] = useState('');
   const router = useRouter();
 
   useEffect(() => {
@@ -97,7 +99,7 @@ export default function JudgeDashboard() {
     } else {
       setFilteredPerformances([]);
     }
-  }, [selectedEventId, performances, filterStatus, searchTerm]);
+  }, [selectedEventId, performances, filterStatus, searchTerm, itemNumberSearch]);
 
   const loadJudgeData = async (judgeId: string) => {
     setIsLoading(true);
@@ -148,7 +150,7 @@ export default function JudgeDashboard() {
       filtered = filtered.filter(p => !p.hasScore);
     }
 
-    // Apply search term filter
+    // Apply search term filter (name, title)
     if (searchTerm) {
       const lowerSearchTerm = searchTerm.toLowerCase();
       filtered = filtered.filter(p => 
@@ -157,9 +159,50 @@ export default function JudgeDashboard() {
         (p.participantNames && p.participantNames.some(name => name.toLowerCase().includes(lowerSearchTerm)))
       );
     }
+
+    // Apply item number search
+    if (itemNumberSearch) {
+      const itemNum = parseInt(itemNumberSearch);
+      if (!isNaN(itemNum)) {
+        filtered = filtered.filter(p => p.itemNumber === itemNum);
+      }
+    }
+
+    // Sort by item number ascending (putting performances without item numbers at the end)
+    filtered.sort((a, b) => {
+      if (a.itemNumber && b.itemNumber) {
+        return a.itemNumber - b.itemNumber;
+      } else if (a.itemNumber && !b.itemNumber) {
+        return -1;
+      } else if (!a.itemNumber && b.itemNumber) {
+        return 1;
+      } else {
+        return a.title.localeCompare(b.title);
+      }
+    });
     
     setFilteredPerformances(filtered);
     setCurrentPage(1); // Reset to first page when filtering
+  };
+
+  const loadPerformanceByItemNumber = (itemNumber: number) => {
+    const performance = performances.find(p => 
+      p.eventId === selectedEventId && p.itemNumber === itemNumber
+    );
+    if (performance) {
+      handleStartScoring(performance);
+    } else {
+      alert(`No performance found with item number ${itemNumber}`);
+    }
+  };
+
+  const handleItemNumberSearchKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      const itemNum = parseInt(itemNumberSearch);
+      if (!isNaN(itemNum)) {
+        loadPerformanceByItemNumber(itemNum);
+      }
+    }
   };
 
   const handleStartScoring = (performance: PerformanceWithScore) => {
@@ -604,15 +647,39 @@ export default function JudgeDashboard() {
                   </button>
                 </div>
 
-                {/* Search Input */}
-                <div className="w-full md:w-auto">
-                  <input 
-                    type="text"
-                    placeholder="Search by title, contestant..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full md:w-72 px-4 py-2 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all text-sm"
-                  />
+                {/* Search Inputs */}
+                <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
+                  <div className="flex-1 md:w-48">
+                    <input 
+                      type="text"
+                      placeholder="Search by name, title..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="w-full px-4 py-2 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all text-sm"
+                    />
+                  </div>
+                  <div className="flex-1 md:w-32">
+                    <input 
+                      type="number"
+                      placeholder="Item #"
+                      value={itemNumberSearch}
+                      onChange={(e) => setItemNumberSearch(e.target.value)}
+                      onKeyPress={handleItemNumberSearchKeyPress}
+                      className="w-full px-4 py-2 border-2 border-purple-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all text-sm font-bold"
+                    />
+                  </div>
+                  <button
+                    onClick={() => {
+                      const itemNum = parseInt(itemNumberSearch);
+                      if (!isNaN(itemNum)) {
+                        loadPerformanceByItemNumber(itemNum);
+                      }
+                    }}
+                    disabled={!itemNumberSearch || isNaN(parseInt(itemNumberSearch))}
+                    className="px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-600 text-white rounded-lg hover:from-purple-600 hover:to-pink-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all font-medium"
+                  >
+                    Load
+                  </button>
                 </div>
               </div>
 
@@ -635,6 +702,11 @@ export default function JudgeDashboard() {
                         <div className="flex justify-between items-start">
                           <div className="flex-1">
                             <div className="flex items-center space-x-3 mb-3">
+                              {performance.itemNumber && (
+                                <span className="px-3 py-1 bg-gradient-to-r from-indigo-500 to-purple-600 text-white text-sm font-bold rounded-full">
+                                  #{performance.itemNumber}
+                                </span>
+                              )}
                               <h3 className="text-lg font-bold text-gray-900">{performance.title}</h3>
                               <div className="flex space-x-2">
                                 <span className={`px-3 py-1 text-xs font-bold rounded-full ${
@@ -642,43 +714,36 @@ export default function JudgeDashboard() {
                                   performance.status === 'in_progress' ? 'bg-yellow-100 text-yellow-800' :
                                   performance.status === 'completed' ? 'bg-green-100 text-green-800' :
                                   'bg-gray-100 text-gray-800'
-                            }`}>
-                              {performance.status.replace('_', ' ').toUpperCase()}
-                            </span>
+                                }`}>
+                                  {performance.status.replace('_', ' ').toUpperCase()}
+                                </span>
                                 {performance.hasScore && (
                                   <span className="px-3 py-1 text-xs font-bold rounded-full bg-green-100 text-green-800">
-                                    ✅ SCORED
+                                    SCORED
                                   </span>
                                 )}
                               </div>
                             </div>
-                            
-                            <div className="grid md:grid-cols-2 gap-4 text-sm mb-4">
-                              <div>
-                                <span className="text-gray-600">Contestant:</span>
-                                <p className="font-medium text-gray-900">{performance.contestantName}</p>
-                              </div>
-                              <div>
-                                <span className="text-gray-600">Duration:</span>
-                                <p className="font-medium text-gray-900">{performance.duration} minutes</p>
-                              </div>
-                              <div className="md:col-span-2">
-                                <span className="text-gray-600">Participants:</span>
-                                <p className="font-medium text-gray-900">{performance.participantNames?.join(', ') || 'Loading...'}</p>
-                              </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm text-gray-600 mb-4">
+                              <div><strong>Contestant:</strong> {performance.contestantName || 'Loading...'}</div>
+                              <div><strong>Duration:</strong> {performance.duration} minutes</div>
+                              <div><strong>Style:</strong> {performance.itemStyle || 'Not specified'}</div>
+                              <div><strong>Mastery:</strong> {performance.mastery || 'Not specified'}</div>
+                            </div>
+                            <div className="text-sm text-gray-600">
+                              <strong>Participants:</strong> {performance.participantNames?.join(', ') || 'Loading...'}
                             </div>
                           </div>
-                          
                           <div className="ml-6">
                             <button
                               onClick={() => handleStartScoring(performance)}
-                              className={`px-6 py-3 font-bold rounded-xl transition-all transform hover:scale-105 shadow-lg ${
+                              className={`px-6 py-3 rounded-xl font-bold transition-all transform hover:scale-105 ${
                                 performance.hasScore
                                   ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white hover:from-blue-600 hover:to-indigo-700'
-                                  : 'bg-gradient-to-r from-purple-500 to-pink-600 text-white hover:from-purple-600 hover:to-pink-700'
+                                  : 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white hover:from-emerald-600 hover:to-teal-700'
                               }`}
                             >
-                              {performance.hasScore ? 'Update Score' : 'Start Judging'}
+                              {performance.hasScore ? 'Update Score' : 'Start Scoring'}
                             </button>
                           </div>
                         </div>

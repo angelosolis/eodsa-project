@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams, useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { AGE_CATEGORIES, MASTERY_LEVELS, ITEM_STYLES } from '@/lib/types';
+import { AGE_CATEGORIES, MASTERY_LEVELS, ITEM_STYLES, TIME_LIMITS, calculateEODSAFee } from '@/lib/types';
 
 interface Event {
   id: string;
@@ -47,6 +47,7 @@ interface EventEntryForm {
   mastery: string;
   itemStyle: string;
   estimatedDuration: number;
+  itemNumber?: number;
 }
 
 export default function PerformanceTypeEntryPage() {
@@ -69,7 +70,8 @@ export default function PerformanceTypeEntryPage() {
     choreographer: '',
     mastery: '',
     itemStyle: '',
-    estimatedDuration: 3
+    estimatedDuration: 3,
+    itemNumber: undefined
   });
   const [calculatedFee, setCalculatedFee] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
@@ -96,6 +98,18 @@ export default function PerformanceTypeEntryPage() {
       }
     }
   }, [formData.eventId, events]);
+
+  useEffect(() => {
+    if (formData.eventId && formData.mastery && formData.participantIds.length > 0) {
+      // Use EODSA fee calculation
+      const feeBreakdown = calculateEODSAFee(
+        formData.mastery,
+        performanceType as 'Solo' | 'Duet' | 'Trio' | 'Group',
+        formData.participantIds.length
+      );
+      setCalculatedFee(feeBreakdown.totalFee);
+    }
+  }, [formData.eventId, formData.mastery, formData.participantIds.length, performanceType]);
 
   const loadContestant = async (id: string) => {
     try {
@@ -194,6 +208,16 @@ export default function PerformanceTypeEntryPage() {
     }
   };
 
+  const validateDuration = (duration: number): boolean => {
+    const performanceTypeLower = performanceType?.toLowerCase();
+    const maxDuration = TIME_LIMITS[performanceType as keyof typeof TIME_LIMITS];
+    
+    if (maxDuration && duration > maxDuration) {
+      return false;
+    }
+    return true;
+  };
+
   const handleSubmit = async () => {
     setIsSubmitting(true);
     
@@ -202,6 +226,13 @@ export default function PerformanceTypeEntryPage() {
       
       if (formData.participantIds.length < limits.min) {
         alert(`${performanceType} requires at least ${limits.min} participant(s)`);
+        setIsSubmitting(false);
+        return;
+      }
+
+      if (!validateDuration(formData.estimatedDuration)) {
+        const maxTime = TIME_LIMITS[performanceType as keyof typeof TIME_LIMITS];
+        alert(`${performanceType} performances must be ${maxTime} minutes or less`);
         setIsSubmitting(false);
         return;
       }
@@ -219,7 +250,8 @@ export default function PerformanceTypeEntryPage() {
         choreographer: formData.choreographer,
         mastery: formData.mastery,
         itemStyle: formData.itemStyle,
-        estimatedDuration: formData.estimatedDuration
+        estimatedDuration: formData.estimatedDuration,
+        itemNumber: formData.itemNumber
       };
 
       const response = await fetch('/api/event-entries', {
@@ -257,6 +289,11 @@ export default function PerformanceTypeEntryPage() {
       alert('Please fill in all performance details');
       return;
     }
+    if (step === 2 && !validateDuration(formData.estimatedDuration)) {
+      const maxTime = TIME_LIMITS[performanceType as keyof typeof TIME_LIMITS];
+      alert(`${performanceType} performances must be ${maxTime} minutes or less`);
+      return;
+    }
     setStep(prev => Math.min(prev + 1, 4));
   };
 
@@ -266,16 +303,16 @@ export default function PerformanceTypeEntryPage() {
 
   if (submitted) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-blue-50 to-purple-100 flex items-center justify-center p-4">
-        <div className="max-w-lg w-full bg-white/80 backdrop-blur-xl rounded-3xl shadow-2xl border border-white/20 p-8 text-center">
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 flex items-center justify-center p-4">
+        <div className="max-w-lg w-full bg-gray-800/80 backdrop-blur-xl rounded-3xl shadow-2xl border border-gray-700/20 p-8 text-center">
           <div className="text-6xl mb-6">🎉</div>
-          <h2 className="text-3xl font-bold text-gray-900 mb-4">Entry Submitted!</h2>
-          <p className="text-gray-600 mb-6">
+          <h2 className="text-3xl font-bold text-white mb-4">Entry Submitted!</h2>
+          <p className="text-gray-300 mb-6">
             Your {performanceType} entry for {region} has been submitted successfully.
           </p>
-          <div className="bg-gradient-to-r from-purple-100 to-pink-100 border-2 border-purple-200 rounded-2xl p-6 mb-6">
-            <p className="text-sm font-medium text-purple-700 mb-2">Status</p>
-            <p className="text-lg font-bold text-purple-900">⏳ Awaiting Judging</p>
+          <div className="bg-gradient-to-r from-purple-900/50 to-pink-900/50 border-2 border-purple-500/30 rounded-2xl p-6 mb-6">
+            <p className="text-sm font-medium text-purple-300 mb-2">Status</p>
+            <p className="text-lg font-bold text-purple-200">⏳ Awaiting Judging</p>
           </div>
           <div className="space-y-3">
             <Link 
@@ -286,7 +323,7 @@ export default function PerformanceTypeEntryPage() {
             </Link>
             <Link 
               href="/"
-              className="block w-full px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 transition-all duration-300 font-semibold"
+              className="block w-full px-6 py-3 border-2 border-gray-600 text-gray-300 rounded-xl hover:bg-gray-700 hover:border-gray-500 transition-all duration-300 font-semibold"
             >
               Back to Home
             </Link>
@@ -298,11 +335,11 @@ export default function PerformanceTypeEntryPage() {
 
   if (!region || !performanceType || !eodsaId) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-blue-50 to-purple-100 flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-white/80 backdrop-blur-xl rounded-3xl shadow-2xl border border-white/20 p-8 text-center">
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 flex items-center justify-center p-4">
+        <div className="max-w-md w-full bg-gray-800/80 backdrop-blur-xl rounded-3xl shadow-2xl border border-gray-700/20 p-8 text-center">
           <div className="text-6xl mb-6">❌</div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-4">Missing Information</h2>
-          <p className="text-gray-700 mb-6">Required parameters not provided.</p>
+          <h2 className="text-2xl font-bold text-white mb-4">Missing Information</h2>
+          <p className="text-gray-300 mb-6">Required parameters not provided.</p>
           <Link 
             href="/"
             className="block w-full px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-600 text-white rounded-xl hover:from-purple-600 hover:to-pink-700 transition-all duration-300 font-semibold"
@@ -315,47 +352,47 @@ export default function PerformanceTypeEntryPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-blue-50 to-purple-100">
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900">
       <div className="container mx-auto px-4 py-8">
         {/* Header */}
         <div className="text-center mb-8">
           <Link 
             href={`/event-dashboard/${region}?eodsaId=${eodsaId}`} 
-            className="inline-flex items-center text-purple-600 hover:text-purple-700 mb-4"
+            className="inline-flex items-center text-purple-400 hover:text-purple-300 mb-4 transition-colors"
           >
             <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
             Back to {region} Events
           </Link>
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent mb-4">
+          <h1 className="text-4xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent mb-4">
             {performanceType?.charAt(0).toUpperCase() + performanceType?.slice(1)} Entry
           </h1>
-          <p className="text-xl text-gray-700">{region} Region - Step {step} of 4</p>
+          <p className="text-xl text-gray-300">{region} Region - Step {step} of 4</p>
         </div>
 
         {/* Progress Bar */}
         <div className="max-w-4xl mx-auto mb-8">
-          <div className="bg-white/80 backdrop-blur-xl rounded-2xl shadow-xl border border-white/20 p-6">
+          <div className="bg-gray-800/80 backdrop-blur-xl rounded-2xl shadow-xl border border-gray-700/20 p-6">
             <div className="flex items-center justify-between">
               {[1, 2, 3, 4].map((stepNum) => (
                 <div key={stepNum} className="flex items-center">
                   <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold ${
                     stepNum <= step 
                       ? 'bg-gradient-to-r from-purple-500 to-pink-600 text-white' 
-                      : 'bg-gray-200 text-gray-500'
+                      : 'bg-gray-600 text-gray-400'
                   }`}>
                     {stepNum}
                   </div>
                   {stepNum < 4 && (
                     <div className={`w-16 h-1 mx-2 ${
-                      stepNum < step ? 'bg-gradient-to-r from-purple-500 to-pink-600' : 'bg-gray-200'
+                      stepNum < step ? 'bg-gradient-to-r from-purple-500 to-pink-600' : 'bg-gray-600'
                     }`}></div>
                   )}
                 </div>
               ))}
             </div>
-            <div className="flex justify-between mt-2 text-sm text-gray-700">
+            <div className="flex justify-between mt-2 text-sm text-gray-300">
               <span>Event</span>
               <span>Details</span>
               <span>Payment</span>
@@ -366,22 +403,22 @@ export default function PerformanceTypeEntryPage() {
 
         {/* Step Content */}
         <div className="max-w-4xl mx-auto">
-          <div className="bg-white/80 backdrop-blur-xl rounded-3xl shadow-2xl border border-white/20 p-8">
+          <div className="bg-gray-800/80 backdrop-blur-xl rounded-3xl shadow-2xl border border-gray-700/20 p-8">
             
             {/* Step 1: Event Selection */}
             {step === 1 && (
               <div>
-                <h2 className="text-2xl font-bold text-gray-900 mb-6">Select Event</h2>
+                <h2 className="text-2xl font-bold text-white mb-6">Select Event</h2>
                 {isLoading ? (
                   <div className="text-center py-12">
-                    <div className="w-16 h-16 border-4 border-purple-200 border-t-purple-600 rounded-full animate-spin mx-auto mb-4"></div>
-                    <p className="text-gray-700">Loading events...</p>
+                    <div className="w-16 h-16 border-4 border-purple-500/30 border-t-purple-400 rounded-full animate-spin mx-auto mb-4"></div>
+                    <p className="text-gray-300">Loading events...</p>
                   </div>
                 ) : events.length === 0 ? (
                   <div className="text-center py-12">
                     <div className="text-6xl mb-4">😔</div>
-                    <h3 className="text-xl font-bold text-gray-900 mb-2">No Events Available</h3>
-                    <p className="text-gray-700">No {performanceType} events are currently available in {region}.</p>
+                    <h3 className="text-xl font-bold text-white mb-2">No Events Available</h3>
+                    <p className="text-gray-300">No {performanceType} events are currently available in {region}.</p>
                   </div>
                 ) : (
                   <div className="space-y-4">
@@ -391,15 +428,15 @@ export default function PerformanceTypeEntryPage() {
                         onClick={() => setFormData(prev => ({ ...prev, eventId: event.id }))}
                         className={`border-2 rounded-xl p-6 cursor-pointer transition-all duration-300 ${
                           formData.eventId === event.id
-                            ? 'border-purple-400 bg-purple-50'
-                            : 'border-gray-200 hover:border-purple-300'
+                            ? 'border-purple-400 bg-purple-900/30'
+                            : 'border-gray-600 hover:border-purple-400 bg-gray-700/50'
                         }`}
                       >
                         <div className="flex justify-between items-start">
                           <div>
-                            <h3 className="text-lg font-bold text-gray-900 mb-2">{event.name}</h3>
-                            <p className="text-gray-700 mb-2">{event.description}</p>
-                            <div className="text-sm text-gray-600 space-y-1">
+                            <h3 className="text-lg font-bold text-white mb-2">{event.name}</h3>
+                            <p className="text-gray-300 mb-2">{event.description}</p>
+                            <div className="text-sm text-gray-400 space-y-1">
                               <p>📅 {new Date(event.eventDate).toLocaleDateString()}</p>
                               <p>📍 {event.venue}</p>
                               <p>🎯 Age Category: {event.ageCategory}</p>
@@ -407,8 +444,8 @@ export default function PerformanceTypeEntryPage() {
                             </div>
                           </div>
                           <div className="text-right">
-                            <p className="text-2xl font-bold text-purple-600">R{event.entryFee.toFixed(2)}</p>
-                            <p className="text-sm text-gray-700">Entry Fee</p>
+                            <p className="text-2xl font-bold text-purple-400">R{event.entryFee.toFixed(2)}</p>
+                            <p className="text-sm text-gray-400">Entry Fee</p>
                           </div>
                         </div>
                       </div>
@@ -421,12 +458,12 @@ export default function PerformanceTypeEntryPage() {
             {/* Step 2: Performance Details */}
             {step === 2 && (
               <div>
-                <h2 className="text-2xl font-bold text-gray-900 mb-6">Performance Details</h2>
+                <h2 className="text-2xl font-bold text-white mb-6">Performance Details</h2>
                 
                 {/* Participant Selection */}
                 {contestant && (
                   <div className="mb-6">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-4">Select Participants</h3>
+                    <h3 className="text-lg font-semibold text-white mb-4">Select Participants</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {contestant.dancers.map((dancer) => (
                         <div
@@ -434,27 +471,27 @@ export default function PerformanceTypeEntryPage() {
                           onClick={() => handleParticipantToggle(dancer.id)}
                           className={`border-2 rounded-xl p-4 cursor-pointer transition-all duration-300 ${
                             formData.participantIds.includes(dancer.id)
-                              ? 'border-purple-400 bg-purple-50'
-                              : 'border-gray-200 hover:border-purple-300'
+                              ? 'border-purple-400 bg-purple-900/30'
+                              : 'border-gray-600 hover:border-purple-400 bg-gray-700/50'
                           }`}
                         >
                           <div className="flex items-center space-x-3">
                             <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold ${
                               formData.participantIds.includes(dancer.id)
                                 ? 'bg-purple-600 text-white'
-                                : 'bg-gray-200 text-gray-600'
+                                : 'bg-gray-600 text-gray-300'
                             }`}>
                               {dancer.name.charAt(0)}
                             </div>
                             <div>
-                              <p className="font-semibold text-gray-900">{dancer.name}</p>
-                              <p className="text-sm text-gray-700">Age: {dancer.age} | Style: {dancer.style}</p>
+                              <p className="font-semibold text-white">{dancer.name}</p>
+                              <p className="text-sm text-gray-400">Age: {dancer.age} | Style: {dancer.style}</p>
                             </div>
                           </div>
                         </div>
                       ))}
                     </div>
-                    <p className="text-sm text-gray-700 mt-2">
+                    <p className="text-sm text-gray-400 mt-2">
                       Selected: {formData.participantIds.length} / {getParticipantLimits().max}
                     </p>
                   </div>
@@ -463,39 +500,55 @@ export default function PerformanceTypeEntryPage() {
                 {/* Performance Information */}
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Item Name *</label>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">Item Name *</label>
                     <input
                       type="text"
                       name="itemName"
                       value={formData.itemName}
                       onChange={handleInputChange}
                       placeholder="Name of your performance piece"
-                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-gray-900"
+                      className="w-full px-4 py-3 border border-gray-600 bg-gray-700 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-white placeholder-gray-400"
                       required
                     />
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Choreographer *</label>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">Choreographer *</label>
                     <input
                       type="text"
                       name="choreographer"
                       value={formData.choreographer}
                       onChange={handleInputChange}
                       placeholder="Name of the choreographer"
-                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-gray-900"
+                      className="w-full px-4 py-3 border border-gray-600 bg-gray-700 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-white placeholder-gray-400"
                       required
                     />
                   </div>
 
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">Item Number</label>
+                    <input
+                      type="number"
+                      name="itemNumber"
+                      value={formData.itemNumber || ''}
+                      onChange={handleInputChange}
+                      placeholder="Optional program order number"
+                      className="w-full px-4 py-3 border border-gray-600 bg-gray-700 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-white placeholder-gray-400"
+                      min="1"
+                    />
+                    <p className="text-xs text-gray-400 mt-1">
+                      Optional: For program ordering (can be assigned later by admin)
+                    </p>
+                  </div>
+
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Mastery Level *</label>
+                      <label className="block text-sm font-medium text-gray-300 mb-2">Mastery Level *</label>
                       <select
                         name="mastery"
                         value={formData.mastery}
                         onChange={handleInputChange}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-gray-900"
+                        className="w-full px-4 py-3 border border-gray-600 bg-gray-700 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-white"
                         required
                       >
                         <option value="">Select mastery level</option>
@@ -506,12 +559,12 @@ export default function PerformanceTypeEntryPage() {
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Item Style *</label>
+                      <label className="block text-sm font-medium text-gray-300 mb-2">Item Style *</label>
                       <select
                         name="itemStyle"
                         value={formData.itemStyle}
                         onChange={handleInputChange}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-gray-900"
+                        className="w-full px-4 py-3 border border-gray-600 bg-gray-700 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-white"
                         required
                       >
                         <option value="">Select item style</option>
@@ -523,17 +576,34 @@ export default function PerformanceTypeEntryPage() {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Estimated Duration (minutes) *</label>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Estimated Duration (minutes) * 
+                      {performanceType && TIME_LIMITS[performanceType as keyof typeof TIME_LIMITS] && (
+                        <span className="text-purple-400 ml-2">
+                          (Max: {TIME_LIMITS[performanceType as keyof typeof TIME_LIMITS]} min)
+                        </span>
+                      )}
+                    </label>
                     <input
                       type="number"
                       name="estimatedDuration"
                       value={formData.estimatedDuration}
                       onChange={handleInputChange}
-                      min="1"
-                      max="10"
-                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-gray-900"
+                      min="0.5"
+                      max={TIME_LIMITS[performanceType as keyof typeof TIME_LIMITS] || 10}
+                      step="0.5"
+                      className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-white placeholder-gray-400 ${
+                        validateDuration(formData.estimatedDuration) 
+                          ? 'border-gray-600 bg-gray-700' 
+                          : 'border-red-500 bg-red-900/30'
+                      }`}
                       required
                     />
+                    {!validateDuration(formData.estimatedDuration) && (
+                      <p className="text-red-400 text-xs mt-1">
+                        Duration exceeds maximum allowed for {performanceType} ({TIME_LIMITS[performanceType as keyof typeof TIME_LIMITS]} minutes)
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>
@@ -542,32 +612,59 @@ export default function PerformanceTypeEntryPage() {
             {/* Step 3: Payment Method */}
             {step === 3 && (
               <div>
-                <h2 className="text-2xl font-bold text-gray-900 mb-6">Payment Method</h2>
+                <h2 className="text-2xl font-bold text-white mb-6">Payment Method</h2>
                 
                 <div className="mb-6">
-                  <div className="bg-gradient-to-r from-purple-50 to-pink-50 border-2 border-purple-200 rounded-2xl p-6">
-                    <h3 className="text-lg font-bold text-purple-900 mb-2">Entry Fee Summary</h3>
-                    <p className="text-3xl font-bold text-purple-700">R{calculatedFee.toFixed(2)}</p>
-                    <p className="text-sm text-purple-600">For {performanceType} performance</p>
+                  <div className="bg-gradient-to-r from-purple-900/50 to-pink-900/50 border-2 border-purple-500/30 rounded-2xl p-6">
+                    <h3 className="text-lg font-bold text-purple-300 mb-4">EODSA Fee Breakdown</h3>
+                    {formData.mastery && formData.participantIds.length > 0 && (() => {
+                      const feeBreakdown = calculateEODSAFee(
+                        formData.mastery,
+                        performanceType as 'Solo' | 'Duet' | 'Trio' | 'Group',
+                        formData.participantIds.length
+                      );
+                      return (
+                        <div className="space-y-3">
+                          <div className="flex justify-between items-center text-purple-200">
+                            <span>Registration Fee ({formData.participantIds.length} participant{formData.participantIds.length > 1 ? 's' : ''})</span>
+                            <span className="font-semibold">R{feeBreakdown.registrationFee.toFixed(2)}</span>
+                          </div>
+                          <div className="flex justify-between items-center text-purple-200">
+                            <span>Performance Fee ({performanceType})</span>
+                            <span className="font-semibold">R{feeBreakdown.performanceFee.toFixed(2)}</span>
+                          </div>
+                          <div className="border-t border-purple-400/30 pt-3">
+                            <div className="flex justify-between items-center">
+                              <span className="text-xl font-bold text-purple-100">Total Amount Due:</span>
+                              <span className="text-2xl font-bold text-purple-100">R{feeBreakdown.totalFee.toFixed(2)}</span>
+                            </div>
+                          </div>
+                          <div className="text-sm text-purple-400 mt-2">
+                            <p>Mastery Level: {formData.mastery}</p>
+                            <p>Performance Type: {performanceType}</p>
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </div>
                 </div>
 
                 <div className="space-y-4">
-                  <h3 className="text-lg font-semibold text-gray-900">Select Payment Method</h3>
+                  <h3 className="text-lg font-semibold text-white">Select Payment Method</h3>
                   
                   <div
                     onClick={() => setFormData(prev => ({ ...prev, paymentMethod: 'credit_card' }))}
                     className={`border-2 rounded-xl p-6 cursor-pointer transition-all duration-300 ${
                       formData.paymentMethod === 'credit_card'
-                        ? 'border-purple-400 bg-purple-50'
-                        : 'border-gray-200 hover:border-purple-300'
+                        ? 'border-purple-400 bg-purple-900/30'
+                        : 'border-gray-600 hover:border-purple-400 bg-gray-700/50'
                     }`}
                   >
                     <div className="flex items-center space-x-4">
                       <div className="text-2xl">💳</div>
                       <div>
-                        <h4 className="font-semibold text-gray-900">Credit Card</h4>
-                        <p className="text-sm text-gray-700">Pay securely with your credit or debit card</p>
+                        <h4 className="font-semibold text-white">Credit Card</h4>
+                        <p className="text-sm text-gray-300">Pay securely with your credit or debit card</p>
                       </div>
                     </div>
                   </div>
@@ -576,15 +673,15 @@ export default function PerformanceTypeEntryPage() {
                     onClick={() => setFormData(prev => ({ ...prev, paymentMethod: 'bank_transfer' }))}
                     className={`border-2 rounded-xl p-6 cursor-pointer transition-all duration-300 ${
                       formData.paymentMethod === 'bank_transfer'
-                        ? 'border-purple-400 bg-purple-50'
-                        : 'border-gray-200 hover:border-purple-300'
+                        ? 'border-purple-400 bg-purple-900/30'
+                        : 'border-gray-600 hover:border-purple-400 bg-gray-700/50'
                     }`}
                   >
                     <div className="flex items-center space-x-4">
                       <div className="text-2xl">🏦</div>
                       <div>
-                        <h4 className="font-semibold text-gray-900">Bank Transfer</h4>
-                        <p className="text-sm text-gray-700">Direct bank transfer (EFT)</p>
+                        <h4 className="font-semibold text-white">Bank Transfer</h4>
+                        <p className="text-sm text-gray-300">Direct bank transfer (EFT)</p>
                       </div>
                     </div>
                   </div>
@@ -595,16 +692,16 @@ export default function PerformanceTypeEntryPage() {
             {/* Step 4: Review & Submit */}
             {step === 4 && (
               <div>
-                <h2 className="text-2xl font-bold text-gray-900 mb-6">Review & Submit</h2>
+                <h2 className="text-2xl font-bold text-white mb-6">Review & Submit</h2>
                 
                 <div className="space-y-6">
                   {/* Event Summary */}
-                  <div className="bg-gray-50 rounded-xl p-6">
-                    <h3 className="font-semibold text-gray-900 mb-3">Event Details</h3>
+                  <div className="bg-gray-700/50 rounded-xl p-6">
+                    <h3 className="font-semibold text-white mb-3">Event Details</h3>
                     {(() => {
                       const selectedEvent = events.find(e => e.id === formData.eventId);
                       return selectedEvent ? (
-                        <div className="text-sm text-gray-600 space-y-1">
+                        <div className="text-sm text-gray-300 space-y-1">
                           <p><strong>Event:</strong> {selectedEvent.name}</p>
                           <p><strong>Region:</strong> {selectedEvent.region}</p>
                           <p><strong>Performance Type:</strong> {selectedEvent.performanceType}</p>
@@ -616,28 +713,52 @@ export default function PerformanceTypeEntryPage() {
                   </div>
 
                   {/* Performance Summary */}
-                  <div className="bg-gray-50 rounded-xl p-6">
-                    <h3 className="font-semibold text-gray-900 mb-3">Performance Details</h3>
-                    <div className="text-sm text-gray-600 space-y-1">
+                  <div className="bg-gray-700/50 rounded-xl p-6">
+                    <h3 className="font-semibold text-white mb-3">Performance Details</h3>
+                    <div className="text-sm text-gray-300 space-y-1">
                       <p><strong>Item Name:</strong> {formData.itemName}</p>
                       <p><strong>Choreographer:</strong> {formData.choreographer}</p>
                       <p><strong>Mastery Level:</strong> {formData.mastery}</p>
                       <p><strong>Item Style:</strong> {formData.itemStyle}</p>
                       <p><strong>Duration:</strong> {formData.estimatedDuration} minutes</p>
                       <p><strong>Participants:</strong> {formData.participantIds.length}</p>
+                      {formData.itemNumber && (
+                        <p><strong>Item Number:</strong> {formData.itemNumber}</p>
+                      )}
                     </div>
                   </div>
 
                   {/* Payment Summary */}
-                  <div className="bg-gradient-to-r from-purple-50 to-pink-50 border-2 border-purple-200 rounded-xl p-6">
-                    <h3 className="font-semibold text-purple-900 mb-3">Payment Summary</h3>
-                    <div className="flex justify-between items-center">
-                      <span className="text-lg text-purple-700">Total Fee:</span>
-                      <span className="text-2xl font-bold text-purple-900">R{calculatedFee.toFixed(2)}</span>
-                    </div>
-                    <p className="text-sm text-purple-600 mt-2">
-                      Payment Method: {formData.paymentMethod === 'credit_card' ? 'Credit Card' : 'Bank Transfer'}
-                    </p>
+                  <div className="bg-gradient-to-r from-purple-900/50 to-pink-900/50 border-2 border-purple-500/30 rounded-xl p-6">
+                    <h3 className="font-semibold text-purple-300 mb-3">EODSA Payment Summary</h3>
+                    {formData.mastery && formData.participantIds.length > 0 && (() => {
+                      const feeBreakdown = calculateEODSAFee(
+                        formData.mastery,
+                        performanceType as 'Solo' | 'Duet' | 'Trio' | 'Group',
+                        formData.participantIds.length
+                      );
+                      return (
+                        <div className="space-y-2">
+                          <div className="flex justify-between text-purple-200">
+                            <span>Registration Fee ({formData.participantIds.length} participant{formData.participantIds.length > 1 ? 's' : ''})</span>
+                            <span>R{feeBreakdown.registrationFee.toFixed(2)}</span>
+                          </div>
+                          <div className="flex justify-between text-purple-200">
+                            <span>Performance Fee ({performanceType})</span>
+                            <span>R{feeBreakdown.performanceFee.toFixed(2)}</span>
+                          </div>
+                          <div className="border-t border-purple-400/30 pt-2 mt-3">
+                            <div className="flex justify-between items-center">
+                              <span className="text-lg font-bold text-purple-100">Total Amount Due:</span>
+                              <span className="text-xl font-bold text-purple-100">R{feeBreakdown.totalFee.toFixed(2)}</span>
+                            </div>
+                          </div>
+                          <p className="text-sm text-purple-400 mt-2">
+                            Payment Method: {formData.paymentMethod === 'credit_card' ? 'Credit Card' : 'Bank Transfer'}
+                          </p>
+                        </div>
+                      );
+                    })()}
                   </div>
                 </div>
               </div>
@@ -648,7 +769,7 @@ export default function PerformanceTypeEntryPage() {
               <button
                 onClick={prevStep}
                 disabled={step === 1}
-                className="px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 transition-all duration-300 font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-6 py-3 border-2 border-gray-600 text-gray-300 rounded-xl hover:bg-gray-700 hover:border-gray-500 transition-all duration-300 font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Previous
               </button>

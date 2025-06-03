@@ -4,23 +4,34 @@ export interface Dancer {
   id: string; // E-O-D-S-A-ID format
   name: string;
   age: number;
+  dateOfBirth: string; // NEW: Date of Birth field
   style: string;
   nationalId: string;
   created_at?: string;
 }
 
+export interface GuardianInfo {
+  name: string;
+  email: string;
+  cell: string;
+}
+
 export interface Contestant {
   id: string;
-  eodsaId: string; // Permanent E-O-D-S-A-ID
+  eodsaId: string; // NEW FORMAT: letter + 6 digits (e.g. "E123456")
   name: string;
   email: string;
   phone: string;
   type: 'studio' | 'private';
+  dateOfBirth: string; // NEW: Date of Birth
+  guardianInfo?: GuardianInfo; // NEW: Guardian info for minors
+  privacyPolicyAccepted: boolean; // NEW: Privacy policy acceptance
+  privacyPolicyAcceptedAt?: string; // NEW: Timestamp
   studioName?: string;
   studioInfo?: {
     address: string;
     contactPerson: string;
-    registrationNumber?: string;
+    registrationNumber?: string; // NEW FORMAT: letter + 6 digits (e.g. "S123456")
   };
   dancers: Dancer[]; // For studio: multiple dancers, for private: single dancer
   registrationDate: string;
@@ -56,10 +67,11 @@ export interface EventEntry {
   paymentMethod?: 'credit_card' | 'bank_transfer';
   submittedAt: string;
   approved: boolean;
+  itemNumber?: number; // NEW: Item Number for program order
   // EODSA Regional Entry Form fields
   itemName: string;
   choreographer: string;
-  mastery: string;
+  mastery: string; // UPDATED: New mastery levels
   itemStyle: string;
   estimatedDuration: number; // in minutes
 }
@@ -72,11 +84,12 @@ export interface Performance {
   title: string; // This maps to itemName
   participantNames: string[];
   duration: number; // in minutes (maps to estimatedDuration)
+  itemNumber?: number; // NEW: Item Number for program order
   scheduledTime?: string;
   status: 'scheduled' | 'in_progress' | 'completed' | 'cancelled';
   // EODSA Regional Entry Form fields
   choreographer: string;
-  mastery: string;
+  mastery: string; // UPDATED: New mastery levels
   itemStyle: string;
 }
 
@@ -138,14 +151,18 @@ export interface Ranking {
   calculatedAt: string;
 }
 
-// Age categories and fee structure
+// UPDATED: Age categories to match EODSA requirements exactly
 export const AGE_CATEGORIES = [
-  'Under 6',
-  '6-8 years',
-  '9-11 years', 
-  '12-14 years',
-  '15-17 years',
-  '18+ years'
+  '4 & Under',
+  '6 & Under', 
+  '7-9',
+  '10-12',
+  '13-14',
+  '15-17',
+  '18-24',
+  '25-39',
+  '40+',
+  '60+'
 ];
 
 export const REGIONS = [
@@ -161,45 +178,153 @@ export const PERFORMANCE_TYPES = [
   'Group'
 ];
 
+// UPDATED: Dance styles to match approved list
 export const DANCE_STYLES = [
   'Ballet',
+  'Ballet Repertoire',
+  'Lyrical',
   'Contemporary',
   'Jazz',
-  'Hip Hop',
+  'Hip-Hop',
+  'Freestyle/Disco',
+  'Musical Theatre',
+  'Acrobatics',
   'Tap',
-  'Musical Theatre',
-  'Commercial',
-  'Lyrical',
-  'Acro',
-  'Other'
-];
-
-// EODSA Regional Entry Form Constants
-export const MASTERY_LEVELS = [
-  'Beginner',
-  'Intermediate', 
-  'Advanced',
   'Open',
-  'Professional'
+  'Speciality Styles'
 ];
 
+// UPDATED: Mastery levels to match client requirements
+export const MASTERY_LEVELS = [
+  'Water (Competition)',
+  'Fire (Advanced)',
+  'Earth (Eisteddfod)',
+  'Air (Special Needs)'
+];
+
+// Updated for client requirements
 export const ITEM_STYLES = [
-  'Ballet - Classical Variation',
-  'Ballet - Contemporary Ballet',
-  'Ballet - Demi Character',
-  'Contemporary - Lyrical',
-  'Contemporary - Modern',
-  'Jazz - Commercial',
-  'Jazz - Musical Theatre',
-  'Jazz - Funk',
-  'Hip Hop - Old School',
-  'Hip Hop - New School',
-  'Hip Hop - Commercial',
-  'Tap - Traditional',
-  'Tap - Contemporary',
+  'Ballet',
+  'Ballet Repertoire',
+  'Lyrical',
+  'Contemporary',
+  'Jazz',
+  'Hip-Hop',
+  'Freestyle/Disco',
   'Musical Theatre',
-  'Commercial Dance',
-  'Acrobatic Dance',
-  'Cultural/Traditional',
-  'Other'
-]; 
+  'Acrobatics',
+  'Tap',
+  'Open',
+  'Speciality Styles'
+];
+
+// UPDATED: Time limits to match EODSA requirements exactly
+export const TIME_LIMITS = {
+  Solo: 2, // minutes
+  Duet: 2, // minutes (EODSA shows 2 mins for Duo/Trio)
+  Trio: 2, // minutes (EODSA shows 2 mins for Duo/Trio)
+  Group: 3 // minutes (EODSA shows 3 mins for Groups/Teams)
+};
+
+// EODSA Fee Structure based on official pricing
+export const EODSA_FEES = {
+  // Registration fees per person
+  REGISTRATION: {
+    'Water (Competition)': 250, // R250 PP for Competitive
+    'Fire (Advanced)': 250,     // R250 PP for Advanced  
+    'Earth (Eisteddfod)': 150,  // R150 PP for Eisteddfod
+    'Air (Special Needs)': 150  // R150 PP for Special Needs
+  },
+  
+  // Performance fees by mastery level
+  PERFORMANCE: {
+    'Water (Competition)': {
+      Solo: 300,      // R300 for 1st solo
+      SoloAdditional: 180, // R180 for each additional solo
+      Duet: 200,      // R200 per dancer
+      Trio: 200,      // R200 per dancer  
+      Group: 180      // R180 per dancer
+    },
+    'Fire (Advanced)': {
+      Solo: 300,      // R300 for 1st solo
+      SoloAdditional: 180, // R180 for each additional solo
+      Duet: 200,      // R200 per dancer
+      Trio: 200,      // R200 per dancer
+      Group: 180      // R180 per dancer
+    },
+    'Earth (Eisteddfod)': {
+      Solo: 200,      // R200 for solo
+      SoloAdditional: 200, // R200 for each additional solo
+      Duet: 200,      // R200 per dancer
+      Trio: 200,      // R200 per dancer
+      Group: 180      // R180 per dancer
+    },
+    'Air (Special Needs)': {
+      Solo: 200,      // R200 for solo
+      SoloAdditional: 200, // R200 for each additional solo
+      Duet: 200,      // R200 per dancer
+      Trio: 200,      // R200 per dancer
+      Group: 180      // R180 per dancer
+    }
+  },
+  
+  // Multiple solo discounts for Competitive/Advanced
+  SOLO_PACKAGES: {
+    'Water (Competition)': {
+      1: 300,   // 1 solo: R300
+      2: 520,   // 2 solos: R520 
+      3: 700    // 3 solos: R700
+    },
+    'Fire (Advanced)': {
+      1: 300,   // 1 solo: R300
+      2: 520,   // 2 solos: R520
+      3: 700    // 3 solos: R700
+    }
+  }
+};
+
+// EODSA Fee Calculation Function
+export const calculateEODSAFee = (
+  masteryLevel: string,
+  performanceType: 'Solo' | 'Duet' | 'Trio' | 'Group',
+  numberOfParticipants: number,
+  isMultipleSolos?: boolean,
+  soloCount?: number
+): { registrationFee: number; performanceFee: number; totalFee: number } => {
+  
+  // Registration fee per person
+  const registrationFeePerPerson = EODSA_FEES.REGISTRATION[masteryLevel as keyof typeof EODSA_FEES.REGISTRATION] || 0;
+  const registrationFee = registrationFeePerPerson * numberOfParticipants;
+  
+  let performanceFee = 0;
+  
+  // Handle solo packages for competitive/advanced levels
+  if (performanceType === 'Solo' && soloCount && (masteryLevel === 'Water (Competition)' || masteryLevel === 'Fire (Advanced)')) {
+    const packages = EODSA_FEES.SOLO_PACKAGES[masteryLevel as keyof typeof EODSA_FEES.SOLO_PACKAGES];
+    if (packages && soloCount <= 3) {
+      performanceFee = packages[soloCount as keyof typeof packages] || 0;
+    } else if (soloCount > 3) {
+      // 3 solos package + additional solos
+      performanceFee = packages[3] + ((soloCount - 3) * EODSA_FEES.PERFORMANCE[masteryLevel as keyof typeof EODSA_FEES.PERFORMANCE].SoloAdditional);
+    }
+  } else {
+    // Regular performance fees
+    const performanceFees = EODSA_FEES.PERFORMANCE[masteryLevel as keyof typeof EODSA_FEES.PERFORMANCE];
+    if (performanceFees) {
+      const baseFee = performanceFees[performanceType as keyof typeof performanceFees] || 0;
+      
+      if (performanceType === 'Solo') {
+        performanceFee = baseFee;
+      } else {
+        // For Duet, Trio, Group - multiply by number of dancers
+        performanceFee = baseFee * numberOfParticipants;
+      }
+    }
+  }
+  
+  return {
+    registrationFee,
+    performanceFee,
+    totalFee: registrationFee + performanceFee
+  };
+}; 

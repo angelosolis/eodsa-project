@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { REGIONS, AGE_CATEGORIES, PERFORMANCE_TYPES } from '@/lib/types';
+import { REGIONS, AGE_CATEGORIES, PERFORMANCE_TYPES, ITEM_STYLES } from '@/lib/types';
 
 interface RankingData {
   performanceId: string;
@@ -15,6 +15,7 @@ interface RankingData {
   averageScore: number;
   rank: number;
   judgeCount: number;
+  itemStyle: string;
 }
 
 export default function AdminRankingsPage() {
@@ -27,6 +28,8 @@ export default function AdminRankingsPage() {
   const [selectedRegion, setSelectedRegion] = useState('');
   const [selectedAgeCategory, setSelectedAgeCategory] = useState('');
   const [selectedPerformanceType, setSelectedPerformanceType] = useState('');
+  const [selectedStyle, setSelectedStyle] = useState('');
+  const [viewMode, setViewMode] = useState<'all' | 'top5_age' | 'top5_style'>('all');
 
   useEffect(() => {
     loadRankings();
@@ -34,7 +37,7 @@ export default function AdminRankingsPage() {
 
   useEffect(() => {
     applyFilters();
-  }, [rankings, selectedRegion, selectedAgeCategory, selectedPerformanceType]);
+  }, [rankings, selectedRegion, selectedAgeCategory, selectedPerformanceType, selectedStyle, viewMode]);
 
   const loadRankings = async () => {
     setIsLoading(true);
@@ -69,6 +72,39 @@ export default function AdminRankingsPage() {
     if (selectedPerformanceType) {
       filtered = filtered.filter(r => r.performanceType === selectedPerformanceType);
     }
+
+    if (selectedStyle) {
+      filtered = filtered.filter(r => r.itemStyle === selectedStyle);
+    }
+
+    // Apply view mode filters
+    if (viewMode === 'top5_age') {
+      // Group by age category and get top 5 from each
+      const groupedByAge = filtered.reduce((groups, ranking) => {
+        if (!groups[ranking.ageCategory]) {
+          groups[ranking.ageCategory] = [];
+        }
+        groups[ranking.ageCategory].push(ranking);
+        return groups;
+      }, {} as Record<string, RankingData[]>);
+
+      filtered = Object.values(groupedByAge).flatMap(group => 
+        group.sort((a, b) => b.totalScore - a.totalScore).slice(0, 5)
+      );
+    } else if (viewMode === 'top5_style') {
+      // Group by style and get top 5 from each
+      const groupedByStyle = filtered.reduce((groups, ranking) => {
+        if (!groups[ranking.itemStyle]) {
+          groups[ranking.itemStyle] = [];
+        }
+        groups[ranking.itemStyle].push(ranking);
+        return groups;
+      }, {} as Record<string, RankingData[]>);
+
+      filtered = Object.values(groupedByStyle).flatMap(group => 
+        group.sort((a, b) => b.totalScore - a.totalScore).slice(0, 5)
+      );
+    }
     
     setFilteredRankings(filtered);
   };
@@ -77,6 +113,8 @@ export default function AdminRankingsPage() {
     setSelectedRegion('');
     setSelectedAgeCategory('');
     setSelectedPerformanceType('');
+    setSelectedStyle('');
+    setViewMode('all');
   };
 
   const getRankBadgeColor = (rank: number) => {
@@ -97,14 +135,23 @@ export default function AdminRankingsPage() {
     }
   };
 
-  // Group rankings by category for better display
+  // Enhanced grouping logic for better display
   const groupedRankings = filteredRankings.reduce((groups, ranking) => {
-    const key = `${ranking.region}-${ranking.ageCategory}-${ranking.performanceType}`;
+    let key;
+    if (viewMode === 'top5_age') {
+      key = `${ranking.ageCategory}`;
+    } else if (viewMode === 'top5_style') {
+      key = `${ranking.itemStyle}`;
+    } else {
+      key = `${ranking.region}-${ranking.ageCategory}-${ranking.performanceType}`;
+    }
+    
     if (!groups[key]) {
       groups[key] = {
         region: ranking.region,
         ageCategory: ranking.ageCategory,
         performanceType: ranking.performanceType,
+        itemStyle: ranking.itemStyle,
         rankings: []
       };
     }
@@ -114,6 +161,7 @@ export default function AdminRankingsPage() {
     region: string;
     ageCategory: string;
     performanceType: string;
+    itemStyle: string;
     rankings: RankingData[];
   }>);
 
@@ -237,15 +285,49 @@ export default function AdminRankingsPage() {
           </div>
         )}
 
-        {/* Enhanced Filters */}
+        {/* Enhanced Filters with View Mode Tabs */}
         <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl p-6 mb-8 border border-indigo-100">
+          {/* View Mode Tabs */}
+          <div className="flex flex-wrap gap-2 mb-6">
+            <button
+              onClick={() => setViewMode('all')}
+              className={`px-4 py-2 rounded-xl font-medium transition-all duration-200 ${
+                viewMode === 'all'
+                  ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-lg'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              All Rankings
+            </button>
+            <button
+              onClick={() => setViewMode('top5_age')}
+              className={`px-4 py-2 rounded-xl font-medium transition-all duration-200 ${
+                viewMode === 'top5_age'
+                  ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-lg'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              🥇 Top 5 by Age Category
+            </button>
+            <button
+              onClick={() => setViewMode('top5_style')}
+              className={`px-4 py-2 rounded-xl font-medium transition-all duration-200 ${
+                viewMode === 'top5_style'
+                  ? 'bg-gradient-to-r from-pink-500 to-rose-600 text-white shadow-lg'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              🎭 Top 5 by Style
+            </button>
+          </div>
+
           <div className="flex items-center space-x-3 mb-6">
             <div className="w-8 h-8 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-lg flex items-center justify-center">
               <span className="text-white text-sm">🔍</span>
             </div>
             <h2 className="text-xl font-bold text-gray-900">Filter Rankings</h2>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-3">Region</label>
               <select
@@ -287,6 +369,20 @@ export default function AdminRankingsPage() {
                 ))}
               </select>
             </div>
+
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-3">Style</label>
+              <select
+                value={selectedStyle}
+                onChange={(e) => setSelectedStyle(e.target.value)}
+                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 font-medium text-gray-900"
+              >
+                <option value="">All Styles</option>
+                {ITEM_STYLES.map(style => (
+                  <option key={style} value={style}>{style}</option>
+                ))}
+              </select>
+            </div>
             
             <div className="flex items-end">
               <button
@@ -319,7 +415,9 @@ export default function AdminRankingsPage() {
                 <div className="bg-gradient-to-r from-indigo-500/10 to-purple-500/10 px-6 py-4 border-b border-indigo-100">
                   <div className="flex items-center justify-between">
                     <h3 className="text-xl font-bold text-gray-900">
-                      {group.region} - {group.ageCategory} - {group.performanceType}
+                      {viewMode === 'top5_age' ? `Top 5 - ${group.ageCategory}` :
+                       viewMode === 'top5_style' ? `Top 5 - ${group.itemStyle}` :
+                       `${group.region} - ${group.ageCategory} - ${group.performanceType}`}
                     </h3>
                     <div className="px-3 py-1 bg-indigo-100 text-indigo-800 rounded-full text-sm font-medium">
                       {group.rankings.length} performance{group.rankings.length !== 1 ? 's' : ''}
