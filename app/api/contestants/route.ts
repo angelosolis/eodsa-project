@@ -31,9 +31,17 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     
     // Validate required fields
-    if (!body.name || !body.email || !body.phone || !body.type) {
+    if (!body.name || !body.email || !body.phone || !body.type || !body.dateOfBirth || typeof body.privacyPolicyAccepted !== 'boolean') {
       return NextResponse.json(
-        { error: 'Missing required fields: name, email, phone, type' },
+        { error: 'Missing required fields: name, email, phone, type, dateOfBirth, privacyPolicyAccepted' },
+        { status: 400 }
+      );
+    }
+
+    // Validate privacy policy acceptance
+    if (!body.privacyPolicyAccepted) {
+      return NextResponse.json(
+        { error: 'Privacy policy must be accepted' },
         { status: 400 }
       );
     }
@@ -48,9 +56,9 @@ export async function POST(request: NextRequest) {
 
     // Validate each dancer
     for (const dancer of body.dancers) {
-      if (!dancer.name || !dancer.age || !dancer.style || !dancer.nationalId) {
+      if (!dancer.name || !dancer.age || !dancer.style || !dancer.nationalId || !dancer.dateOfBirth) {
         return NextResponse.json(
-          { error: 'Each dancer must have name, age, style, and nationalId' },
+          { error: 'Each dancer must have name, age, style, nationalId, and dateOfBirth' },
           { status: 400 }
         );
       }
@@ -66,12 +74,35 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Check if guardian info is required for minors
+    const contestantAge = new Date().getFullYear() - new Date(body.dateOfBirth).getFullYear();
+    if (contestantAge < 18 && !body.guardianInfo) {
+      return NextResponse.json(
+        { error: 'Guardian information is required for contestants under 18' },
+        { status: 400 }
+      );
+    }
+
+    // Validate guardian info if provided
+    if (body.guardianInfo) {
+      if (!body.guardianInfo.name || !body.guardianInfo.email || !body.guardianInfo.cell) {
+        return NextResponse.json(
+          { error: 'Guardian info requires name, email, and cell' },
+          { status: 400 }
+        );
+      }
+    }
+
     // Create contestant
     const contestant = await db.createContestant({
       name: body.name,
       email: body.email,
       phone: body.phone,
       type: body.type,
+      dateOfBirth: body.dateOfBirth,
+      guardianInfo: body.guardianInfo,
+      privacyPolicyAccepted: body.privacyPolicyAccepted,
+      privacyPolicyAcceptedAt: body.privacyPolicyAccepted ? new Date().toISOString() : undefined,
       studioName: body.studioName,
       studioInfo: body.studioInfo,
       dancers: body.dancers
