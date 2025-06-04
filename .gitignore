@@ -39,3 +39,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# uploads - exclude actual uploaded files for security
+/public/uploads/waivers/*
+!/public/uploads/waivers/.gitkeep

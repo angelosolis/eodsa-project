@@ -2,14 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { generateEODSAId, generateStudioRegistrationId } from '@/lib/database';
-
-interface DancerForm {
-  name: string;
-  age: string;
-  dateOfBirth: string;
-  nationalId: string;
-}
+import { generateEODSAId } from '@/lib/database';
 
 interface GuardianInfo {
   name: string;
@@ -18,17 +11,14 @@ interface GuardianInfo {
 }
 
 interface RegistrationForm {
-  type: 'studio' | 'private';
+  type: 'individual_dancer';
   name: string;
   email: string;
   phone: string;
   dateOfBirth: string;
+  nationalId: string;
   guardianInfo?: GuardianInfo;
   privacyPolicyAccepted: boolean;
-  studioName: string;
-  studioAddress: string;
-  studioContactPerson: string;
-  dancers: DancerForm[];
 }
 
 // Privacy Policy Modal Component
@@ -86,17 +76,14 @@ const PrivacyPolicyModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () 
 
 export default function RegisterPage() {
   const [formData, setFormData] = useState<RegistrationForm>({
-    type: 'studio',
+    type: 'individual_dancer',
     name: '',
     email: '',
     phone: '',
     dateOfBirth: '',
+    nationalId: '',
     guardianInfo: undefined,
     privacyPolicyAccepted: false,
-    studioName: '',
-    studioAddress: '',
-    studioContactPerson: '',
-    dancers: [{ name: '', age: '', dateOfBirth: '', nationalId: '' }]
   });
   
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -134,22 +121,6 @@ export default function RegisterPage() {
     setFormData(prev => {
       const newFormData = { ...prev, [name]: value };
       
-      // Auto-populate dancer information for private registration
-      if (prev.type === 'private' && prev.dancers.length > 0) {
-        if (name === 'name') {
-          newFormData.dancers = [{
-            ...prev.dancers[0],
-            name: value
-          }];
-        } else if (name === 'dateOfBirth') {
-          newFormData.dancers = [{
-            ...prev.dancers[0],
-            dateOfBirth: value,
-            age: value ? calculateAge(value).toString() : ''
-          }];
-        }
-      }
-
       // Handle guardian info requirement for minors
       if (name === 'dateOfBirth' && isMinor(value)) {
         newFormData.guardianInfo = newFormData.guardianInfo || { name: '', email: '', cell: '' };
@@ -171,49 +142,6 @@ export default function RegisterPage() {
     }));
   };
 
-  const handleDancerChange = (index: number, field: keyof DancerForm, value: string) => {
-    setFormData(prev => ({
-      ...prev,
-      dancers: prev.dancers.map((dancer, i) => {
-        if (i === index) {
-          const updatedDancer = { ...dancer, [field]: value };
-          // Auto-calculate age when date of birth changes
-          if (field === 'dateOfBirth' && value) {
-            updatedDancer.age = calculateAge(value).toString();
-          }
-          return updatedDancer;
-        }
-        return dancer;
-      })
-    }));
-  };
-
-  const addDancer = () => {
-    setFormData(prev => ({
-      ...prev,
-      dancers: [...prev.dancers, { name: '', age: '', dateOfBirth: '', nationalId: '' }]
-    }));
-  };
-
-  const removeDancer = (index: number) => {
-    setFormData(prev => ({
-      ...prev,
-      dancers: prev.dancers.filter((_, i) => i !== index)
-    }));
-  };
-
-  const handleTypeChange = (type: 'studio' | 'private') => {
-    setFormData(prev => ({
-      ...prev,
-      type,
-      dancers: type === 'private' 
-        ? [{ name: prev.name || '', age: prev.dateOfBirth ? calculateAge(prev.dateOfBirth).toString() : '', dateOfBirth: prev.dateOfBirth || '', nationalId: '' }]
-        : prev.dancers.length === 0 
-          ? [{ name: '', age: '', dateOfBirth: '', nationalId: '' }] 
-          : prev.dancers
-    }));
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -226,64 +154,44 @@ export default function RegisterPage() {
         return;
       }
 
+      // Validate individual dancer fields
+      if (!formData.name || !formData.dateOfBirth || !formData.nationalId) {
+        alert('Name, date of birth, and national ID are required for individual dancer registration.');
+        setIsSubmitting(false);
+        return;
+      }
+
       // Validate guardian info for minors
-      if (isMinor(formData.dateOfBirth)) {
+      const age = calculateAge(formData.dateOfBirth);
+      if (age < 18) {
         if (!formData.guardianInfo?.name || !formData.guardianInfo?.email || !formData.guardianInfo?.cell) {
-          alert('Guardian information is required for minors (under 18 years old).');
+          alert('Guardian information is required for dancers under 18 years old.');
           setIsSubmitting(false);
           return;
         }
       }
 
-      // Validate dancers
-      const validDancers = formData.dancers.filter(dancer => 
-        dancer.name && dancer.dateOfBirth && dancer.nationalId
-      );
-      
-      if (validDancers.length === 0) {
-        alert('Please add at least one dancer with complete information.');
-        setIsSubmitting(false);
-        return;
-      }
-
-      // Auto-generate Studio Registration Number for studios
-      const studioRegistrationNumber = formData.type === 'studio' ? generateStudioRegistrationId() : undefined;
-
-      // Prepare registration data
-      const registrationData = {
-        name: formData.type === 'studio' ? formData.studioName : formData.name,
-        email: formData.email,
-        phone: formData.phone,
-        type: formData.type,
-        dateOfBirth: formData.dateOfBirth,
-        guardianInfo: formData.guardianInfo,
-        privacyPolicyAccepted: formData.privacyPolicyAccepted,
-        studioName: formData.type === 'studio' ? formData.studioName : undefined,
-        studioInfo: formData.type === 'studio' ? {
-          address: formData.studioAddress,
-          contactPerson: formData.studioContactPerson,
-          registrationNumber: studioRegistrationNumber
-        } : undefined,
-        dancers: validDancers.map(dancer => ({
-          name: dancer.name,
-          age: parseInt(dancer.age) || calculateAge(dancer.dateOfBirth),
-          dateOfBirth: dancer.dateOfBirth,
-          style: 'To be selected per performance', // Remove style from main form
-          nationalId: dancer.nationalId
-        }))
-      };
-
-      const response = await fetch('/api/contestants', {
+      // Register individual dancer
+      const response = await fetch('/api/dancers/register', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(registrationData),
+        body: JSON.stringify({
+          name: formData.name,
+          dateOfBirth: formData.dateOfBirth,
+          nationalId: formData.nationalId,
+          email: formData.email,
+          phone: formData.phone,
+          guardianName: formData.guardianInfo?.name,
+          guardianEmail: formData.guardianInfo?.email,
+          guardianPhone: formData.guardianInfo?.cell
+        }),
       });
 
       if (response.ok) {
         const result = await response.json();
-        setEodsaId(result.eodsaId);
+        setEodsaId(result.dancer.eodsaId);
         setSubmitted(true);
       } else {
         const error = await response.json();
@@ -326,16 +234,29 @@ export default function RegisterPage() {
             </div>
             
             <p className="text-gray-300 mb-8 leading-relaxed">
-              Congratulations! You're now registered in the E-O-D-S-A competition system. 
-              Use your ID to enter competitions and track your performances.
+              Your dancer registration is now <strong>pending admin approval</strong>. Once approved, 
+              you can apply to dance studios. Check back later for your approval status.
             </p>
             
             <div className="space-y-4">
+              <div className="bg-blue-900/20 border border-blue-500/30 rounded-xl p-4 mb-4">
+                <div className="flex items-center">
+                  <svg className="w-5 h-5 text-blue-400 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span className="text-blue-300 font-medium">Next Steps</span>
+                </div>
+                <p className="text-blue-200 text-sm mt-1">
+                  1. Wait for admin approval (you'll be notified)<br/>
+                  2. Once approved, browse and apply to dance studios<br/>
+                  3. Studios will review and accept/reject your application
+                </p>
+              </div>
               <Link 
-                href={`/event-dashboard?eodsaId=${eodsaId}`}
-                className="block w-full px-6 py-4 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-2xl hover:from-purple-600 hover:to-pink-600 transition-all duration-300 font-semibold shadow-lg hover:shadow-xl transform hover:scale-105"
+                href="/dancer-dashboard" 
+                className="block w-full px-6 py-4 bg-gradient-to-r from-emerald-500 to-green-500 text-white rounded-2xl hover:from-emerald-600 hover:to-green-600 transition-all duration-300 font-semibold shadow-lg hover:shadow-xl transform hover:scale-105"
               >
-                🎪 Enter Your First Competition
+                🎭 Go to Dancer Dashboard
               </Link>
               
               <button
@@ -343,22 +264,19 @@ export default function RegisterPage() {
                   setSubmitted(false);
                   setEodsaId('');
                   setFormData({
-                    type: 'studio',
+                    type: 'individual_dancer',
                     name: '',
                     email: '',
                     phone: '',
                     dateOfBirth: '',
+                    nationalId: '',
                     guardianInfo: undefined,
                     privacyPolicyAccepted: false,
-                    studioName: '',
-                    studioAddress: '',
-                    studioContactPerson: '',
-                    dancers: [{ name: '', age: '', dateOfBirth: '', nationalId: '' }]
                   });
                 }}
                 className="block w-full px-6 py-4 border-2 border-gray-600 text-gray-300 rounded-2xl hover:bg-gray-700 hover:border-gray-500 transition-all duration-300 font-semibold"
               >
-                ➕ Register Another Contestant
+                ➕ Register Another Dancer
               </button>
               
               <Link 
@@ -414,55 +332,78 @@ export default function RegisterPage() {
 
             <div className="bg-gray-800/80 backdrop-blur-xl rounded-3xl shadow-2xl border border-gray-700/20 p-6 lg:p-12">
               <form onSubmit={handleSubmit} className="space-y-8">
-                {/* Registration Type Toggle */}
-                <div className="text-center">
-                  <h3 className="text-lg font-semibold text-white mb-6">Choose Registration Type</h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-2xl mx-auto">
-                    <button
-                      type="button"
-                      onClick={() => handleTypeChange('studio')}
-                      className={`group relative p-6 rounded-2xl border-2 transition-all duration-300 ${
-                        formData.type === 'studio'
-                          ? 'border-purple-500 bg-purple-900/30 shadow-lg scale-105'
-                          : 'border-gray-600 bg-gray-700/50 hover:border-purple-400 hover:shadow-md'
-                      }`}
-                    >
-                      <div className="text-center">
-                        <div className={`w-16 h-16 mx-auto rounded-full flex items-center justify-center mb-4 transition-colors ${
-                          formData.type === 'studio' ? 'bg-purple-500' : 'bg-gray-500 group-hover:bg-purple-400'
-                        }`}>
-                          <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                          </svg>
-                        </div>
-                        <h4 className="font-bold text-lg mb-2 text-white">Dance Studio</h4>
-                        <p className="text-sm text-gray-300">Register multiple dancers from your studio</p>
-              </div>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => handleTypeChange('private')}
-                      className={`group relative p-6 rounded-2xl border-2 transition-all duration-300 ${
-                        formData.type === 'private'
-                          ? 'border-pink-500 bg-pink-900/30 shadow-lg scale-105'
-                          : 'border-gray-600 bg-gray-700/50 hover:border-pink-400 hover:shadow-md'
-                      }`}
-                    >
-                      <div className="text-center">
-                        <div className={`w-16 h-16 mx-auto rounded-full flex items-center justify-center mb-4 transition-colors ${
-                          formData.type === 'private' ? 'bg-pink-500' : 'bg-gray-500 group-hover:bg-pink-400'
-                        }`}>
-                          <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                          </svg>
-                        </div>
-                        <h4 className="font-bold text-lg mb-2 text-white">Individual Dancer</h4>
-                        <p className="text-sm text-gray-300">Register as a private contestant</p>
-                      </div>
-                    </button>
+                {/* Registration Header */}
+                <div className="text-center mb-8">
+                  <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-r from-emerald-500 to-green-500 rounded-full mb-6 shadow-lg">
+                    <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                    </svg>
                   </div>
-              </div>
+                  <h3 className="text-2xl font-bold text-white mb-2">Individual Dancer Registration</h3>
+                  <p className="text-gray-300">Register yourself as a dancer, then apply to dance studios</p>
+                  <div className="bg-blue-900/20 border border-blue-500/30 rounded-xl p-4 mt-4 max-w-2xl mx-auto">
+                    <div className="flex items-center justify-center">
+                      <svg className="w-5 h-5 text-blue-400 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <span className="text-blue-300 font-medium text-sm">Studios register through the Studio Portal</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Individual Dancer Registration Details */}
+                <div className="bg-emerald-900/20 rounded-2xl p-6 border border-emerald-500/30">
+                  <h3 className="text-lg font-semibold text-white mb-6 flex items-center">
+                    <svg className="w-5 h-5 mr-2 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                    </svg>
+                    Dancer Details
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <label htmlFor="name" className="block text-sm font-medium text-gray-300 mb-2">
+                        Full Name *
+                      </label>
+                      <input
+                        type="text"
+                        id="name"
+                        name="name"
+                        value={formData.name}
+                        onChange={handleInputChange}
+                        className="w-full px-4 py-3 border border-gray-600 bg-gray-700 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all text-white placeholder-gray-400"
+                        required={formData.type === 'individual_dancer'}
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="nationalId" className="block text-sm font-medium text-gray-300 mb-2">
+                        National ID Number *
+                      </label>
+                      <input
+                        type="text"
+                        id="nationalId"
+                        name="nationalId"
+                        value={formData.nationalId}
+                        onChange={handleInputChange}
+                        className="w-full px-4 py-3 border border-gray-600 bg-gray-700 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all text-white placeholder-gray-400"
+                        placeholder="e.g., 0012345678901"
+                        required={formData.type === 'individual_dancer'}
+                      />
+                    </div>
+                  </div>
+                  <div className="mt-6">
+                    <div className="bg-blue-900/20 border border-blue-500/30 rounded-xl p-4">
+                      <div className="flex items-center">
+                        <svg className="w-5 h-5 text-blue-400 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <span className="text-blue-300 font-medium">How it works</span>
+                      </div>
+                      <p className="text-blue-200 text-sm mt-1">
+                        After registration, you'll need admin approval. Once approved, you can apply to dance studios who will review and accept/reject your application.
+                      </p>
+                    </div>
+                  </div>
+                </div>
 
                 {/* Contact Information */}
                 <div className="bg-gray-700/50 rounded-2xl p-6">
@@ -592,244 +533,6 @@ export default function RegisterPage() {
                   )}
               </div>
 
-                {/* Studio Information (if studio type) */}
-              {formData.type === 'studio' && (
-                  <div className="bg-purple-900/20 rounded-2xl p-6 border border-purple-500/30">
-                    <h3 className="text-lg font-semibold text-white mb-6 flex items-center">
-                      <svg className="w-5 h-5 mr-2 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                      </svg>
-                      Studio Details
-                    </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <label htmlFor="studioName" className="block text-sm font-medium text-gray-300 mb-2">
-                    Studio Name *
-                  </label>
-                  <input
-                    type="text"
-                    id="studioName"
-                    name="studioName"
-                    value={formData.studioName}
-                    onChange={handleInputChange}
-                          className="w-full px-4 py-3 border border-gray-600 bg-gray-700 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all text-white placeholder-gray-400"
-                          required={formData.type === 'studio'}
-                        />
-                      </div>
-                      <div>
-                        <label htmlFor="studioContactPerson" className="block text-sm font-medium text-gray-300 mb-2">
-                          Contact Person *
-                        </label>
-                        <input
-                          type="text"
-                          id="studioContactPerson"
-                          name="studioContactPerson"
-                          value={formData.studioContactPerson}
-                          onChange={handleInputChange}
-                          className="w-full px-4 py-3 border border-gray-600 bg-gray-700 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all text-white placeholder-gray-400"
-                          required={formData.type === 'studio'}
-                        />
-                      </div>
-                    </div>
-                    <div className="mt-6">
-                      <label htmlFor="studioAddress" className="block text-sm font-medium text-gray-300 mb-2">
-                        Studio Address *
-                      </label>
-                      <input
-                        type="text"
-                        id="studioAddress"
-                        name="studioAddress"
-                        value={formData.studioAddress}
-                        onChange={handleInputChange}
-                        className="w-full px-4 py-3 border border-gray-600 bg-gray-700 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all text-white placeholder-gray-400"
-                    required={formData.type === 'studio'}
-                  />
-                    </div>
-                    <div className="mt-6">
-                      <div className="bg-green-900/20 border border-green-500/30 rounded-xl p-4">
-                        <div className="flex items-center">
-                          <svg className="w-5 h-5 text-green-400 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                          </svg>
-                          <span className="text-green-300 font-medium">Auto-Generated ID</span>
-                        </div>
-                        <p className="text-green-200 text-sm mt-1">
-                          Your Studio Registration Number will be automatically generated upon registration.
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Private Registration Name */}
-                {formData.type === 'private' && (
-                  <div className="bg-pink-900/20 rounded-2xl p-6 border border-pink-500/30">
-                    <h3 className="text-lg font-semibold text-white mb-6 flex items-center">
-                      <svg className="w-5 h-5 mr-2 text-pink-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                      </svg>
-                      Personal Details
-                    </h3>
-                    <div>
-                      <label htmlFor="name" className="block text-sm font-medium text-gray-300 mb-2">
-                        Full Name *
-                      </label>
-                      <input
-                        type="text"
-                        id="name"
-                        name="name"
-                        value={formData.name}
-                        onChange={handleInputChange}
-                        className="w-full px-4 py-3 border border-gray-600 bg-gray-700 rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-pink-500 transition-all text-white placeholder-gray-400"
-                        required={formData.type === 'private'}
-                      />
-                    </div>
-                </div>
-              )}
-
-                {/* Dancers Section */}
-                <div className="bg-gradient-to-r from-blue-900/30 to-indigo-900/30 rounded-2xl p-6 border border-blue-500/30">
-                  <div className="flex justify-between items-center mb-6">
-                    <div>
-                      <h3 className="text-lg font-semibold text-white flex items-center">
-                        <svg className="w-5 h-5 mr-2 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                        </svg>
-                        {formData.type === 'studio' ? 'Studio Dancers' : 'Dancer Information'}
-                      </h3>
-                      {formData.type === 'private' && (
-                        <p className="text-sm text-gray-400 mt-1">
-                          Complete your dancer profile for competition registration
-                        </p>
-                      )}
-                      <p className="text-sm text-gray-400 mt-1">
-                        ℹ️ Dance styles will be selected per performance entry
-                      </p>
-                    </div>
-                    {formData.type === 'studio' && (
-                      <button
-                        type="button"
-                        onClick={addDancer}
-                        className="px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-xl hover:from-green-600 hover:to-emerald-600 transition-all duration-300 font-semibold shadow-lg hover:shadow-xl transform hover:scale-105"
-                      >
-                        ➕ Add Dancer
-                      </button>
-                    )}
-                  </div>
-
-                  <div className="space-y-6">
-                    {formData.dancers.map((dancer, index) => (
-                      <div key={index} className="bg-gray-700/50 rounded-xl p-6 border border-gray-600 shadow-sm">
-                        <div className="flex justify-between items-center mb-4">
-                          <h4 className="font-medium text-white flex items-center">
-                            <span className="w-8 h-8 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-full flex items-center justify-center text-sm font-bold mr-3">
-                              {index + 1}
-                            </span>
-                            {formData.type === 'studio' ? `Dancer ${index + 1}` : 'Your Information'}
-                          </h4>
-                          {formData.type === 'studio' && formData.dancers.length > 1 && (
-                            <button
-                              type="button"
-                              onClick={() => removeDancer(index)}
-                              className="text-red-400 hover:text-red-300 p-2 hover:bg-red-900/20 rounded-lg transition-colors"
-                            >
-                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                              </svg>
-                            </button>
-                          )}
-                        </div>
-                        
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div>
-                            <label className="block text-sm font-medium text-gray-300 mb-2">
-                              Full Name *
-                            </label>
-                            {formData.type === 'private' ? (
-                              <div className="relative">
-                                <input
-                                  type="text"
-                                  value={dancer.name}
-                                  className="w-full px-4 py-3 border border-gray-600 bg-gray-600 rounded-xl text-gray-300 cursor-not-allowed"
-                                  readOnly
-                                />
-                                <div className="absolute inset-y-0 right-0 flex items-center pr-3">
-                                  <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                                  </svg>
-                                </div>
-                              </div>
-                            ) : (
-                              <input
-                                type="text"
-                                value={dancer.name}
-                                onChange={(e) => handleDancerChange(index, 'name', e.target.value)}
-                                className="w-full px-4 py-3 border border-gray-600 bg-gray-700 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-white placeholder-gray-400"
-                                required
-                              />
-                            )}
-                            {formData.type === 'private' && (
-                              <p className="text-xs text-gray-400 mt-1">
-                                💡 Auto-filled from your personal details above
-                              </p>
-                            )}
-                          </div>
-                          <div>
-                            <label className="block text-sm font-medium text-gray-300 mb-2">
-                              Age *
-                            </label>
-                            <input
-                              type="number"
-                              min="3"
-                              max="99"
-                              value={dancer.age}
-                              onChange={(e) => handleDancerChange(index, 'age', e.target.value)}
-                              className="w-full px-4 py-3 border border-gray-600 bg-gray-700 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-white placeholder-gray-400"
-                              required
-                              readOnly={formData.type === 'private'}
-                            />
-                            {formData.type === 'private' && (
-                              <p className="text-xs text-gray-400 mt-1">
-                                💡 Auto-calculated from date of birth
-                              </p>
-                            )}
-                          </div>
-                          <div>
-                            <label className="block text-sm font-medium text-gray-300 mb-2">
-                              Date of Birth *
-                            </label>
-                            <input
-                              type="date"
-                              value={dancer.dateOfBirth}
-                              onChange={(e) => handleDancerChange(index, 'dateOfBirth', e.target.value)}
-                              className="w-full px-4 py-3 border border-gray-600 bg-gray-700 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-white"
-                              required
-                              readOnly={formData.type === 'private'}
-                            />
-                            {formData.type === 'private' && (
-                              <p className="text-xs text-gray-400 mt-1">
-                                💡 Auto-filled from your personal details above
-                              </p>
-                            )}
-                          </div>
-                          <div>
-                            <label className="block text-sm font-medium text-gray-300 mb-2">
-                              National ID Number *
-                            </label>
-                            <input
-                              type="text"
-                              value={dancer.nationalId}
-                              onChange={(e) => handleDancerChange(index, 'nationalId', e.target.value)}
-                              className="w-full px-4 py-3 border border-gray-600 bg-gray-700 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-white placeholder-gray-400"
-                              required
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
                 {/* Privacy Policy Checkbox */}
                 <div className="bg-gray-700/50 rounded-2xl p-6 border border-gray-600">
                   <div className="flex items-start space-x-3">
@@ -878,7 +581,7 @@ export default function RegisterPage() {
                   ) : (
                       <span className="flex items-center justify-center">
                         <svg className="w-6 h-6 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
                         Complete Registration & Get EODSA ID
                       </span>

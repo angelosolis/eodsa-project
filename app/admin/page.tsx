@@ -40,11 +40,32 @@ interface JudgeAssignment {
   eventName: string;
 }
 
+interface Dancer {
+  id: string;
+  eodsaId: string;
+  name: string;
+  age: number;
+  dateOfBirth: string;
+  nationalId: string;
+  email?: string;
+  phone?: string;
+  guardianName?: string;
+  guardianEmail?: string;
+  guardianPhone?: string;
+  approved: boolean;
+  approvedBy?: string;
+  approvedAt?: string;
+  rejectionReason?: string;
+  approvedByName?: string;
+  createdAt: string;
+}
+
 export default function AdminDashboard() {
   const [events, setEvents] = useState<Event[]>([]);
   const [judges, setJudges] = useState<Judge[]>([]);
   const [assignments, setAssignments] = useState<JudgeAssignment[]>([]);
-  const [activeTab, setActiveTab] = useState<'events' | 'judges' | 'assignments'>('events');
+  const [dancers, setDancers] = useState<Dancer[]>([]);
+  const [activeTab, setActiveTab] = useState<'events' | 'judges' | 'assignments' | 'dancers'>('events');
   const [isLoading, setIsLoading] = useState(true);
   
   // Event creation state
@@ -85,6 +106,10 @@ export default function AdminDashboard() {
   const [isCleaningDatabase, setIsCleaningDatabase] = useState(false);
   const [cleanDatabaseMessage, setCleanDatabaseMessage] = useState('');
 
+  // Dancer search and filter state
+  const [dancerSearchTerm, setDancerSearchTerm] = useState('');
+  const [dancerStatusFilter, setDancerStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all');
+
   // Modal states
   const [showCreateEventModal, setShowCreateEventModal] = useState(false);
   const [showCreateJudgeModal, setShowCreateJudgeModal] = useState(false);
@@ -111,19 +136,22 @@ export default function AdminDashboard() {
   const fetchData = async () => {
     setIsLoading(true);
     try {
-      const [eventsRes, judgesRes, assignmentsRes] = await Promise.all([
+      const [eventsRes, judgesRes, assignmentsRes, dancersRes] = await Promise.all([
         fetch('/api/events'),
         fetch('/api/judges'),
-        fetch('/api/judge-assignments')
+        fetch('/api/judge-assignments'),
+        fetch('/api/admin/dancers')
       ]);
 
       const eventsData = await eventsRes.json();
       const judgesData = await judgesRes.json();
       const assignmentsData = await assignmentsRes.json();
+      const dancersData = await dancersRes.json();
 
       if (eventsData.success) setEvents(eventsData.events);
       if (judgesData.success) setJudges(judgesData.judges);
       if (assignmentsData.success) setAssignments(assignmentsData.assignments);
+      if (dancersData.success) setDancers(dancersData.dancers);
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {
@@ -355,6 +383,85 @@ export default function AdminDashboard() {
     }
   };
 
+  const handleApproveDancer = async (dancerId: string) => {
+    try {
+      const session = localStorage.getItem('judgeSession');
+      if (!session) {
+        alert('Session expired. Please log in again.');
+        return;
+      }
+
+      const judgeData = JSON.parse(session);
+
+      const response = await fetch('/api/admin/dancers', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          dancerId,
+          action: 'approve',
+          adminId: judgeData.id
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        alert('✅ Dancer approved successfully! They can now apply to studios.');
+        fetchData(); // Refresh the data
+      } else {
+        alert(`❌ Error: ${data.error || 'Unknown error occurred'}`);
+      }
+    } catch (error) {
+      console.error('Error approving dancer:', error);
+      alert('❌ Error approving dancer. Please check your connection and try again.');
+    }
+  };
+
+  const handleRejectDancer = async (dancerId: string) => {
+    const rejectionReason = prompt('Please provide a reason for rejection:');
+    if (!rejectionReason || rejectionReason.trim() === '') {
+      alert('Rejection reason is required.');
+      return;
+    }
+
+    try {
+      const session = localStorage.getItem('judgeSession');
+      if (!session) {
+        alert('Session expired. Please log in again.');
+        return;
+      }
+
+      const judgeData = JSON.parse(session);
+
+      const response = await fetch('/api/admin/dancers', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          dancerId,
+          action: 'reject',
+          rejectionReason: rejectionReason.trim(),
+          adminId: judgeData.id
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        alert('✅ Dancer registration rejected.');
+        fetchData(); // Refresh the data
+      } else {
+        alert(`❌ Error: ${data.error || 'Unknown error occurred'}`);
+      }
+    } catch (error) {
+      console.error('Error rejecting dancer:', error);
+      alert('❌ Error rejecting dancer. Please check your connection and try again.');
+    }
+  };
+
   const handleLogout = () => {
     localStorage.removeItem('judgeSession');
     router.push('/portal/admin');
@@ -492,7 +599,8 @@ export default function AdminDashboard() {
             {[
               { id: 'events', label: 'Events', icon: '🏆', color: 'indigo' },
               { id: 'judges', label: 'Judges', icon: '👨‍⚖️', color: 'purple' },
-              { id: 'assignments', label: 'Assignments', icon: '🔗', color: 'pink' }
+              { id: 'assignments', label: 'Assignments', icon: '🔗', color: 'pink' },
+              { id: 'dancers', label: 'Dancers', icon: '💃', color: 'rose' }
             ].map((tab) => (
                 <button
                   key={tab.id}
@@ -784,6 +892,210 @@ export default function AdminDashboard() {
               </div>
             </div>
           )}
+
+        {/* Dancers Tab - Enhanced */}
+        {activeTab === 'dancers' && (
+          <div className="space-y-8 animate-fadeIn">
+            {/* Enhanced Dancers List */}
+            <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl overflow-hidden border border-rose-100">
+              <div className="px-6 py-4 bg-gradient-to-r from-rose-500/10 to-pink-500/10 border-b border-rose-100">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-8 h-8 bg-gradient-to-br from-rose-500 to-pink-600 rounded-lg flex items-center justify-center">
+                      <span className="text-white text-sm">💃</span>
+                    </div>
+                    <h2 className="text-xl font-bold text-gray-900">Individual Dancer Registrations</h2>
+                    <div className="px-3 py-1 bg-rose-100 text-rose-800 rounded-full text-sm font-medium">
+                      {dancers.filter(d => {
+                        const matchesSearch = !dancerSearchTerm || 
+                          d.name.toLowerCase().includes(dancerSearchTerm.toLowerCase()) ||
+                          d.nationalId.includes(dancerSearchTerm) ||
+                          d.eodsaId.toLowerCase().includes(dancerSearchTerm.toLowerCase()) ||
+                          (d.email && d.email.toLowerCase().includes(dancerSearchTerm.toLowerCase()));
+                        const matchesFilter = dancerStatusFilter === 'all' ||
+                          (dancerStatusFilter === 'pending' && !d.approved && !d.rejectionReason) ||
+                          (dancerStatusFilter === 'approved' && d.approved) ||
+                          (dancerStatusFilter === 'rejected' && d.rejectionReason);
+                        return matchesSearch && matchesFilter;
+                      }).length} of {dancers.length} dancers
+                    </div>
+                  </div>
+                  
+                  {/* Search and Filter Controls */}
+                  <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+                    <div className="relative">
+                      <input
+                        type="text"
+                        placeholder="Search dancers..."
+                        value={dancerSearchTerm}
+                        onChange={(e) => setDancerSearchTerm(e.target.value)}
+                        className="w-full sm:w-64 px-4 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-500 focus:border-rose-500 text-sm"
+                      />
+                      <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                        <span className="text-gray-400">🔍</span>
+                      </div>
+                    </div>
+                    
+                    <select
+                      value={dancerStatusFilter}
+                      onChange={(e) => setDancerStatusFilter(e.target.value as any)}
+                      className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-500 focus:border-rose-500 text-sm"
+                    >
+                      <option value="all">All Status</option>
+                      <option value="pending">⏳ Pending</option>
+                      <option value="approved">✅ Approved</option>
+                      <option value="rejected">❌ Rejected</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {(() => {
+                // Filter and sort dancers
+                const filteredDancers = dancers
+                  .filter(d => {
+                    const matchesSearch = !dancerSearchTerm || 
+                      d.name.toLowerCase().includes(dancerSearchTerm.toLowerCase()) ||
+                      d.nationalId.includes(dancerSearchTerm) ||
+                      d.eodsaId.toLowerCase().includes(dancerSearchTerm.toLowerCase()) ||
+                      (d.email && d.email.toLowerCase().includes(dancerSearchTerm.toLowerCase()));
+                    const matchesFilter = dancerStatusFilter === 'all' ||
+                      (dancerStatusFilter === 'pending' && !d.approved && !d.rejectionReason) ||
+                      (dancerStatusFilter === 'approved' && d.approved) ||
+                      (dancerStatusFilter === 'rejected' && d.rejectionReason);
+                    return matchesSearch && matchesFilter;
+                  })
+                  .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()); // Sort by newest first
+
+                return filteredDancers.length === 0 ? (
+                  <div className="text-center py-12 text-gray-500">
+                    <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
+                      <span className="text-2xl">💃</span>
+                    </div>
+                    <h3 className="text-lg font-medium mb-2">
+                      {dancers.length === 0 ? 'No dancer registrations yet' : 'No dancers match your filters'}
+                    </h3>
+                    <p className="text-sm mb-4">
+                      {dancers.length === 0 
+                        ? 'Individual dancers will appear here after they register'
+                        : 'Try adjusting your search or filter criteria'
+                      }
+                    </p>
+                    {dancers.length > 0 && (
+                      <button
+                        onClick={() => {
+                          setDancerSearchTerm('');
+                          setDancerStatusFilter('all');
+                        }}
+                        className="inline-flex items-center space-x-2 px-4 py-2 bg-rose-500 text-white rounded-lg hover:bg-rose-600 transition-colors"
+                      >
+                        <span>🔄</span>
+                        <span>Clear Filters</span>
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-gray-50/80">
+                        <tr>
+                          <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Name</th>
+                          <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Age</th>
+                          <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Contact</th>
+                          <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Guardian</th>
+                          <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Status</th>
+                          <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white/50 divide-y divide-gray-200">
+                        {filteredDancers.map((dancer) => (
+                          <tr key={dancer.id} className="hover:bg-rose-50/50 transition-colors duration-200">
+                            <td className="px-6 py-4">
+                              <div>
+                                <div className="text-sm font-bold text-gray-900">{dancer.name}</div>
+                                <div className="text-xs text-gray-500">ID: {dancer.nationalId}</div>
+                                <div className="text-xs text-gray-500">EODSA: {dancer.eodsaId}</div>
+                                <div className="text-xs text-gray-500">Registered: {new Date(dancer.createdAt).toLocaleDateString()}</div>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4">
+                              <div className="text-sm font-medium text-gray-900">{dancer.age}</div>
+                              <div className="text-xs text-gray-500">{dancer.dateOfBirth}</div>
+                            </td>
+                            <td className="px-6 py-4">
+                              <div className="text-sm font-medium text-gray-900">{dancer.email || 'N/A'}</div>
+                              <div className="text-xs text-gray-500">{dancer.phone || 'N/A'}</div>
+                            </td>
+                            <td className="px-6 py-4">
+                              {dancer.guardianName ? (
+                                <div>
+                                  <div className="text-sm font-medium text-gray-900">{dancer.guardianName}</div>
+                                  <div className="text-xs text-gray-500">{dancer.guardianEmail}</div>
+                                  <div className="text-xs text-gray-500">{dancer.guardianPhone}</div>
+                                </div>
+                              ) : (
+                                <span className="text-sm text-gray-400">Adult</span>
+                              )}
+                            </td>
+                            <td className="px-6 py-4">
+                              {dancer.approved ? (
+                                <div>
+                                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                    ✅ Approved
+                                  </span>
+                                  {dancer.approvedAt && (
+                                    <div className="text-xs text-gray-500 mt-1">
+                                      {new Date(dancer.approvedAt).toLocaleDateString()}
+                                    </div>
+                                  )}
+                                </div>
+                              ) : dancer.rejectionReason ? (
+                                <div>
+                                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                                    ❌ Rejected
+                                  </span>
+                                  <div className="text-xs text-gray-500 mt-1" title={dancer.rejectionReason}>
+                                    {dancer.rejectionReason.length > 30 
+                                      ? dancer.rejectionReason.substring(0, 30) + '...' 
+                                      : dancer.rejectionReason}
+                                  </div>
+                                </div>
+                              ) : (
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                                  ⏳ Pending
+                                </span>
+                              )}
+                            </td>
+                            <td className="px-6 py-4">
+                              {!dancer.approved && !dancer.rejectionReason ? (
+                                <div className="flex space-x-2">
+                                  <button
+                                    onClick={() => handleApproveDancer(dancer.id)}
+                                    className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors"
+                                  >
+                                    ✅ Approve
+                                  </button>
+                                  <button
+                                    onClick={() => handleRejectDancer(dancer.id)}
+                                    className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors"
+                                  >
+                                    ❌ Reject
+                                  </button>
+                                </div>
+                              ) : (
+                                <span className="text-xs text-gray-400">No actions</span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Modal Components */}

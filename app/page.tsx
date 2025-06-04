@@ -22,13 +22,13 @@ export default function HomePage() {
         </div>
 
         {/* Main Content */}
-        <div className="max-w-4xl mx-auto">
+        <div className="max-w-6xl mx-auto">
           <div className="text-center mb-8">
             <h2 className="text-2xl font-bold text-white mb-2">Get Started</h2>
             <p className="text-gray-400">Choose your path to get started</p>
           </div>
 
-          <div className="grid md:grid-cols-2 gap-8 lg:gap-12 mb-16">
+          <div className="grid md:grid-cols-3 gap-8 lg:gap-8 mb-16">
             {/* New User Card */}
             <div className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-2xl border-2 border-indigo-500/30 p-8 text-center hover:scale-105 transition-all duration-300 shadow-2xl hover:shadow-indigo-500/20">
               <div className="w-16 h-16 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-6 shadow-xl">
@@ -78,6 +78,49 @@ export default function HomePage() {
                   Enter Event Dashboard
                 </Link>
               </div>
+            </div>
+
+            {/* Studio Portal Card */}
+            <div className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-2xl border-2 border-orange-500/30 p-8 text-center hover:scale-105 transition-all duration-300 shadow-2xl hover:shadow-orange-500/20">
+              <div className="w-16 h-16 bg-gradient-to-br from-orange-500 to-pink-600 rounded-full flex items-center justify-center mx-auto mb-6 shadow-xl">
+                <span className="text-white text-2xl">🏢</span>
+              </div>
+              <h3 className="text-2xl font-bold text-white mb-4">Studio Portal</h3>
+              <p className="text-gray-300 mb-6">
+                Dance studio owners and teachers can manage their dancers and registrations.
+              </p>
+              
+              <div className="space-y-3">
+                <Link 
+                  href="/studio-login"
+                  className="block w-full px-6 py-3 bg-gradient-to-r from-orange-500 to-pink-600 text-white rounded-xl font-semibold hover:from-orange-600 hover:to-pink-700 transition-all duration-300 shadow-lg hover:shadow-xl"
+                >
+                  Studio Login
+                </Link>
+                <Link 
+                  href="/studio-register"
+                  className="block w-full px-6 py-3 border-2 border-orange-500/30 text-orange-300 rounded-xl font-semibold hover:bg-orange-500/10 transition-all duration-300"
+                >
+                  Register Studio
+                </Link>
+              </div>
+            </div>
+          </div>
+
+          {/* Additional Links */}
+          <div className="text-center space-y-4">
+            <div className="flex flex-wrap justify-center gap-4 text-sm">
+              <Link href="/admin" className="text-blue-400 hover:text-blue-300 transition-colors">
+                Admin Portal
+              </Link>
+              <span className="text-gray-600">•</span>
+              <Link href="/judge" className="text-green-400 hover:text-green-300 transition-colors">
+                Judge Portal
+              </Link>
+              <span className="text-gray-600">•</span>
+              <Link href="/portal" className="text-purple-400 hover:text-purple-300 transition-colors">
+                Rankings Portal
+              </Link>
             </div>
           </div>
         </div>

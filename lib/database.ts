@@ -35,14 +35,109 @@ export const initializeDatabase = async () => {
   try {
     const sqlClient = getSql();
     
-    // Check if tables already exist
+    // First, try to ensure all tables exist with proper schema
+    console.log('🔄 Checking and fixing database schema...');
+    
+    // Handle dancers table specially since it's causing issues
     try {
-      const existingData = await sqlClient`SELECT 1 FROM contestants LIMIT 1` as any[];
-      console.log('Database tables already exist and initialized');
+      // Check if dancers table has the required eodsa_id column
+      await sqlClient`SELECT eodsa_id FROM dancers LIMIT 1`;
+      console.log('✅ Dancers table schema is correct');
+    } catch (error) {
+      console.log('❌ Dancers table needs fixing, recreating with proper schema...');
+      
+      // Drop and recreate dancers table with correct schema
+      try {
+        await sqlClient`DROP TABLE IF EXISTS studio_applications`;  // Drop dependent table first
+        await sqlClient`DROP TABLE IF EXISTS waivers`;  // Drop dependent table first
+        await sqlClient`DROP TABLE IF EXISTS dancers`;
+        console.log('Dropped old dancers table');
+      } catch (dropError) {
+        console.log('Could not drop dancers table (might not exist)');
+      }
+      
+      // Create dancers table with proper schema
+      await sqlClient`
+        CREATE TABLE dancers (
+          id TEXT PRIMARY KEY,
+          eodsa_id TEXT UNIQUE NOT NULL,
+          name TEXT NOT NULL,
+          date_of_birth TEXT NOT NULL,
+          age INTEGER NOT NULL,
+          national_id TEXT NOT NULL,
+          email TEXT,
+          phone TEXT,
+          guardian_name TEXT,
+          guardian_email TEXT,
+          guardian_phone TEXT,
+          approved BOOLEAN DEFAULT FALSE,
+          approved_by TEXT,
+          approved_at TEXT,
+          rejection_reason TEXT,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `;
+      console.log('✅ Created dancers table with proper schema');
+      
+      // Recreate dependent tables
+      await sqlClient`
+        CREATE TABLE IF NOT EXISTS studio_applications (
+          id TEXT PRIMARY KEY,
+          dancer_id TEXT NOT NULL,
+          studio_id TEXT NOT NULL,
+          status TEXT CHECK(status IN ('pending', 'accepted', 'rejected', 'withdrawn')) DEFAULT 'pending',
+          applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          responded_at TIMESTAMP,
+          responded_by TEXT,
+          rejection_reason TEXT,
+          FOREIGN KEY (dancer_id) REFERENCES dancers (id) ON DELETE CASCADE,
+          FOREIGN KEY (studio_id) REFERENCES studios (id) ON DELETE CASCADE,
+          UNIQUE(dancer_id, studio_id)
+        )
+      `;
+      
+      await sqlClient`
+        CREATE TABLE IF NOT EXISTS waivers (
+          id TEXT PRIMARY KEY,
+          dancer_id TEXT NOT NULL,
+          parent_name TEXT NOT NULL,
+          parent_email TEXT NOT NULL,
+          parent_phone TEXT NOT NULL,
+          relationship_to_dancer TEXT NOT NULL,
+          signed_date TEXT NOT NULL,
+          signature_path TEXT NOT NULL,
+          id_document_path TEXT NOT NULL,
+          approved BOOLEAN DEFAULT FALSE,
+          approved_by TEXT,
+          approved_at TEXT,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (dancer_id) REFERENCES dancers (id) ON DELETE CASCADE
+        )
+      `;
+      console.log('✅ Recreated dependent tables');
+    }
+    
+    // Check if all required tables exist and have the correct schema
+    try {
+      await sqlClient`SELECT 1 FROM contestants LIMIT 1`;
+      await sqlClient`SELECT 1 FROM studios LIMIT 1`;
+      await sqlClient`SELECT 1 FROM judges LIMIT 1`;
+      await sqlClient`SELECT 1 FROM dancers LIMIT 1`;
+      await sqlClient`SELECT 1 FROM studio_applications LIMIT 1`;
+      
+      // Check and fix contestants table schema
+      try {
+        await sqlClient`SELECT date_of_birth FROM contestants LIMIT 1`;
+      } catch {
+        console.log('Adding date_of_birth column to contestants table...');
+        await sqlClient`ALTER TABLE contestants ADD COLUMN IF NOT EXISTS date_of_birth TEXT`;
+      }
+      
+      console.log('✅ All database tables exist and are properly configured');
       return;
     } catch (error) {
-      // Tables don't exist yet, continue with initialization
-      console.log('Database not initialized, creating tables...');
+      // Some tables don't exist yet, continue with initialization
+      console.log('📋 Creating missing database tables...');
     }
     
     console.log('🔄 Initializing database tables...');
@@ -71,18 +166,62 @@ export const initializeDatabase = async () => {
       )
     `;
 
-    // Create dancers table with updated fields
+    // Create independent dancers table (NEW UNIFIED SYSTEM)
     await sqlClient`
       CREATE TABLE IF NOT EXISTS dancers (
         id TEXT PRIMARY KEY,
-        contestant_id TEXT NOT NULL,
+        eodsa_id TEXT UNIQUE NOT NULL,
         name TEXT NOT NULL,
-        age INTEGER NOT NULL,
         date_of_birth TEXT NOT NULL,
-        style TEXT NOT NULL,
+        age INTEGER NOT NULL,
         national_id TEXT NOT NULL,
+        email TEXT,
+        phone TEXT,
+        guardian_name TEXT,
+        guardian_email TEXT,
+        guardian_phone TEXT,
+        approved BOOLEAN DEFAULT FALSE,
+        approved_by TEXT,
+        approved_at TEXT,
+        rejection_reason TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `;
+
+    // Create studio applications table (NEW UNIFIED SYSTEM)
+    await sqlClient`
+      CREATE TABLE IF NOT EXISTS studio_applications (
+        id TEXT PRIMARY KEY,
+        dancer_id TEXT NOT NULL,
+        studio_id TEXT NOT NULL,
+        status TEXT CHECK(status IN ('pending', 'accepted', 'rejected', 'withdrawn')) DEFAULT 'pending',
+        applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        responded_at TIMESTAMP,
+        responded_by TEXT,
+        rejection_reason TEXT,
+        FOREIGN KEY (dancer_id) REFERENCES dancers (id) ON DELETE CASCADE,
+        FOREIGN KEY (studio_id) REFERENCES studios (id) ON DELETE CASCADE,
+        UNIQUE(dancer_id, studio_id)
+      )
+    `;
+
+    // Create waivers table for minors under 18
+    await sqlClient`
+      CREATE TABLE IF NOT EXISTS waivers (
+        id TEXT PRIMARY KEY,
+        dancer_id TEXT NOT NULL,
+        parent_name TEXT NOT NULL,
+        parent_email TEXT NOT NULL,
+        parent_phone TEXT NOT NULL,
+        relationship_to_dancer TEXT NOT NULL,
+        signed_date TEXT NOT NULL,
+        signature_path TEXT NOT NULL,
+        id_document_path TEXT NOT NULL,
+        approved BOOLEAN DEFAULT FALSE,
+        approved_by TEXT,
+        approved_at TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (contestant_id) REFERENCES contestants (id) ON DELETE CASCADE
+        FOREIGN KEY (dancer_id) REFERENCES dancers (id) ON DELETE CASCADE
       )
     `;
 
@@ -99,7 +238,27 @@ export const initializeDatabase = async () => {
       )
     `;
 
-    // Create events table
+    // Create studios table for studio authentication and management
+    await sqlClient`
+      CREATE TABLE IF NOT EXISTS studios (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        email TEXT UNIQUE NOT NULL,
+        password TEXT NOT NULL,
+        contact_person TEXT NOT NULL,
+        address TEXT NOT NULL,
+        phone TEXT NOT NULL,
+        registration_number TEXT UNIQUE NOT NULL,
+        approved BOOLEAN DEFAULT FALSE,
+        approved_by TEXT,
+        approved_at TEXT,
+        rejection_reason TEXT,
+        is_active BOOLEAN DEFAULT TRUE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `;
+
+    // Keep existing tables for competitions...
     await sqlClient`
       CREATE TABLE IF NOT EXISTS events (
         id TEXT PRIMARY KEY,
@@ -120,7 +279,7 @@ export const initializeDatabase = async () => {
       )
     `;
 
-    // Create judge_event_assignments table
+    // Continue with other existing tables...
     await sqlClient`
       CREATE TABLE IF NOT EXISTS judge_event_assignments (
         id TEXT PRIMARY KEY,
@@ -132,18 +291,17 @@ export const initializeDatabase = async () => {
         FOREIGN KEY (judge_id) REFERENCES judges (id) ON DELETE CASCADE,
         FOREIGN KEY (event_id) REFERENCES events (id) ON DELETE CASCADE,
         FOREIGN KEY (assigned_by) REFERENCES judges (id) ON DELETE CASCADE,
-        UNIQUE(judge_id, event_id) -- One assignment per judge per event
+        UNIQUE(judge_id, event_id)
       )
     `;
 
-    // Create event_entries table with item_number field
     await sqlClient`
       CREATE TABLE IF NOT EXISTS event_entries (
         id TEXT PRIMARY KEY,
         event_id TEXT NOT NULL,
         contestant_id TEXT NOT NULL,
         eodsa_id TEXT NOT NULL,
-        participant_ids TEXT NOT NULL, -- JSON array of dancer IDs
+        participant_ids TEXT NOT NULL,
         calculated_fee DECIMAL(10,2) NOT NULL,
         payment_status TEXT CHECK(payment_status IN ('pending', 'paid', 'failed')) DEFAULT 'pending',
         payment_method TEXT CHECK(payment_method IN ('credit_card', 'bank_transfer')),
@@ -161,7 +319,6 @@ export const initializeDatabase = async () => {
       )
     `;
 
-    // Create performances table with item_number field
     await sqlClient`
       CREATE TABLE IF NOT EXISTS performances (
         id TEXT PRIMARY KEY,
@@ -169,7 +326,7 @@ export const initializeDatabase = async () => {
         event_entry_id TEXT NOT NULL,
         contestant_id TEXT NOT NULL,
         title TEXT NOT NULL,
-        participant_names TEXT NOT NULL, -- JSON array of participant names
+        participant_names TEXT NOT NULL,
         duration INTEGER NOT NULL,
         item_number INTEGER,
         choreographer TEXT NOT NULL,
@@ -184,7 +341,6 @@ export const initializeDatabase = async () => {
       )
     `;
 
-    // Create scores table
     await sqlClient`
       CREATE TABLE IF NOT EXISTS scores (
         id TEXT PRIMARY KEY,
@@ -202,7 +358,6 @@ export const initializeDatabase = async () => {
       )
     `;
 
-    // Create rankings table
     await sqlClient`
       CREATE TABLE IF NOT EXISTS rankings (
         id TEXT PRIMARY KEY,
@@ -218,7 +373,6 @@ export const initializeDatabase = async () => {
       )
     `;
 
-    // Create fee_schedule table
     await sqlClient`
       CREATE TABLE IF NOT EXISTS fee_schedule (
         id TEXT PRIMARY KEY,
@@ -235,14 +389,20 @@ export const initializeDatabase = async () => {
 
     // Create indexes for better performance
     try {
-    await sqlClient`CREATE INDEX IF NOT EXISTS idx_contestants_eodsa_id ON contestants(eodsa_id)`;
-    await sqlClient`CREATE INDEX IF NOT EXISTS idx_dancers_contestant_id ON dancers(contestant_id)`;
-    await sqlClient`CREATE INDEX IF NOT EXISTS idx_event_entries_contestant_id ON event_entries(contestant_id)`;
+      await sqlClient`CREATE INDEX IF NOT EXISTS idx_contestants_eodsa_id ON contestants(eodsa_id)`;
+      await sqlClient`CREATE INDEX IF NOT EXISTS idx_dancers_eodsa_id ON dancers(eodsa_id)`;
+      await sqlClient`CREATE INDEX IF NOT EXISTS idx_dancers_approved ON dancers(approved)`;
+      await sqlClient`CREATE INDEX IF NOT EXISTS idx_studio_applications_dancer_id ON studio_applications(dancer_id)`;
+      await sqlClient`CREATE INDEX IF NOT EXISTS idx_studio_applications_studio_id ON studio_applications(studio_id)`;
+      await sqlClient`CREATE INDEX IF NOT EXISTS idx_studio_applications_status ON studio_applications(status)`;
+      await sqlClient`CREATE INDEX IF NOT EXISTS idx_studios_approved ON studios(approved)`;
+      await sqlClient`CREATE INDEX IF NOT EXISTS idx_waivers_dancer_id ON waivers(dancer_id)`;
+      await sqlClient`CREATE INDEX IF NOT EXISTS idx_event_entries_contestant_id ON event_entries(contestant_id)`;
       await sqlClient`CREATE INDEX IF NOT EXISTS idx_event_entries_event_id ON event_entries(event_id)`;
-    await sqlClient`CREATE INDEX IF NOT EXISTS idx_performances_event_entry_id ON performances(event_entry_id)`;
+      await sqlClient`CREATE INDEX IF NOT EXISTS idx_performances_event_entry_id ON performances(event_entry_id)`;
       await sqlClient`CREATE INDEX IF NOT EXISTS idx_performances_event_id ON performances(event_id)`;
-    await sqlClient`CREATE INDEX IF NOT EXISTS idx_scores_performance_id ON scores(performance_id)`;
-    await sqlClient`CREATE INDEX IF NOT EXISTS idx_scores_judge_id ON scores(judge_id)`;
+      await sqlClient`CREATE INDEX IF NOT EXISTS idx_scores_performance_id ON scores(performance_id)`;
+      await sqlClient`CREATE INDEX IF NOT EXISTS idx_scores_judge_id ON scores(judge_id)`;
       await sqlClient`CREATE INDEX IF NOT EXISTS idx_rankings_event_id ON rankings(event_id)`;
       await sqlClient`CREATE INDEX IF NOT EXISTS idx_judge_assignments_judge_id ON judge_event_assignments(judge_id)`;
       await sqlClient`CREATE INDEX IF NOT EXISTS idx_judge_assignments_event_id ON judge_event_assignments(event_id)`;
@@ -257,19 +417,19 @@ export const initializeDatabase = async () => {
     // Insert default fee schedule only if it doesn't exist
     const existingFees = await sqlClient`SELECT COUNT(*) as count FROM fee_schedule` as any[];
     if (existingFees[0]?.count === 0) {
-    await sqlClient`
-      INSERT INTO fee_schedule (id, age_category, solo_fee, duet_fee, trio_fee, group_fee)
-      VALUES 
-        ('fee_under6', 'Under 6', 150.00, 250.00, 350.00, 450.00),
-        ('fee_7_9', '7-9', 200.00, 300.00, 400.00, 500.00),
-        ('fee_10_12', '10-12', 250.00, 350.00, 450.00, 550.00),
-        ('fee_13_14', '13-14', 300.00, 400.00, 500.00, 600.00),
-        ('fee_15_17', '15-17', 350.00, 450.00, 550.00, 650.00),
-        ('fee_18_24', '18-24', 400.00, 500.00, 600.00, 700.00),
-        ('fee_25_39', '25-39', 400.00, 500.00, 600.00, 700.00),
-        ('fee_40_plus', '40+', 400.00, 500.00, 600.00, 700.00),
-        ('fee_60_plus', '60+', 350.00, 450.00, 550.00, 650.00)
-      `;
+      await sqlClient`
+        INSERT INTO fee_schedule (id, age_category, solo_fee, duet_fee, trio_fee, group_fee)
+        VALUES 
+          ('fee_under6', 'Under 6', 150.00, 250.00, 350.00, 450.00),
+          ('fee_7_9', '7-9', 200.00, 300.00, 400.00, 500.00),
+          ('fee_10_12', '10-12', 250.00, 350.00, 450.00, 550.00),
+          ('fee_13_14', '13-14', 300.00, 400.00, 500.00, 600.00),
+          ('fee_15_17', '15-17', 350.00, 450.00, 550.00, 650.00),
+          ('fee_18_24', '18-24', 400.00, 500.00, 600.00, 700.00),
+          ('fee_25_39', '25-39', 400.00, 500.00, 600.00, 700.00),
+          ('fee_40_plus', '40+', 400.00, 500.00, 600.00, 700.00),
+          ('fee_60_plus', '60+', 350.00, 450.00, 550.00, 650.00)
+        `;
       console.log('Default fee schedule inserted');
     }
 
@@ -287,7 +447,7 @@ export const initializeDatabase = async () => {
       console.log('Default admin user created: admin@competition.com / admin123');
     }
 
-    console.log('✅ Database initialized successfully - Ready for production use');
+    console.log('✅ Database initialized successfully - Ready for unified dancer-studio system');
   } catch (error) {
     console.error('Error initializing database:', error);
     throw error;
@@ -350,9 +510,8 @@ export const db = {
     for (const dancer of contestant.dancers) {
       const dancerId = Date.now().toString() + Math.random().toString(36).substring(2, 8);
       await sqlClient`
-        INSERT INTO dancers (id, contestant_id, name, age, date_of_birth, style, national_id)
-        VALUES (${dancerId}, ${id}, ${dancer.name}, ${dancer.age}, ${dancer.dateOfBirth}, 
-                ${dancer.style}, ${dancer.nationalId})
+        INSERT INTO dancers (id, eodsa_id, name, date_of_birth, age, national_id)
+        VALUES (${dancerId}, ${eodsaId}, ${dancer.name}, ${dancer.dateOfBirth}, ${dancer.age}, ${dancer.nationalId})
       `;
     }
     
@@ -372,7 +531,7 @@ export const db = {
     if (result.length === 0) return null;
     
     const contestant = result[0];
-    const dancers = await sqlClient`SELECT * FROM dancers WHERE contestant_id = ${id}` as any[];
+    const dancers = await sqlClient`SELECT * FROM dancers WHERE eodsa_id = ${contestant.eodsa_id}` as any[];
     const eventEntries = await sqlClient`SELECT * FROM event_entries WHERE contestant_id = ${id}` as any[];
     
     return {
@@ -401,7 +560,7 @@ export const db = {
         name: d.name,
         age: d.age,
         dateOfBirth: d.date_of_birth,
-        style: d.style,
+        style: d.national_id,
         nationalId: d.national_id
       })),
       registrationDate: contestant.registration_date,
@@ -1019,6 +1178,794 @@ export const db = {
     await sqlClient`DELETE FROM judges WHERE is_admin = false`;
     
     console.log('✅ Database cleaned successfully - Admin user and fee schedule preserved');
+  },
+
+  // Waiver management for minors under 18
+  async createWaiver(waiver: {
+    dancerId: string;
+    parentName: string;
+    parentEmail: string;
+    parentPhone: string;
+    relationshipToDancer: string;
+    signaturePath: string;
+    idDocumentPath: string;
+  }) {
+    const sqlClient = getSql();
+    const id = Date.now().toString();
+    const signedDate = new Date().toISOString();
+    const createdAt = new Date().toISOString();
+    
+    await sqlClient`
+      INSERT INTO waivers (id, dancer_id, parent_name, parent_email, parent_phone, 
+                          relationship_to_dancer, signed_date, signature_path, 
+                          id_document_path, created_at)
+      VALUES (${id}, ${waiver.dancerId}, ${waiver.parentName}, ${waiver.parentEmail}, 
+              ${waiver.parentPhone}, ${waiver.relationshipToDancer}, ${signedDate}, 
+              ${waiver.signaturePath}, ${waiver.idDocumentPath}, ${createdAt})
+    `;
+    
+    return { id, signedDate };
+  },
+
+  async getWaiverByDancerId(dancerId: string) {
+    const sqlClient = getSql();
+    const result = await sqlClient`SELECT * FROM waivers WHERE dancer_id = ${dancerId}` as any[];
+    if (result.length === 0) return null;
+    
+    const waiver = result[0];
+    return {
+      id: waiver.id,
+      dancerId: waiver.dancer_id,
+      parentName: waiver.parent_name,
+      parentEmail: waiver.parent_email,
+      parentPhone: waiver.parent_phone,
+      relationshipToDancer: waiver.relationship_to_dancer,
+      signedDate: waiver.signed_date,
+      signaturePath: waiver.signature_path,
+      idDocumentPath: waiver.id_document_path,
+      approved: waiver.approved,
+      approvedBy: waiver.approved_by,
+      approvedAt: waiver.approved_at,
+      createdAt: waiver.created_at
+    };
+  },
+
+  async updateWaiverApproval(waiverId: string, approved: boolean, approvedBy?: string) {
+    const sqlClient = getSql();
+    const approvedAt = approved ? new Date().toISOString() : null;
+    
+    await sqlClient`
+      UPDATE waivers 
+      SET approved = ${approved}, approved_by = ${approvedBy || null}, approved_at = ${approvedAt}
+      WHERE id = ${waiverId}
+    `;
+  },
+
+  // Dancer approval management
+  async approveDancer(dancerId: string, approvedBy: string) {
+    const sqlClient = getSql();
+    const approvedAt = new Date().toISOString();
+    
+    await sqlClient`
+      UPDATE dancers 
+      SET approved = TRUE, approved_by = ${approvedBy}, approved_at = ${approvedAt}, rejection_reason = NULL
+      WHERE id = ${dancerId}
+    `;
+  },
+
+  async rejectDancer(dancerId: string, rejectionReason: string, rejectedBy: string) {
+    const sqlClient = getSql();
+    
+    await sqlClient`
+      UPDATE dancers 
+      SET approved = FALSE, approved_by = ${rejectedBy}, approved_at = NULL, rejection_reason = ${rejectionReason}
+      WHERE id = ${dancerId}
+    `;
+  },
+
+  async getAllPendingDancers() {
+    const sqlClient = getSql();
+    const result = await sqlClient`
+      SELECT d.*, c.eodsa_id, c.registration_date, s.name as studio_name, s.email as studio_email
+      FROM dancers d
+      JOIN contestants c ON d.eodsa_id = c.eodsa_id
+      LEFT JOIN studios s ON c.email = s.email
+      WHERE d.approved = FALSE AND d.rejection_reason IS NULL
+      ORDER BY d.created_at DESC
+    ` as any[];
+    
+    return result.map((row: any) => ({
+      id: row.id,
+      name: row.name,
+      age: row.age,
+      dateOfBirth: row.date_of_birth,
+      style: row.national_id,
+      nationalId: row.national_id,
+      approved: row.approved,
+      rejectionReason: row.rejection_reason,
+      createdAt: row.created_at,
+      eodsaId: row.eodsa_id,
+      registrationDate: row.registration_date,
+      studioName: row.studio_name,
+      studioEmail: row.studio_email
+    }));
+  },
+
+  async getAllDancersWithStatus() {
+    const sqlClient = getSql();
+    const result = await sqlClient`
+      SELECT d.*, c.eodsa_id, c.registration_date, s.name as studio_name, s.email as studio_email,
+             j.name as approved_by_name
+      FROM dancers d
+      JOIN contestants c ON d.eodsa_id = c.eodsa_id
+      LEFT JOIN studios s ON c.email = s.email
+      LEFT JOIN judges j ON d.approved_by = j.id
+      ORDER BY d.created_at DESC
+    ` as any[];
+    
+    return result.map((row: any) => ({
+      id: row.id,
+      name: row.name,
+      age: row.age,
+      dateOfBirth: row.date_of_birth,
+      style: row.national_id,
+      nationalId: row.national_id,
+      approved: row.approved,
+      approvedBy: row.approved_by,
+      approvedAt: row.approved_at,
+      rejectionReason: row.rejection_reason,
+      createdAt: row.created_at,
+      eodsaId: row.eodsa_id,
+      registrationDate: row.registration_date,
+      studioName: row.studio_name,
+      studioEmail: row.studio_email,
+      approvedByName: row.approved_by_name
+    }));
+  },
+
+  // Get all dancers for admin approval
+  async getAllDancers(status?: 'pending' | 'approved' | 'rejected') {
+    const sqlClient = getSql();
+    let query = `SELECT d.*, j.name as approved_by_name FROM dancers d 
+                 LEFT JOIN judges j ON d.approved_by = j.id`;
+    
+    if (status === 'pending') {
+      query += ' WHERE d.approved = false AND d.rejection_reason IS NULL';
+    } else if (status === 'approved') {
+      query += ' WHERE d.approved = true';
+    } else if (status === 'rejected') {
+      query += ' WHERE d.approved = false AND d.rejection_reason IS NOT NULL';
+    }
+    
+    query += ' ORDER BY d.created_at DESC';
+    
+    const result = (await sqlClient.unsafe(query)) as unknown as any[];
+    
+    return result.map((row: any) => ({
+      id: row.id,
+      eodsaId: row.eodsa_id,
+      name: row.name,
+      age: row.age,
+      dateOfBirth: row.date_of_birth,
+      nationalId: row.national_id,
+      email: row.email,
+      phone: row.phone,
+      guardianName: row.guardian_name,
+      guardianEmail: row.guardian_email,
+      guardianPhone: row.guardian_phone,
+      approved: row.approved,
+      approvedBy: row.approved_by,
+      approvedAt: row.approved_at,
+      rejectionReason: row.rejection_reason,
+      approvedByName: row.approved_by_name,
+      createdAt: row.created_at
+    }));
+  }
+};
+
+// Studio operations
+export const studioDb = {
+  async createStudio(studio: {
+    name: string;
+    email: string;
+    password: string;
+    contactPerson: string;
+    address: string;
+    phone: string;
+  }) {
+    const sqlClient = getSql();
+    const id = Date.now().toString();
+    const registrationNumber = generateStudioRegistrationId();
+    const createdAt = new Date().toISOString();
+    
+    await sqlClient`
+      INSERT INTO studios (id, name, email, password, contact_person, address, phone, registration_number, created_at)
+      VALUES (${id}, ${studio.name}, ${studio.email}, ${studio.password}, ${studio.contactPerson}, 
+              ${studio.address}, ${studio.phone}, ${registrationNumber}, ${createdAt})
+    `;
+    
+    return { id, registrationNumber };
+  },
+
+  async getStudioByEmail(email: string) {
+    const sqlClient = getSql();
+    const result = await sqlClient`SELECT * FROM studios WHERE email = ${email} AND is_active = TRUE` as any[];
+    if (result.length === 0) return null;
+    
+    const studio = result[0];
+    return {
+      id: studio.id,
+      name: studio.name,
+      email: studio.email,
+      password: studio.password,
+      contactPerson: studio.contact_person,
+      address: studio.address,
+      phone: studio.phone,
+      registrationNumber: studio.registration_number,
+      isActive: studio.is_active,
+      createdAt: studio.created_at
+    };
+  },
+
+  async getStudioById(id: string) {
+    const sqlClient = getSql();
+    const result = await sqlClient`SELECT * FROM studios WHERE id = ${id} AND is_active = TRUE` as any[];
+    if (result.length === 0) return null;
+    
+    const studio = result[0];
+    return {
+      id: studio.id,
+      name: studio.name,
+      email: studio.email,
+      contactPerson: studio.contact_person,
+      address: studio.address,
+      phone: studio.phone,
+      registrationNumber: studio.registration_number,
+      isActive: studio.is_active,
+      createdAt: studio.created_at
+    };
+  },
+
+  async updateStudio(id: string, updates: {
+    name?: string;
+    contactPerson?: string;
+    address?: string;
+    phone?: string;
+  }) {
+    const sqlClient = getSql();
+    
+    // Update each field individually to avoid dynamic SQL issues
+    if (updates.name !== undefined) {
+      await sqlClient`UPDATE studios SET name = ${updates.name} WHERE id = ${id}`;
+    }
+    if (updates.contactPerson !== undefined) {
+      await sqlClient`UPDATE studios SET contact_person = ${updates.contactPerson} WHERE id = ${id}`;
+    }
+    if (updates.address !== undefined) {
+      await sqlClient`UPDATE studios SET address = ${updates.address} WHERE id = ${id}`;
+    }
+    if (updates.phone !== undefined) {
+      await sqlClient`UPDATE studios SET phone = ${updates.phone} WHERE id = ${id}`;
+    }
+  },
+
+  // Get all dancers registered under this studio
+  async getStudioDancers(studioId: string) {
+    const sqlClient = getSql();
+    // Find contestants created by this studio (matching email/phone)
+    const studio = await this.getStudioById(studioId);
+    if (!studio) return [];
+
+    const contestants = await sqlClient`
+      SELECT * FROM contestants 
+      WHERE type = 'studio' AND (email = ${studio.email} OR studio_name = ${studio.name})
+      ORDER BY registration_date DESC
+    ` as any[];
+
+    const results = [];
+    for (const contestant of contestants) {
+      const dancers = await sqlClient`SELECT * FROM dancers WHERE eodsa_id = ${contestant.eodsa_id}` as any[];
+      
+      // Get waiver information for each dancer
+      const dancersWithWaivers = [];
+      for (const dancer of dancers) {
+        const waiver = await this.getWaiverByDancerId(dancer.id);
+        dancersWithWaivers.push({
+          id: dancer.id,
+          name: dancer.name,
+          age: dancer.age,
+          dateOfBirth: dancer.date_of_birth,
+          style: dancer.national_id,
+          nationalId: dancer.national_id,
+          approved: dancer.approved,
+          approvedBy: dancer.approved_by,
+          approvedAt: dancer.approved_at,
+          rejectionReason: dancer.rejection_reason,
+          waiver: waiver
+        });
+      }
+      
+      results.push({
+        eodsaId: contestant.eodsa_id,
+        studioName: contestant.studio_name,
+        registrationDate: contestant.registration_date,
+        dancers: dancersWithWaivers
+      });
+    }
+    return results;
+  },
+
+  // Add dancer to studio
+  async addDancerToStudio(studioId: string, dancer: {
+    name: string;
+    age: number;
+    dateOfBirth: string;
+    nationalId: string;
+  }) {
+    const sqlClient = getSql();
+    const studio = await this.getStudioById(studioId);
+    if (!studio) throw new Error('Studio not found');
+
+    // Generate IDs
+    const dancerId = Date.now().toString() + Math.random().toString(36).substring(2, 8);
+    const eodsaId = generateEODSAId();
+    const registrationDate = new Date().toISOString();
+
+    // Create a new contestant entry for this dancer
+    await sqlClient`
+      INSERT INTO contestants (id, eodsa_id, name, email, phone, type, date_of_birth,
+                              privacy_policy_accepted, privacy_policy_accepted_at,
+                              studio_name, studio_address, studio_contact_person,
+                              studio_registration_number, registration_date)
+      VALUES (${dancerId}, ${eodsaId}, ${dancer.name}, ${studio.email}, ${studio.phone},
+              'studio', ${dancer.dateOfBirth}, TRUE, ${new Date().toISOString()},
+              ${studio.name}, ${studio.address}, ${studio.contactPerson},
+              ${studio.registrationNumber}, ${registrationDate})
+    `;
+
+    // Add the dancer to the new independent dancers table
+    await sqlClient`
+      INSERT INTO dancers (id, eodsa_id, name, date_of_birth, age, national_id)
+      VALUES (${dancerId}, ${eodsaId}, ${dancer.name}, ${dancer.dateOfBirth}, ${dancer.age}, ${dancer.nationalId})
+    `;
+
+    return { eodsaId, dancerId };
+  },
+
+  // Update dancer information
+  async updateDancer(dancerId: string, updates: {
+    name?: string;
+    age?: number;
+    dateOfBirth?: string;
+    nationalId?: string;
+  }) {
+    const sqlClient = getSql();
+    
+    // Update each field individually to avoid dynamic SQL issues
+    if (updates.name !== undefined) {
+      await sqlClient`UPDATE dancers SET name = ${updates.name} WHERE id = ${dancerId}`;
+    }
+    if (updates.age !== undefined) {
+      await sqlClient`UPDATE dancers SET age = ${updates.age} WHERE id = ${dancerId}`;
+    }
+    if (updates.dateOfBirth !== undefined) {
+      await sqlClient`UPDATE dancers SET date_of_birth = ${updates.dateOfBirth} WHERE id = ${dancerId}`;
+    }
+    if (updates.nationalId !== undefined) {
+      await sqlClient`UPDATE dancers SET national_id = ${updates.nationalId} WHERE id = ${dancerId}`;
+    }
+  },
+
+  // Delete dancer
+  async deleteDancer(dancerId: string) {
+    const sqlClient = getSql();
+    
+    // Get eodsa_id first
+    const dancer = await sqlClient`SELECT eodsa_id FROM dancers WHERE id = ${dancerId}` as any[];
+    if (dancer.length === 0) return;
+    
+    const eodsaId = dancer[0].eodsa_id;
+    
+    // Delete the dancer
+    await sqlClient`DELETE FROM dancers WHERE id = ${dancerId}`;
+    
+    // Check if this was the only dancer for this eodsa_id
+    const remainingDancers = await sqlClient`SELECT COUNT(*) as count FROM dancers WHERE eodsa_id = ${eodsaId}` as any[];
+    
+    // If no dancers left, delete the contestant record
+    if (remainingDancers[0].count === 0) {
+      await sqlClient`DELETE FROM contestants WHERE eodsa_id = ${eodsaId}`;
+    }
+  },
+
+  // Waiver management for minors under 18
+  async createWaiver(waiver: {
+    dancerId: string;
+    parentName: string;
+    parentEmail: string;
+    parentPhone: string;
+    relationshipToDancer: string;
+    signaturePath: string;
+    idDocumentPath: string;
+  }) {
+    const sqlClient = getSql();
+    const id = Date.now().toString();
+    const signedDate = new Date().toISOString();
+    const createdAt = new Date().toISOString();
+    
+    await sqlClient`
+      INSERT INTO waivers (id, dancer_id, parent_name, parent_email, parent_phone, 
+                          relationship_to_dancer, signed_date, signature_path, 
+                          id_document_path, created_at)
+      VALUES (${id}, ${waiver.dancerId}, ${waiver.parentName}, ${waiver.parentEmail}, 
+              ${waiver.parentPhone}, ${waiver.relationshipToDancer}, ${signedDate}, 
+              ${waiver.signaturePath}, ${waiver.idDocumentPath}, ${createdAt})
+    `;
+    
+    return { id, signedDate };
+  },
+
+  async getWaiverByDancerId(dancerId: string) {
+    const sqlClient = getSql();
+    const result = await sqlClient`SELECT * FROM waivers WHERE dancer_id = ${dancerId}` as any[];
+    if (result.length === 0) return null;
+    
+    const waiver = result[0];
+    return {
+      id: waiver.id,
+      dancerId: waiver.dancer_id,
+      parentName: waiver.parent_name,
+      parentEmail: waiver.parent_email,
+      parentPhone: waiver.parent_phone,
+      relationshipToDancer: waiver.relationship_to_dancer,
+      signedDate: waiver.signed_date,
+      signaturePath: waiver.signature_path,
+      idDocumentPath: waiver.id_document_path,
+      approved: waiver.approved,
+      approvedBy: waiver.approved_by,
+      approvedAt: waiver.approved_at,
+      createdAt: waiver.created_at
+    };
+  },
+
+  async updateWaiverApproval(waiverId: string, approved: boolean, approvedBy?: string) {
+    const sqlClient = getSql();
+    const approvedAt = approved ? new Date().toISOString() : null;
+    
+    await sqlClient`
+      UPDATE waivers 
+      SET approved = ${approved}, approved_by = ${approvedBy || null}, approved_at = ${approvedAt}
+      WHERE id = ${waiverId}
+    `;
+  },
+
+  // Dancer approval management
+  async approveDancer(dancerId: string, approvedBy: string) {
+    const sqlClient = getSql();
+    const approvedAt = new Date().toISOString();
+    
+    await sqlClient`
+      UPDATE dancers 
+      SET approved = TRUE, approved_by = ${approvedBy}, approved_at = ${approvedAt}, rejection_reason = NULL
+      WHERE id = ${dancerId}
+    `;
+  },
+
+  async rejectDancer(dancerId: string, rejectionReason: string, rejectedBy: string) {
+    const sqlClient = getSql();
+    
+    await sqlClient`
+      UPDATE dancers 
+      SET approved = FALSE, approved_by = ${rejectedBy}, approved_at = NULL, rejection_reason = ${rejectionReason}
+      WHERE id = ${dancerId}
+    `;
+  },
+
+  async getAllPendingDancers() {
+    const sqlClient = getSql();
+    const result = await sqlClient`
+      SELECT d.*, c.eodsa_id, c.registration_date, s.name as studio_name, s.email as studio_email
+      FROM dancers d
+      JOIN contestants c ON d.eodsa_id = c.eodsa_id
+      LEFT JOIN studios s ON c.email = s.email
+      WHERE d.approved = FALSE AND d.rejection_reason IS NULL
+      ORDER BY d.created_at DESC
+    ` as any[];
+    
+    return result.map((row: any) => ({
+      id: row.id,
+      name: row.name,
+      age: row.age,
+      dateOfBirth: row.date_of_birth,
+      style: row.national_id,
+      nationalId: row.national_id,
+      approved: row.approved,
+      rejectionReason: row.rejection_reason,
+      createdAt: row.created_at,
+      eodsaId: row.eodsa_id,
+      registrationDate: row.registration_date,
+      studioName: row.studio_name,
+      studioEmail: row.studio_email
+    }));
+  },
+
+  async getAllDancersWithStatus() {
+    const sqlClient = getSql();
+    const result = await sqlClient`
+      SELECT d.*, c.eodsa_id, c.registration_date, s.name as studio_name, s.email as studio_email,
+             j.name as approved_by_name
+      FROM dancers d
+      JOIN contestants c ON d.eodsa_id = c.eodsa_id
+      LEFT JOIN studios s ON c.email = s.email
+      LEFT JOIN judges j ON d.approved_by = j.id
+      ORDER BY d.created_at DESC
+    ` as any[];
+    
+    return result.map((row: any) => ({
+      id: row.id,
+      name: row.name,
+      age: row.age,
+      dateOfBirth: row.date_of_birth,
+      style: row.national_id,
+      nationalId: row.national_id,
+      approved: row.approved,
+      approvedBy: row.approved_by,
+      approvedAt: row.approved_at,
+      rejectionReason: row.rejection_reason,
+      createdAt: row.created_at,
+      eodsaId: row.eodsa_id,
+      registrationDate: row.registration_date,
+      studioName: row.studio_name,
+      studioEmail: row.studio_email,
+      approvedByName: row.approved_by_name
+    }));
+  }
+};
+
+// NEW: Unified dancer-studio system functions
+export const unifiedDb = {
+  // Individual dancer registration
+  async registerDancer(dancer: {
+    name: string;
+    dateOfBirth: string;
+    nationalId: string;
+    email?: string;
+    phone?: string;
+    guardianName?: string;
+    guardianEmail?: string;
+    guardianPhone?: string;
+  }) {
+    const sqlClient = getSql();
+    const id = Date.now().toString() + Math.random().toString(36).substring(2, 8);
+    const eodsaId = generateEODSAId();
+    const age = this.calculateAge(dancer.dateOfBirth);
+    
+    await sqlClient`
+      INSERT INTO dancers (id, eodsa_id, name, date_of_birth, age, national_id, email, phone, 
+                          guardian_name, guardian_email, guardian_phone)
+      VALUES (${id}, ${eodsaId}, ${dancer.name}, ${dancer.dateOfBirth}, ${age}, ${dancer.nationalId},
+              ${dancer.email || null}, ${dancer.phone || null}, ${dancer.guardianName || null},
+              ${dancer.guardianEmail || null}, ${dancer.guardianPhone || null})
+    `;
+    
+    return { id, eodsaId };
+  },
+
+  // Get all dancers for admin approval
+  async getAllDancers(status?: 'pending' | 'approved' | 'rejected') {
+    const sqlClient = getSql();
+    let query = `SELECT d.*, j.name as approved_by_name FROM dancers d 
+                 LEFT JOIN judges j ON d.approved_by = j.id`;
+    
+    if (status === 'pending') {
+      query += ' WHERE d.approved = false AND d.rejection_reason IS NULL';
+    } else if (status === 'approved') {
+      query += ' WHERE d.approved = true';
+    } else if (status === 'rejected') {
+      query += ' WHERE d.approved = false AND d.rejection_reason IS NOT NULL';
+    }
+    
+    query += ' ORDER BY d.created_at DESC';
+    
+    const result = (await sqlClient.unsafe(query)) as unknown as any[];
+    
+    return result.map((row: any) => ({
+      id: row.id,
+      eodsaId: row.eodsa_id,
+      name: row.name,
+      age: row.age,
+      dateOfBirth: row.date_of_birth,
+      nationalId: row.national_id,
+      email: row.email,
+      phone: row.phone,
+      guardianName: row.guardian_name,
+      guardianEmail: row.guardian_email,
+      guardianPhone: row.guardian_phone,
+      approved: row.approved,
+      approvedBy: row.approved_by,
+      approvedAt: row.approved_at,
+      rejectionReason: row.rejection_reason,
+      approvedByName: row.approved_by_name,
+      createdAt: row.created_at
+    }));
+  },
+
+  // Admin approve/reject dancer
+  async approveDancer(dancerId: string, adminId: string) {
+    const sqlClient = getSql();
+    const approvedAt = new Date().toISOString();
+    
+    await sqlClient`
+      UPDATE dancers 
+      SET approved = true, approved_by = ${adminId}, approved_at = ${approvedAt}, rejection_reason = null
+      WHERE id = ${dancerId}
+    `;
+  },
+
+  async rejectDancer(dancerId: string, rejectionReason: string, adminId: string) {
+    const sqlClient = getSql();
+    
+    await sqlClient`
+      UPDATE dancers 
+      SET approved = false, approved_by = ${adminId}, approved_at = null, rejection_reason = ${rejectionReason}
+      WHERE id = ${dancerId}
+    `;
+  },
+
+  // Studio application system
+  async applyToStudio(dancerId: string, studioId: string) {
+    const sqlClient = getSql();
+    const id = Date.now().toString() + Math.random().toString(36).substring(2, 8);
+    
+    await sqlClient`
+      INSERT INTO studio_applications (id, dancer_id, studio_id)
+      VALUES (${id}, ${dancerId}, ${studioId})
+    `;
+    
+    return { id };
+  },
+
+  // Get studio applications for a studio
+  async getStudioApplications(studioId: string, status?: string) {
+    const sqlClient = getSql();
+    let query = `
+      SELECT sa.*, d.name as dancer_name, d.age, d.date_of_birth, d.national_id, 
+             d.email as dancer_email, d.phone as dancer_phone, d.approved as dancer_approved
+      FROM studio_applications sa
+      JOIN dancers d ON sa.dancer_id = d.id
+      WHERE sa.studio_id = '${studioId}'
+    `;
+    
+    if (status) {
+      query += ` AND sa.status = '${status}'`;
+    }
+    
+    query += ' ORDER BY sa.applied_at DESC';
+    
+    const result = (await sqlClient.unsafe(query)) as unknown as any[];
+    
+    return result.map((row: any) => ({
+      id: row.id,
+      dancerId: row.dancer_id,
+      studioId: row.studio_id,
+      status: row.status,
+      appliedAt: row.applied_at,
+      respondedAt: row.responded_at,
+      respondedBy: row.responded_by,
+      rejectionReason: row.rejection_reason,
+      dancer: {
+        name: row.dancer_name,
+        age: row.age,
+        dateOfBirth: row.date_of_birth,
+        nationalId: row.national_id,
+        email: row.dancer_email,
+        phone: row.dancer_phone,
+        approved: row.dancer_approved
+      }
+    }));
+  },
+
+  // Get dancer applications for a dancer
+  async getDancerApplications(dancerId: string) {
+    const sqlClient = getSql();
+    const result = await sqlClient`
+      SELECT sa.*, s.name as studio_name, s.email as studio_email, s.address as studio_address
+      FROM studio_applications sa
+      JOIN studios s ON sa.studio_id = s.id
+      WHERE sa.dancer_id = ${dancerId}
+      ORDER BY sa.applied_at DESC
+    ` as any[];
+    
+    return result.map((row: any) => ({
+      id: row.id,
+      dancerId: row.dancer_id,
+      studioId: row.studio_id,
+      status: row.status,
+      appliedAt: row.applied_at,
+      respondedAt: row.responded_at,
+      respondedBy: row.responded_by,
+      rejectionReason: row.rejection_reason,
+      studio: {
+        name: row.studio_name,
+        email: row.studio_email,
+        address: row.studio_address
+      }
+    }));
+  },
+
+  // Studio accept/reject application
+  async respondToApplication(applicationId: string, action: 'accept' | 'reject', respondedBy: string, rejectionReason?: string) {
+    const sqlClient = getSql();
+    const respondedAt = new Date().toISOString();
+    const status = action === 'accept' ? 'accepted' : 'rejected';
+    
+    await sqlClient`
+      UPDATE studio_applications 
+      SET status = ${status}, responded_at = ${respondedAt}, responded_by = ${respondedBy}, 
+          rejection_reason = ${rejectionReason || null}
+      WHERE id = ${applicationId}
+    `;
+  },
+
+  // Get accepted dancers for a studio
+  async getStudioDancers(studioId: string) {
+    const sqlClient = getSql();
+    const result = await sqlClient`
+      SELECT d.*, sa.applied_at, sa.responded_at
+      FROM dancers d
+      JOIN studio_applications sa ON d.id = sa.dancer_id
+      WHERE sa.studio_id = ${studioId} AND sa.status = 'accepted' AND d.approved = true
+      ORDER BY sa.responded_at DESC
+    ` as any[];
+    
+    return result.map((row: any) => ({
+      id: row.id,
+      eodsaId: row.eodsa_id,
+      name: row.name,
+      age: row.age,
+      dateOfBirth: row.date_of_birth,
+      nationalId: row.national_id,
+      email: row.email,
+      phone: row.phone,
+      approved: row.approved,
+      joinedAt: row.responded_at
+    }));
+  },
+
+  // Get available studios for dancer applications
+  async getAvailableStudios(dancerId: string) {
+    const sqlClient = getSql();
+    const result = await sqlClient`
+      SELECT s.* FROM studios s
+      WHERE s.approved = true 
+      AND s.id NOT IN (
+        SELECT studio_id FROM studio_applications 
+        WHERE dancer_id = ${dancerId} AND status IN ('pending', 'accepted')
+      )
+      ORDER BY s.name
+    ` as any[];
+    
+    return result.map((row: any) => ({
+      id: row.id,
+      name: row.name,
+      email: row.email,
+      contactPerson: row.contact_person,
+      address: row.address,
+      phone: row.phone,
+      registrationNumber: row.registration_number
+    }));
+  },
+
+  // Utility function to calculate age
+  calculateAge(dateOfBirth: string): number {
+    const today = new Date();
+    const birthDate = new Date(dateOfBirth);
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const monthDiff = today.getMonth() - birthDate.getMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+      age--;
+    }
+    return age;
   }
 };
 

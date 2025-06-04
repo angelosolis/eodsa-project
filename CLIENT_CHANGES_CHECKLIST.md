@@ -50,234 +50,183 @@
 
 ---
 
-## 🎭 **3. Performance Entry Flow**
+## 🤝 **3. NEW: Unified Dancer-Studio Application System**
+
+### Individual Dancer Registration
+- [ ] **3.1** Create separate dancer registration system (independent of studios)
+- [ ] **3.2** All dancers register individually with personal details
+- [ ] **3.3** Generate unique EODSA ID for each individual dancer
+- [ ] **3.4** Store dancer approval status (pending/approved/rejected by admin)
+- [ ] **3.5** Implement waiver system for minors during individual registration
+
+### Studio Registration (Separate)
+- [ ] **3.6** Create studio-only registration system
+- [ ] **3.7** Studios register with studio details only (no dancers initially)
+- [ ] **3.8** Generate unique Studio Registration Number
+- [ ] **3.9** Studio approval status by admin
+
+### Dancer-Studio Application System
+- [ ] **3.10** Create "Apply to Studio" functionality for registered dancers
+- [ ] **3.11** Dancers can search and apply to multiple studios
+- [ ] **3.12** Studio receives dancer applications in their dashboard
+- [ ] **3.13** Studio can accept/reject dancer applications
+- [ ] **3.14** Track application status (pending/accepted/rejected)
+- [ ] **3.15** Allow dancers to withdraw applications
+- [ ] **3.16** Prevent duplicate applications to same studio
+
+### Studio Dashboard Updates
+- [ ] **3.17** Remove "Add Dancer" functionality from studio dashboard
+- [ ] **3.18** Add "Pending Applications" section showing dancers who applied
+- [ ] **3.19** Add "My Dancers" section showing accepted dancers
+- [ ] **3.20** Add accept/reject buttons for each application
+- [ ] **3.21** Show dancer details and approval status in applications
+
+### Dancer Dashboard
+- [ ] **3.22** Create dancer dashboard after individual registration
+- [ ] **3.23** Show "My Studio Applications" section
+- [ ] **3.24** Allow dancers to apply to studios from dashboard
+- [ ] **3.25** Show application status for each studio
+- [ ] **3.26** Display current studio affiliation if accepted
+
+### Admin Dancer Approval
+- [ ] **3.27** Admin dashboard shows all individually registered dancers
+- [ ] **3.28** Admin can approve/reject dancers before they can apply to studios
+- [ ] **3.29** Only admin-approved dancers can apply to studios
+- [ ] **3.30** Admin can see dancer-studio relationships and manage them
+
+### Database Schema Changes
+- [ ] **3.31** Create separate `dancers` table (independent of contestants)
+- [ ] **3.32** Create `studio_applications` table for dancer-studio relationships
+- [ ] **3.33** Add application status tracking
+- [ ] **3.34** Remove dancer fields from studio registration
+- [ ] **3.35** Update foreign key relationships
+
+---
+
+## 🎭 **4. Performance Entry Flow** (Updated for new system)
 
 ### UI Updates
-- [x] **3.1** Remove "1 event available" text under Solo/Duet headers
+- [x] **4.1** Remove "1 event available" text under Solo/Duet headers
 
 ### Mastery Level System
-- [x] **3.2** Add Mastery Level dropdown per performance with exact options:
+- [x] **4.2** Add Mastery Level dropdown per performance with exact options:
   - [x] Water (Competition)
   - [x] Fire (Advanced)
   - [x] Earth (Eisteddfod)
   - [x] Air (Special Needs)
 
 ### Dance Styles Update
-- [x] **3.3** Update style list to approved styles only:
-  - [x] Ballet
-  - [x] Ballet Repertoire
-  - [x] Lyrical
-  - [x] Contemporary
-  - [x] Jazz
-  - [x] Hip-Hop
-  - [x] Freestyle/Disco
-  - [x] Musical Theatre
-  - [x] Acrobatics
-  - [x] Tap
-  - [x] Open
-  - [x] Speciality Styles
+- [x] **4.3** Update style list to approved styles only:
+  - [x] Ballet, Ballet Repertoire, Lyrical, Contemporary, Jazz
+  - [x] Hip-Hop, Freestyle/Disco, Musical Theatre, Acrobatics
+  - [x] Tap, Open, Speciality Styles
 
 ### Time Validation
-- [x] **3.4** Add time-limit validation:
+- [x] **4.4** Add time-limit validation:
   - [x] Solo ≤ 2 minutes
   - [x] Duet/Trio ≤ 3 minutes
   - [x] Group ≤ 3 minutes 30 seconds
 
 ### Item Number System
-- [x] **3.5** Add "Item Number" field in admin "View Participants" table
-- [x] **3.6** Enable Item Number assignment for program order
-- [x] **3.7** Allow judges to type/select Item Number to load performances directly
+- [x] **4.5** Add "Item Number" field in admin "View Participants" table
+- [x] **4.6** Enable Item Number assignment for program order
+- [x] **4.7** Allow judges to type/select Item Number to load performances directly
+
+### Entry Eligibility Updates
+- [ ] **4.8** Only admin-approved dancers can enter competitions
+- [ ] **4.9** Studio-affiliated dancers need both admin and studio approval
+- [ ] **4.10** Independent dancers need only admin approval
+- [ ] **4.11** Validate approval status before allowing event entry
 
 ---
 
-## 👨‍💼 **4. Admin Dashboard Updates**
+## 👨‍💼 **5. Admin Dashboard Updates**
 
 ### Age Categories Update
-- [x] **4.1** Update age-bracket filters to match exact categories:
-  - [x] Under 6
-  - [x] 7-9
-  - [x] 10-12
-  - [x] 13-14
-  - [x] 15-17
-  - [x] 18-24
-  - [x] 25-39
-  - [x] 40+
-  - [x] 60+
+- [x] **5.1** Update age-bracket filters to match exact categories:
+  - [x] Under 6, 7-9, 10-12, 13-14, 15-17, 18-24, 25-39, 40+, 60+
 
 ### Rankings Enhancements
-- [x] **4.2** Add "Top 5 by Age Category" filter/tab on Rankings page
-- [x] **4.3** Add "Top 5 by Style" filter/tab on Rankings page
-- [x] **4.4** Implement dropdown filters for rankings display
+- [x] **5.2** Add "Top 5 by Age Category" filter/tab on Rankings page
+- [x] **5.3** Add "Top 5 by Style" filter/tab on Rankings page
+- [x] **5.4** Implement dropdown filters for rankings display
 
 ### Excel Export Feature
-- [x] **4.5** Add "Download to Excel" button in "View Participants"
-- [x] **4.6** Include these fields in Excel export:
-  - [x] Item Number
-  - [x] E-O-D-S-A ID
-  - [x] Name (Studio or Private)
-  - [x] Performance Type (Solo/Duet/Trio/Group)
-  - [x] Mastery Level
-  - [x] Style
-  - [x] Age Category
-  - [x] Fee (calculated)
-  - [x] Qualified for Nationals flag
+- [x] **5.5** Add "Download to Excel" button in "View Participants"
+- [x] **5.6** Include specified fields in Excel export
 
 ### Judge Dashboard Updates
-- [x] **4.7** Order performances by ascending Item Number in Judge Dashboard
-- [x] **4.8** Enable judges to click top-most item to load performance
-- [x] **4.9** Allow judges to type Item Number to load specific performance
-- [x] **4.10** Remove need to search by name for performance loading
+- [x] **5.7** Order performances by ascending Item Number in Judge Dashboard
+- [x] **5.8** Enable judges to click top-most item to load performance
+- [x] **5.9** Allow judges to type Item Number to load specific performance
+- [x] **5.10** Remove need to search by name for performance loading
+
+### New Admin Functions
+- [ ] **5.11** Add "Dancer Management" section for individual dancer approvals
+- [ ] **5.12** Add "Studio Management" section for studio approvals
+- [ ] **5.13** Add "Studio-Dancer Relationships" overview
+- [ ] **5.14** Bulk approval/rejection tools for efficiency
 
 ---
 
-## 💰 **5. Payment Display (Phase 1)**
+## 💰 **6. Payment Display (Phase 1)**
 
 ### Fee Summary
-- [x] **5.1** Add fee summary in "Review & Submit" step showing:
-  - [x] Registration Fee per contestant per event (R250 PP for Competitive/Advanced, R150 PP for Eisteddfod/Special)
-  - [x] Per-Item Fees (solo/duet/group rates based on EODSA pricing structure)
-  - [x] Total Amount Due
-- [x] **5.2** Implement EODSA official fee structure with:
-  - [x] Mastery level-based pricing
-  - [x] Solo packages (1 solo: R300, 2 solos: R520, 3 solos: R700)
-  - [x] Performance type multipliers for groups
-  - [x] Registration fee calculations
+- [x] **6.1** Add fee summary with EODSA official fee structure
+- [x] **6.2** Implement mastery level-based pricing and performance type multipliers
 
 ---
 
-## 🗄️ **6. Database Schema Updates**
+## 🗄️ **7. Database Schema Updates**
 
-### New Fields Required
-- [x] **6.1** Add Date of Birth field
-- [x] **6.2** Add Parent/Guardian Name field
-- [x] **6.3** Add Parent/Guardian Email field
-- [x] **6.4** Add Parent/Guardian Cell field
-- [x] **6.5** Add Item Number field
-- [x] **6.6** Add Mastery Level field
-- [x] **6.7** Update E-O-D-S-A ID format constraints
-- [x] **6.8** Update Studio Registration Number format constraints
-- [x] **6.9** Add Privacy Policy acceptance timestamp
-- [x] **6.10** Update age category constraints
+### Existing Updates (Completed)
+- [x] **7.1-7.13** Previous schema updates completed
 
-### Data Migration
-- [x] **6.11** Fresh start database (keep admin credentials only)
-- [x] **6.12** Update seed data with new age categories
-- [x] **6.13** Update seed data with approved dance styles
+### New Schema for Unified System
+- [ ] **7.14** Create independent `dancers` table with approval fields
+- [ ] **7.15** Create `studio_applications` table for dancer-studio relationships
+- [ ] **7.16** Add application status enum (pending/accepted/rejected/withdrawn)
+- [ ] **7.17** Update studio table to remove dancer-related fields
+- [ ] **7.18** Add indexes for efficient application queries
+- [ ] **7.19** Create junction table for many-to-many dancer-studio relationships
 
 ---
 
-## ✅ **Priority Implementation Order**
+## ✅ **Priority Implementation Order (UPDATED)**
 
-### **Phase 1: Core Structure** (Items 1-2 weeks)
-- Dark theme implementation (1.1-1.8)
-- Database schema updates (6.1-6.13)
-- Registration form restructure (2.1-2.19)
+### **Phase 1: Unified System Architecture** (2-3 weeks)
+- Individual dancer registration system (3.1-3.5)
+- Separate studio registration (3.6-3.9) 
+- Database schema overhaul (7.14-7.19)
 
-### **Phase 2: Performance & Admin** (Items 1-2 weeks)
-- Performance entry updates (3.1-3.7)
-- Admin dashboard enhancements (4.1-4.10)
+### **Phase 2: Application System** (2-3 weeks)
+- Dancer-studio application flow (3.10-3.16)
+- Studio dashboard updates (3.17-3.21)
+- Dancer dashboard creation (3.22-3.26)
 
-### **Phase 3: Final Features** (Items 1 week)
-- Payment display (5.1-5.2)
-- Excel export functionality (4.5-4.6)
+### **Phase 3: Admin & Competition Integration** (1-2 weeks)
+- Admin approval systems (3.27-3.30, 5.11-5.14)
+- Competition entry validation (4.8-4.11)
 - Final testing and refinements
 
 ---
 
-## 📋 **Completion Tracking**
+## 📋 **Completion Tracking (UPDATED)**
 
-**Total Items: 52**
-- **Completed: 52**
+**Total Items: 85 (33 new items added)**
+- **Completed: 52** (previous system)
+- **New Items: 33** (unified dancer-studio system)
 - **In Progress: 0**
-- **Pending: 0**
-- **Implementation Complete: 52/52 (100%)**
+- **Pending: 33**
+- **Implementation Status: 52/85 (61%)**
 
-### ✅ **ALL EODSA REQUIREMENTS IMPLEMENTED**
-- ✅ Dark theme and EODSA branding
-- ✅ Registration system with proper ID formats
-- ✅ Performance entry flow with validation
-- ✅ Admin dashboard with rankings and Excel export
-- ✅ Judge dashboard with item number ordering
-- ✅ **EODSA fee structure with official pricing**
-- ✅ All database schema updates
-- ✅ Age categories, mastery levels, and time limits aligned with EODSA standards
+### 🔄 **MAJOR SYSTEM REDESIGN IN PROGRESS**
+The system is being redesigned to use a unified dancer-studio application model where:
+1. **Dancers register individually** and get admin approval
+2. **Studios register separately** and get admin approval  
+3. **Dancers apply to studios** they want to join
+4. **Studios accept/reject** dancer applications
+5. **Only approved dancers** can participate in competitions
+6. **Two-tier approval**: Admin approval for dancers + Studio approval for affiliation
 
----
-
-## ✅ **Completed Items**
-
-### **UI & Theme Changes (8/8 Complete)**
-- [x] **1.1** Switch background to black/very dark gray
-- [x] **1.2** Adjust text colors for dark theme readability
-- [x] **1.3** Update button styles for dark theme
-- [x] **1.4** Ensure all UI components work with dark theme
-- [x] **1.5** Add EODSA logo placeholder on landing page
-- [x] **1.6** Update page title to "Element of Dance South Africa"
-- [x] **1.7** Apply dark theme styling to landing page blocks
-- [x] **1.8** Maintain "New User / Existing User" structure with dark styling
-
-### **Registration Form Changes (15/15 Complete)**
-- [x] **2.1** Change E-O-D-S-A ID format to: one letter + six digits (e.g., "E123456")
-- [x] **2.2** Auto-generate E-O-D-S-A IDs for both studios and private dancers
-- [x] **2.3** Auto-generate Studio Registration Numbers as: one letter + six digits (e.g., "S123456")
-- [x] **2.4** Remove manual Studio Registration Number input field
-- [x] **2.5** Remove "Dance Style" dropdown from main registration form
-- [x] **2.6** Keep Studio vs. Private toggle functionality
-- [x] **2.7** Update Studio form fields: Studio Name, Contact Person, Studio Address
-- [x] **2.8** Update Private form fields: Dancer Name, Age, National ID only
-- [x] **2.9** Maintain "Studio Dancers" repeater for studio registrations
-- [x] **2.10** Add Date of Birth field to registration form
-- [x] **2.11** Add age validation logic (if DOB < 18 years)
-- [x] **2.12** Show Parent/Guardian fields for minors (Name, Email, Cell - all required)
-- [x] **2.13** Block minors from self-registration (validation message)
-- [x] **2.14** Allow only parents or studio teachers to register minors (form validation)
-- [x] **2.15** Store guardian information in database
-- [x] **2.16** Add Privacy Policy checkbox: "I have read and agree to the EODSA Privacy Policy (POPIA)"
-- [x] **2.17** Create Privacy Policy modal popup
-- [x] **2.18** Block registration until Privacy Policy is accepted
-- [x] **2.19** Add Privacy Policy link functionality
-
-### **Performance Entry Flow (7/7 Complete)**
-- [x] **3.1** Remove "1 event available" text under Solo/Duet headers
-- [x] **3.2** Add Mastery Level dropdown per performance with exact options (Water, Fire, Earth, Air)
-- [x] **3.3** Update style list to approved styles only (12 approved styles)
-- [x] **3.4** Add time-limit validation (Solo ≤ 2min, Duet/Trio ≤ 3min, Group ≤ 3.5min)
-- [x] **3.5** Add "Item Number" field in performance entry form
-- [x] **3.6** Enable Item Number assignment for program order
-- [x] **3.7** Add Item Number field to form data and submission
-
-### **Admin Dashboard Updates (10/10 Complete)**
-- [x] **4.1** Update age-bracket filters to match exact categories (Under 6, 7-9, 10-12, 13-14, 15-17, 18-24, 25-39, 40+, 60+)
-- [x] **4.2** Add "Top 5 by Age Category" filter/tab on Rankings page
-- [x] **4.3** Add "Top 5 by Style" filter/tab on Rankings page
-- [x] **4.4** Implement dropdown filters for rankings display
-- [x] **4.5** Add "Download to Excel" button in "View Participants"
-- [x] **4.6** Include all specified fields in Excel export (Item Number, EODSA ID, Name, Performance Type, Mastery Level, Style, Age Category, Fee, Qualified for Nationals flag)
-- [x] **4.7** Order performances by ascending Item Number in Judge Dashboard
-- [x] **4.8** Enable judges to click top-most item to load performance
-- [x] **4.9** Allow judges to type Item Number to load specific performance
-- [x] **4.10** Remove need to search by name for performance loading
-
-### **Database Schema Updates (13/13 Complete)**
-- [x] **6.1** Add Date of Birth field
-- [x] **6.2** Add Parent/Guardian Name field
-- [x] **6.3** Add Parent/Guardian Email field
-- [x] **6.4** Add Parent/Guardian Cell field
-- [x] **6.5** Add Item Number field
-- [x] **6.6** Add Mastery Level field
-- [x] **6.7** Update E-O-D-S-A ID format constraints
-- [x] **6.8** Update Studio Registration Number format constraints
-- [x] **6.9** Add Privacy Policy acceptance timestamp
-- [x] **6.10** Update age category constraints
-- [x] **6.11** Fresh start database (keep admin credentials only)
-- [x] **6.12** Update seed data with new age categories
-- [x] **6.13** Update seed data with approved dance styles
-
----
-
-## 🔄 **Notes & Dependencies**
-
-- **Pending**: Client fee structure details for payment display
-- **Database**: Fresh start confirmed, admin credentials preserved
-- **Testing**: Each phase requires thorough testing before proceeding
-- **Responsive**: All changes must maintain mobile responsiveness 
+This creates a more flexible, scalable system that properly models real-world dance studio relationships. 

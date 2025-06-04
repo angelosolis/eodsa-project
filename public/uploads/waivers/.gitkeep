@@ -1,0 +1,2 @@
+# This file ensures the waivers upload directory exists
+# Actual uploaded files should not be committed to git 

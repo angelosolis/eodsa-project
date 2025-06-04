@@ -1,5 +1,19 @@
 // Phase 1 Types for E-O-D-S-A Competition System
 
+export interface ParentGuardianWaiver {
+  id: string;
+  parentName: string;
+  parentEmail: string;
+  parentPhone: string;
+  relationshipToDancer: string;
+  signedDate: string;
+  signaturePath: string; // Path to signature image
+  idDocumentPath: string; // Path to uploaded ID document
+  approved: boolean;
+  approvedBy?: string; // Admin who approved
+  approvedAt?: string;
+}
+
 export interface Dancer {
   id: string; // E-O-D-S-A-ID format
   name: string;
@@ -7,6 +21,11 @@ export interface Dancer {
   dateOfBirth: string; // NEW: Date of Birth field
   style: string;
   nationalId: string;
+  approved: boolean; // NEW: Admin approval status
+  approvedBy?: string; // NEW: Admin who approved
+  approvedAt?: string; // NEW: Approval timestamp
+  rejectionReason?: string; // NEW: Reason if rejected
+  waiver?: ParentGuardianWaiver; // NEW: Waiver for minors under 18
   created_at?: string;
 }
 
@@ -327,4 +346,24 @@ export const calculateEODSAFee = (
     performanceFee,
     totalFee: registrationFee + performanceFee
   };
-}; 
+};
+
+export interface Studio {
+  id: string;
+  name: string;
+  email: string;
+  password: string; // Hashed
+  contactPerson: string;
+  address: string;
+  phone: string;
+  registrationNumber: string; // Auto-generated S123456 format
+  isActive: boolean;
+  createdAt: string;
+}
+
+export interface StudioSession {
+  id: string;
+  name: string;
+  email: string;
+  registrationNumber: string;
+} 
