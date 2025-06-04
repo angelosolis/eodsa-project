@@ -3,8 +3,8 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import WaiverModal from '@/app/components/WaiverModal';
 
+// Studio session interface
 interface StudioSession {
   id: string;
   name: string;
@@ -12,59 +12,52 @@ interface StudioSession {
   registrationNumber: string;
 }
 
-interface Waiver {
+// Application interface for the new unified system
+interface DancerApplication {
   id: string;
   dancerId: string;
-  parentName: string;
-  parentEmail: string;
-  parentPhone: string;
-  relationshipToDancer: string;
-  signedDate: string;
-  signaturePath: string;
-  idDocumentPath: string;
-  approved: boolean;
-  approvedBy?: string;
-  approvedAt?: string;
-  createdAt: string;
+  studioId: string;
+  status: 'pending' | 'accepted' | 'rejected' | 'withdrawn';
+  appliedAt: string;
+  respondedAt?: string;
+  respondedBy?: string;
+  rejectionReason?: string;
+  dancer: {
+    id: string;
+    eodsaId: string;
+    name: string;
+    age: number;
+    dateOfBirth: string;
+    nationalId: string;
+    email?: string;
+    phone?: string;
+    approved: boolean;
+  };
 }
 
-interface Dancer {
+// Accepted dancer interface  
+interface AcceptedDancer {
   id: string;
+  eodsaId: string;
   name: string;
   age: number;
   dateOfBirth: string;
   nationalId: string;
-  waiver?: Waiver;
-}
-
-interface StudioDancer {
-  contestantId: string;
-  eodsaId: string;
-  studioName: string;
-  registrationDate: string;
-  dancers: Dancer[];
-}
-
-interface AddDancerForm {
-  name: string;
-  dateOfBirth: string;
-  nationalId: string;
+  email?: string;
+  phone?: string;
+  joinedAt: string;
 }
 
 export default function StudioDashboardPage() {
   const [studioSession, setStudioSession] = useState<StudioSession | null>(null);
-  const [dancers, setDancers] = useState<StudioDancer[]>([]);
+  const [applications, setApplications] = useState<DancerApplication[]>([]);
+  const [acceptedDancers, setAcceptedDancers] = useState<AcceptedDancer[]>([]);
+  const [activeTab, setActiveTab] = useState<'applications' | 'dancers'>('applications');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'accepted' | 'rejected'>('all');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
-  const [showAddForm, setShowAddForm] = useState(false);
-  const [editingDancer, setEditingDancer] = useState<Dancer | null>(null);
-  const [showWaiverModal, setShowWaiverModal] = useState(false);
-  const [pendingMinorDancer, setPendingMinorDancer] = useState<{ id: string; name: string } | null>(null);
-  const [addForm, setAddForm] = useState<AddDancerForm>({
-    name: '',
-    dateOfBirth: '',
-    nationalId: ''
-  });
+  const [rejectingApplication, setRejectingApplication] = useState<string | null>(null);
+  const [rejectionReason, setRejectionReason] = useState('');
   const router = useRouter();
 
   useEffect(() => {
@@ -77,202 +70,101 @@ export default function StudioDashboardPage() {
 
     const parsedSession = JSON.parse(session);
     setStudioSession(parsedSession);
-    loadDancers(parsedSession.id);
+    loadData(parsedSession.id);
   }, [router]);
 
-  const loadDancers = async (studioId: string) => {
+  const loadData = async (studioId: string) => {
     try {
-      const response = await fetch(`/api/studios/dancers?studioId=${studioId}`);
-      const data = await response.json();
+      setIsLoading(true);
+      
+      // Load applications and accepted dancers in parallel
+      const [applicationsResponse, dancersResponse] = await Promise.all([
+        fetch(`/api/studios/applications?studioId=${studioId}`),
+        fetch(`/api/studios/dancers-new?studioId=${studioId}`)
+      ]);
 
-      if (data.success) {
-        setDancers(data.dancers);
+      const applicationsData = await applicationsResponse.json();
+      const dancersData = await dancersResponse.json();
+
+      if (applicationsData.success) {
+        setApplications(applicationsData.applications);
       } else {
-        setError(data.error || 'Failed to load dancers');
+        setError(applicationsData.error || 'Failed to load applications');
+      }
+
+      if (dancersData.success) {
+        setAcceptedDancers(dancersData.dancers);
+      } else {
+        setError(dancersData.error || 'Failed to load dancers');
       }
     } catch (error) {
-      console.error('Load dancers error:', error);
-      setError('Failed to load dancers');
+      console.error('Load data error:', error);
+      setError('Failed to load data');
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleAddDancer = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleAcceptApplication = async (applicationId: string) => {
     if (!studioSession) return;
 
     try {
-      // Calculate age from date of birth
-      const birthDate = new Date(addForm.dateOfBirth);
-      const today = new Date();
-      let age = today.getFullYear() - birthDate.getFullYear();
-      const monthDiff = today.getMonth() - birthDate.getMonth();
-      if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
-        age--;
-      }
-
-      const response = await fetch('/api/studios/dancers', {
+      const response = await fetch('/api/studios/applications', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          studioId: studioSession.id,
-          dancer: {
-            name: addForm.name,
-            age: age,
-            dateOfBirth: addForm.dateOfBirth,
-            nationalId: addForm.nationalId
-          }
+          applicationId,
+          action: 'accept',
+          respondedBy: studioSession.id
         }),
       });
 
       const data = await response.json();
 
       if (data.success) {
-        setAddForm({ name: '', dateOfBirth: '', nationalId: '' });
-        setShowAddForm(false);
-        
-        // Check if dancer is under 18 and needs a waiver
-        if (age < 18) {
-          setPendingMinorDancer({ id: data.dancer.dancerId, name: addForm.name });
-          setShowWaiverModal(true);
-        }
-        
-        loadDancers(studioSession.id);
+        // Reload data to reflect changes
+        loadData(studioSession.id);
       } else {
-        setError(data.error || 'Failed to add dancer');
+        setError(data.error || 'Failed to accept application');
       }
     } catch (error) {
-      console.error('Add dancer error:', error);
-      setError('Failed to add dancer');
+      console.error('Accept application error:', error);
+      setError('Failed to accept application');
     }
   };
 
-  const handleWaiverSubmitted = () => {
-    setPendingMinorDancer(null);
-    setShowWaiverModal(false);
-    // Reload dancers to get updated waiver status
-    if (studioSession) {
-      loadDancers(studioSession.id);
-    }
-  };
-
-  const handleWaiverModalClose = () => {
-    setPendingMinorDancer(null);
-    setShowWaiverModal(false);
-  };
-
-  const checkWaiverStatus = async (dancerId: string) => {
-    try {
-      const response = await fetch(`/api/studios/waivers?dancerId=${dancerId}`);
-      const data = await response.json();
-      return data.waiver;
-    } catch (error) {
-      console.error('Check waiver status error:', error);
-      return null;
-    }
-  };
-
-  const getWaiverStatusBadge = (dancer: Dancer) => {
-    if (dancer.age >= 18) {
-      return (
-        <span className="px-2 py-1 bg-blue-900 text-blue-200 text-xs rounded-full">
-          Adult
-        </span>
-      );
-    }
-    
-    if (!dancer.waiver) {
-      return (
-        <span className="px-2 py-1 bg-red-900 text-red-200 text-xs rounded-full">
-          Waiver Required
-        </span>
-      );
-    }
-    
-    if (dancer.waiver.approved) {
-      return (
-        <span className="px-2 py-1 bg-green-900 text-green-200 text-xs rounded-full">
-          Waiver Approved
-        </span>
-      );
-    }
-    
-    return (
-      <span className="px-2 py-1 bg-yellow-900 text-yellow-200 text-xs rounded-full">
-        Waiver Pending
-      </span>
-    );
-  };
-
-  const handleUpdateDancer = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingDancer || !studioSession) return;
+  const handleRejectApplication = async (applicationId: string) => {
+    if (!studioSession || !rejectionReason.trim()) return;
 
     try {
-      // Calculate age from date of birth
-      const birthDate = new Date(editingDancer.dateOfBirth);
-      const today = new Date();
-      let age = today.getFullYear() - birthDate.getFullYear();
-      const monthDiff = today.getMonth() - birthDate.getMonth();
-      if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
-        age--;
-      }
-
-      const response = await fetch('/api/studios/dancers', {
-        method: 'PUT',
+      const response = await fetch('/api/studios/applications', {
+        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          dancerId: editingDancer.id,
-          updates: {
-            name: editingDancer.name,
-            age: age,
-            dateOfBirth: editingDancer.dateOfBirth,
-            nationalId: editingDancer.nationalId
-          }
+          applicationId,
+          action: 'reject',
+          respondedBy: studioSession.id,
+          rejectionReason: rejectionReason.trim()
         }),
       });
 
       const data = await response.json();
 
       if (data.success) {
-        setEditingDancer(null);
-        loadDancers(studioSession.id);
+        setRejectingApplication(null);
+        setRejectionReason('');
+        // Reload data to reflect changes
+        loadData(studioSession.id);
       } else {
-        setError(data.error || 'Failed to update dancer');
+        setError(data.error || 'Failed to reject application');
       }
     } catch (error) {
-      console.error('Update dancer error:', error);
-      setError('Failed to update dancer');
-    }
-  };
-
-  const handleDeleteDancer = async (dancerId: string) => {
-    if (!studioSession) return;
-    
-    if (!confirm('Are you sure you want to delete this dancer? This action cannot be undone.')) {
-      return;
-    }
-
-    try {
-      const response = await fetch(`/api/studios/dancers?dancerId=${dancerId}`, {
-        method: 'DELETE',
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
-        loadDancers(studioSession.id);
-      } else {
-        setError(data.error || 'Failed to delete dancer');
-      }
-    } catch (error) {
-      console.error('Delete dancer error:', error);
-      setError('Failed to delete dancer');
+      console.error('Reject application error:', error);
+      setError('Failed to reject application');
     }
   };
 
@@ -281,16 +173,32 @@ export default function StudioDashboardPage() {
     router.push('/studio-login');
   };
 
-  const calculateAge = (dateOfBirth: string): number => {
-    const today = new Date();
-    const birthDate = new Date(dateOfBirth);
-    let age = today.getFullYear() - birthDate.getFullYear();
-    const monthDiff = today.getMonth() - birthDate.getMonth();
-    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
-      age--;
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'pending':
+        return <span className="px-2 py-1 bg-yellow-900 text-yellow-200 text-xs rounded-full">Pending</span>;
+      case 'accepted':
+        return <span className="px-2 py-1 bg-green-900 text-green-200 text-xs rounded-full">Accepted</span>;
+      case 'rejected':
+        return <span className="px-2 py-1 bg-red-900 text-red-200 text-xs rounded-full">Rejected</span>;
+      case 'withdrawn':
+        return <span className="px-2 py-1 bg-gray-600 text-gray-300 text-xs rounded-full">Withdrawn</span>;
+      default:
+        return null;
     }
-    return age;
   };
+
+  const getApprovalBadge = (approved: boolean) => {
+    return approved ? (
+      <span className="px-2 py-1 bg-blue-900 text-blue-200 text-xs rounded-full">Admin Approved</span>
+    ) : (
+      <span className="px-2 py-1 bg-orange-900 text-orange-200 text-xs rounded-full">Pending Admin</span>
+    );
+  };
+
+  const filteredApplications = statusFilter === 'all' 
+    ? applications 
+    : applications.filter(app => app.status === statusFilter);
 
   if (isLoading) {
     return (
@@ -343,7 +251,7 @@ export default function StudioDashboardPage() {
         {/* Dashboard Header */}
         <div className="mb-8">
           <h2 className="text-3xl font-bold text-white mb-2">Studio Dashboard</h2>
-          <p className="text-gray-300">Manage your dancers and register for competitions</p>
+          <p className="text-gray-300">Manage dancer applications and your accepted dancers</p>
         </div>
 
         {error && (
@@ -359,7 +267,23 @@ export default function StudioDashboardPage() {
         )}
 
         {/* Quick Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+          <div className="bg-gray-800/80 rounded-2xl p-6 border border-gray-700/20">
+            <div className="flex items-center">
+              <div className="w-12 h-12 bg-yellow-500 rounded-lg flex items-center justify-center mr-4">
+                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-white">Pending</h3>
+                <p className="text-3xl font-bold text-yellow-400">
+                  {applications.filter(a => a.status === 'pending').length}
+                </p>
+              </div>
+            </div>
+          </div>
+
           <div className="bg-gray-800/80 rounded-2xl p-6 border border-gray-700/20">
             <div className="flex items-center">
               <div className="w-12 h-12 bg-purple-500 rounded-lg flex items-center justify-center mr-4">
@@ -368,24 +292,8 @@ export default function StudioDashboardPage() {
                 </svg>
               </div>
               <div>
-                <h3 className="text-lg font-semibold text-white">Total Dancers</h3>
-                <p className="text-3xl font-bold text-purple-400">
-                  {dancers.reduce((total, group) => total + group.dancers.length, 0)}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-gray-800/80 rounded-2xl p-6 border border-gray-700/20">
-            <div className="flex items-center">
-              <div className="w-12 h-12 bg-blue-500 rounded-lg flex items-center justify-center mr-4">
-                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold text-white">Registrations</h3>
-                <p className="text-3xl font-bold text-blue-400">{dancers.length}</p>
+                <h3 className="text-lg font-semibold text-white">Accepted Dancers</h3>
+                <p className="text-3xl font-bold text-purple-400">{acceptedDancers.length}</p>
               </div>
             </div>
           </div>
@@ -394,257 +302,294 @@ export default function StudioDashboardPage() {
             <div className="flex items-center">
               <div className="w-12 h-12 bg-green-500 rounded-lg flex items-center justify-center mr-4">
                 <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
               </div>
               <div>
-                <h3 className="text-lg font-semibold text-white">Ready to Compete</h3>
-                <p className="text-3xl font-bold text-green-400">
-                  {dancers.reduce((total, group) => total + group.dancers.length, 0)}
+                <h3 className="text-lg font-semibold text-white">Total Applications</h3>
+                <p className="text-3xl font-bold text-green-400">{applications.length}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-gray-800/80 rounded-2xl p-6 border border-gray-700/20">
+            <div className="flex items-center">
+              <div className="w-12 h-12 bg-blue-500 rounded-lg flex items-center justify-center mr-4">
+                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-white">Acceptance Rate</h3>
+                <p className="text-3xl font-bold text-blue-400">
+                  {applications.length > 0 
+                    ? Math.round((applications.filter(a => a.status === 'accepted').length / applications.length) * 100)
+                    : 0
+                  }%
                 </p>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Add Dancer Button */}
+        {/* Tab Navigation */}
         <div className="mb-6">
-          <button
-            onClick={() => setShowAddForm(true)}
-            className="px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-xl hover:from-purple-600 hover:to-pink-600 transition-all duration-300 font-semibold shadow-lg hover:shadow-xl transform hover:scale-105"
-          >
-            ➕ Add New Dancer
-          </button>
+          <div className="flex space-x-1 bg-gray-800/80 rounded-lg p-1">
+            <button
+              onClick={() => setActiveTab('applications')}
+              className={`flex-1 px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+                activeTab === 'applications'
+                  ? 'bg-purple-600 text-white'
+                  : 'text-gray-300 hover:text-white hover:bg-gray-700'
+              }`}
+            >
+              Applications ({applications.length})
+            </button>
+            <button
+              onClick={() => setActiveTab('dancers')}
+              className={`flex-1 px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+                activeTab === 'dancers'
+                  ? 'bg-purple-600 text-white'
+                  : 'text-gray-300 hover:text-white hover:bg-gray-700'
+              }`}
+            >
+              My Dancers ({acceptedDancers.length})
+            </button>
+          </div>
         </div>
 
-        {/* Add Dancer Form Modal */}
-        {showAddForm && (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-            <div className="bg-gray-800 rounded-2xl p-6 w-full max-w-md border border-gray-700">
-              <h3 className="text-xl font-bold text-white mb-4">Add New Dancer</h3>
-              <form onSubmit={handleAddDancer} className="space-y-4">
+        {/* Applications Tab */}
+        {activeTab === 'applications' && (
+          <div className="bg-gray-800/80 rounded-2xl border border-gray-700/20 overflow-hidden">
+            <div className="p-6 border-b border-gray-700">
+              <div className="flex justify-between items-center">
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
-                    Dancer Name *
-                  </label>
-                  <input
-                    type="text"
-                    value={addForm.name}
-                    onChange={(e) => setAddForm({...addForm, name: e.target.value})}
-                    className="w-full px-4 py-3 border border-gray-600 bg-gray-700 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all text-white placeholder-gray-400"
-                    placeholder="Enter dancer's name"
-                    required
-                  />
+                  <h3 className="text-xl font-bold text-white">Dancer Applications</h3>
+                  <p className="text-gray-400 text-sm mt-1">Review and respond to dancer applications</p>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
-                    Date of Birth *
-                  </label>
-                  <input
-                    type="date"
-                    value={addForm.dateOfBirth}
-                    onChange={(e) => setAddForm({...addForm, dateOfBirth: e.target.value})}
-                    className="w-full px-4 py-3 border border-gray-600 bg-gray-700 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all text-white"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
-                    National ID *
-                  </label>
-                  <input
-                    type="text"
-                    value={addForm.nationalId}
-                    onChange={(e) => setAddForm({...addForm, nationalId: e.target.value})}
-                    className="w-full px-4 py-3 border border-gray-600 bg-gray-700 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all text-white placeholder-gray-400"
-                    placeholder="Enter national ID"
-                    required
-                  />
-                </div>
-                <div className="flex space-x-3 pt-4">
-                  <button
-                    type="submit"
-                    className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                <div className="flex space-x-2">
+                  <select
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.target.value as any)}
+                    className="px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm"
                   >
-                    Add Dancer
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowAddForm(false);
-                      setAddForm({ name: '', dateOfBirth: '', nationalId: '' });
-                    }}
-                    className="flex-1 px-4 py-2 border border-gray-600 text-gray-300 rounded-lg hover:bg-gray-700 transition-colors"
-                  >
-                    Cancel
-                  </button>
+                    <option value="all">All Applications</option>
+                    <option value="pending">Pending</option>
+                    <option value="accepted">Accepted</option>
+                    <option value="rejected">Rejected</option>
+                  </select>
                 </div>
-              </form>
-            </div>
-          </div>
-        )}
-
-        {/* Edit Dancer Form Modal */}
-        {editingDancer && (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-            <div className="bg-gray-800 rounded-2xl p-6 w-full max-w-md border border-gray-700">
-              <h3 className="text-xl font-bold text-white mb-4">Edit Dancer</h3>
-              <form onSubmit={handleUpdateDancer} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
-                    Dancer Name *
-                  </label>
-                  <input
-                    type="text"
-                    value={editingDancer.name}
-                    onChange={(e) => setEditingDancer({...editingDancer, name: e.target.value})}
-                    className="w-full px-4 py-3 border border-gray-600 bg-gray-700 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all text-white placeholder-gray-400"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
-                    Date of Birth *
-                  </label>
-                  <input
-                    type="date"
-                    value={editingDancer.dateOfBirth}
-                    onChange={(e) => setEditingDancer({...editingDancer, dateOfBirth: e.target.value})}
-                    className="w-full px-4 py-3 border border-gray-600 bg-gray-700 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all text-white"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
-                    National ID *
-                  </label>
-                  <input
-                    type="text"
-                    value={editingDancer.nationalId}
-                    onChange={(e) => setEditingDancer({...editingDancer, nationalId: e.target.value})}
-                    className="w-full px-4 py-3 border border-gray-600 bg-gray-700 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all text-white placeholder-gray-400"
-                    required
-                  />
-                </div>
-                <div className="flex space-x-3 pt-4">
-                  <button
-                    type="submit"
-                    className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
-                  >
-                    Update Dancer
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setEditingDancer(null)}
-                    className="flex-1 px-4 py-2 border border-gray-600 text-gray-300 rounded-lg hover:bg-gray-700 transition-colors"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
-
-        {/* Dancers List */}
-        <div className="bg-gray-800/80 rounded-2xl border border-gray-700/20 overflow-hidden">
-          <div className="p-6 border-b border-gray-700">
-            <h3 className="text-xl font-bold text-white">Studio Dancers</h3>
-            <p className="text-gray-400 text-sm mt-1">Manage your registered dancers</p>
-          </div>
-
-          {dancers.length === 0 ? (
-            <div className="p-8 text-center">
-              <div className="w-16 h-16 bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4">
-                <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                </svg>
               </div>
-              <p className="text-gray-400 mb-4">No dancers registered yet</p>
-              <button
-                onClick={() => setShowAddForm(true)}
-                className="px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
-              >
-                Add Your First Dancer
-              </button>
             </div>
-          ) : (
-            <div className="divide-y divide-gray-700">
-              {dancers.map((group) => (
-                group.dancers.map((dancer) => (
+
+            {filteredApplications.length === 0 ? (
+              <div className="p-8 text-center">
+                <div className="w-16 h-16 bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                </div>
+                <p className="text-gray-400 mb-2">No applications found</p>
+                <p className="text-gray-500 text-sm">Dancers will appear here when they apply to join your studio</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-gray-700">
+                {filteredApplications.map((application) => (
+                  <div key={application.id} className="p-6 hover:bg-gray-700/30 transition-colors">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center mb-3">
+                          <h4 className="text-lg font-semibold text-white mr-3">{application.dancer.name}</h4>
+                          <span className="px-3 py-1 bg-gray-700 text-gray-300 rounded-full text-sm font-medium mr-2">
+                            Age {application.dancer.age}
+                          </span>
+                          {getStatusBadge(application.status)}
+                          {getApprovalBadge(application.dancer.approved)}
+                        </div>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-sm mb-4">
+                          <div>
+                            <span className="text-gray-400">EODSA ID:</span>
+                            <span className="text-white ml-2 font-mono">{application.dancer.eodsaId}</span>
+                          </div>
+                          <div>
+                            <span className="text-gray-400">National ID:</span>
+                            <span className="text-white ml-2 font-mono">{application.dancer.nationalId}</span>
+                          </div>
+                          <div>
+                            <span className="text-gray-400">Applied:</span>
+                            <span className="text-white ml-2">{new Date(application.appliedAt).toLocaleDateString()}</span>
+                          </div>
+                          {application.dancer.email && (
+                            <div>
+                              <span className="text-gray-400">Email:</span>
+                              <span className="text-white ml-2">{application.dancer.email}</span>
+                            </div>
+                          )}
+                          {application.dancer.phone && (
+                            <div>
+                              <span className="text-gray-400">Phone:</span>
+                              <span className="text-white ml-2">{application.dancer.phone}</span>
+                            </div>
+                          )}
+                          <div>
+                            <span className="text-gray-400">Date of Birth:</span>
+                            <span className="text-white ml-2">{new Date(application.dancer.dateOfBirth).toLocaleDateString()}</span>
+                          </div>
+                        </div>
+
+                        {application.status === 'rejected' && application.rejectionReason && (
+                          <div className="mt-3 p-3 bg-red-900/20 border border-red-500/30 rounded-lg">
+                            <p className="text-red-300 text-sm">
+                              <strong>Rejection Reason:</strong> {application.rejectionReason}
+                            </p>
+                          </div>
+                        )}
+
+                        {!application.dancer.approved && (
+                          <div className="mt-3 p-3 bg-orange-900/20 border border-orange-500/30 rounded-lg">
+                            <p className="text-orange-300 text-sm">
+                              ⚠️ This dancer is awaiting admin approval before they can compete
+                            </p>
+                          </div>
+                        )}
+                      </div>
+
+                      {application.status === 'pending' && (
+                        <div className="flex items-center space-x-2 ml-4">
+                          <button
+                            onClick={() => handleAcceptApplication(application.id)}
+                            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm"
+                          >
+                            Accept
+                          </button>
+                          <button
+                            onClick={() => setRejectingApplication(application.id)}
+                            className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm"
+                          >
+                            Reject
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Dancers Tab */}
+        {activeTab === 'dancers' && (
+          <div className="bg-gray-800/80 rounded-2xl border border-gray-700/20 overflow-hidden">
+            <div className="p-6 border-b border-gray-700">
+              <h3 className="text-xl font-bold text-white">My Dancers</h3>
+              <p className="text-gray-400 text-sm mt-1">Dancers who are part of your studio</p>
+            </div>
+
+            {acceptedDancers.length === 0 ? (
+              <div className="p-8 text-center">
+                <div className="w-16 h-16 bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                  </svg>
+                </div>
+                <p className="text-gray-400 mb-2">No dancers in your studio yet</p>
+                <p className="text-gray-500 text-sm">Accept applications to build your dance team</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-gray-700">
+                {acceptedDancers.map((dancer) => (
                   <div key={dancer.id} className="p-6 hover:bg-gray-700/30 transition-colors">
                     <div className="flex items-center justify-between">
                       <div className="flex-1">
-                        <div className="flex items-center mb-2">
+                        <div className="flex items-center mb-3">
                           <h4 className="text-lg font-semibold text-white mr-3">{dancer.name}</h4>
                           <span className="px-3 py-1 bg-purple-900/30 text-purple-300 rounded-full text-sm font-medium">
-                            Age {calculateAge(dancer.dateOfBirth)}
+                            Age {dancer.age}
                           </span>
-                          {getWaiverStatusBadge(dancer)}
                         </div>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
                           <div>
                             <span className="text-gray-400">EODSA ID:</span>
-                            <span className="text-white ml-2 font-mono">{group.eodsaId}</span>
-                          </div>
-                          <div>
-                            <span className="text-gray-400">Date of Birth:</span>
-                            <span className="text-white ml-2">{new Date(dancer.dateOfBirth).toLocaleDateString()}</span>
+                            <span className="text-white ml-2 font-mono">{dancer.eodsaId}</span>
                           </div>
                           <div>
                             <span className="text-gray-400">National ID:</span>
                             <span className="text-white ml-2 font-mono">{dancer.nationalId}</span>
                           </div>
+                          <div>
+                            <span className="text-gray-400">Joined:</span>
+                            <span className="text-white ml-2">{new Date(dancer.joinedAt).toLocaleDateString()}</span>
+                          </div>
+                          {dancer.email && (
+                            <div>
+                              <span className="text-gray-400">Email:</span>
+                              <span className="text-white ml-2">{dancer.email}</span>
+                            </div>
+                          )}
+                          {dancer.phone && (
+                            <div>
+                              <span className="text-gray-400">Phone:</span>
+                              <span className="text-white ml-2">{dancer.phone}</span>
+                            </div>
+                          )}
+                          <div>
+                            <span className="text-gray-400">Date of Birth:</span>
+                            <span className="text-white ml-2">{new Date(dancer.dateOfBirth).toLocaleDateString()}</span>
+                          </div>
                         </div>
                       </div>
                       <div className="flex items-center space-x-2 ml-4">
-                        {calculateAge(dancer.dateOfBirth) < 18 && !dancer.waiver && (
-                          <button
-                            onClick={() => {
-                              setPendingMinorDancer({ id: dancer.id, name: dancer.name });
-                              setShowWaiverModal(true);
-                            }}
-                            className="px-3 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors text-sm"
-                          >
-                            Add Waiver
-                          </button>
-                        )}
-                        <button
-                          onClick={() => setEditingDancer(dancer)}
-                          className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          onClick={() => handleDeleteDancer(dancer.id)}
-                          className="px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm"
-                        >
-                          Delete
-                        </button>
                         <Link
-                          href={`/event-dashboard?eodsaId=${group.eodsaId}`}
-                          className="px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm"
+                          href={`/event-dashboard?eodsaId=${dancer.eodsaId}`}
+                          className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm"
                         >
-                          Compete
+                          Enter Competitions
                         </Link>
                       </div>
                     </div>
                   </div>
-                ))
-              ))}
-            </div>
-          )}
-        </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
-        {/* Waiver Modal */}
-        {showWaiverModal && pendingMinorDancer && (
-          <WaiverModal
-            isOpen={showWaiverModal}
-            onClose={handleWaiverModalClose}
-            dancerId={pendingMinorDancer.id}
-            dancerName={pendingMinorDancer.name}
-            onWaiverSubmitted={handleWaiverSubmitted}
-          />
+        {/* Rejection Modal */}
+        {rejectingApplication && (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+            <div className="bg-gray-800 rounded-2xl p-6 w-full max-w-md border border-gray-700">
+              <h3 className="text-xl font-bold text-white mb-4">Reject Application</h3>
+              <p className="text-gray-300 mb-4">Please provide a reason for rejecting this application:</p>
+              <textarea
+                value={rejectionReason}
+                onChange={(e) => setRejectionReason(e.target.value)}
+                className="w-full px-4 py-3 border border-gray-600 bg-gray-700 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all text-white placeholder-gray-400 resize-none"
+                placeholder="Enter rejection reason..."
+                rows={4}
+                required
+              />
+              <div className="flex space-x-3 pt-4">
+                <button
+                  onClick={() => handleRejectApplication(rejectingApplication)}
+                  disabled={!rejectionReason.trim()}
+                  className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Reject Application
+                </button>
+                <button
+                  onClick={() => {
+                    setRejectingApplication(null);
+                    setRejectionReason('');
+                  }}
+                  className="flex-1 px-4 py-2 border border-gray-600 text-gray-300 rounded-lg hover:bg-gray-700 transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
         )}
       </div>
     </div>

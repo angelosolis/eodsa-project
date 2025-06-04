@@ -21,12 +21,12 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      applications: applications
+      applications
     });
   } catch (error) {
-    console.error('Get dancer applications error:', error);
+    console.error('Error getting dancer applications:', error);
     return NextResponse.json(
-      { error: 'Failed to get dancer applications' },
+      { error: 'Failed to get applications' },
       { status: 500 }
     );
   }

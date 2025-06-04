@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { unifiedDb, initializeDatabase } from '@/lib/database';
+import { emailService } from '@/lib/email';
 
 // Get all dancers with their approval status
 export async function GET(request: NextRequest) {
@@ -42,7 +43,27 @@ export async function POST(request: NextRequest) {
     }
 
     if (action === 'approve') {
+      // Get dancer details before approval for email
+      const dancers = await unifiedDb.getAllDancers();
+      const dancer = dancers.find(d => d.id === dancerId);
+      
       await unifiedDb.approveDancer(dancerId, adminId);
+      
+      // Send approval email if dancer has email
+      if (dancer && dancer.email) {
+        try {
+          await emailService.sendDancerApprovalEmail(
+            dancer.name,
+            dancer.email,
+            dancer.eodsaId
+          );
+          console.log('Approval email sent successfully to:', dancer.email);
+        } catch (emailError) {
+          console.error('Failed to send approval email:', emailError);
+          // Don't fail the approval if email fails
+        }
+      }
+      
       return NextResponse.json({
         success: true,
         message: 'Dancer approved successfully. They can now apply to studios.'
@@ -54,10 +75,32 @@ export async function POST(request: NextRequest) {
           { status: 400 }
         );
       }
+      
+      // Get dancer details before rejection for email
+      const dancers = await unifiedDb.getAllDancers();
+      const dancer = dancers.find(d => d.id === dancerId);
+      
       await unifiedDb.rejectDancer(dancerId, rejectionReason, adminId);
+      
+      // Send rejection email if dancer has email
+      if (dancer && dancer.email) {
+        try {
+          await emailService.sendDancerRejectionEmail(
+            dancer.name,
+            dancer.email,
+            dancer.eodsaId,
+            rejectionReason
+          );
+          console.log('Rejection email sent successfully to:', dancer.email);
+        } catch (emailError) {
+          console.error('Failed to send rejection email:', emailError);
+          // Don't fail the rejection if email fails
+        }
+      }
+      
       return NextResponse.json({
         success: true,
-        message: 'Dancer registration rejected'
+        message: 'Dancer registration rejected and notification sent'
       });
     } else {
       return NextResponse.json(

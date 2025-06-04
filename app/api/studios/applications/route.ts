@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { unifiedDb, initializeDatabase } from '@/lib/database';
 
-// Get studio applications or respond to applications
+// Get applications for a studio
 export async function GET(request: NextRequest) {
   try {
-    // Initialize database tables if they don't exist
     await initializeDatabase();
     
     const { searchParams } = new URL(request.url);
@@ -22,25 +21,23 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      applications: applications
+      applications
     });
   } catch (error) {
-    console.error('Get studio applications error:', error);
+    console.error('Error getting studio applications:', error);
     return NextResponse.json(
-      { error: 'Failed to get studio applications' },
+      { error: 'Failed to get applications' },
       { status: 500 }
     );
   }
 }
 
-// Respond to studio application (accept/reject)
+// Respond to an application (accept/reject)
 export async function POST(request: NextRequest) {
   try {
-    // Initialize database tables if they don't exist
     await initializeDatabase();
     
-    const body = await request.json();
-    const { applicationId, action, respondedBy, rejectionReason } = body;
+    const { applicationId, action, respondedBy, rejectionReason } = await request.json();
 
     if (!applicationId || !action || !respondedBy) {
       return NextResponse.json(
@@ -49,32 +46,32 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (action === 'accept') {
-      await unifiedDb.respondToApplication(applicationId, 'accept', respondedBy);
-      return NextResponse.json({
-        success: true,
-        message: 'Dancer application accepted. They are now part of your studio.'
-      });
-    } else if (action === 'reject') {
-      if (!rejectionReason) {
-        return NextResponse.json(
-          { error: 'Rejection reason is required' },
-          { status: 400 }
-        );
-      }
-      await unifiedDb.respondToApplication(applicationId, 'reject', respondedBy, rejectionReason);
-      return NextResponse.json({
-        success: true,
-        message: 'Dancer application rejected'
-      });
-    } else {
+    if (!['accept', 'reject'].includes(action)) {
       return NextResponse.json(
-        { error: 'Invalid action. Use "accept" or "reject"' },
+        { error: 'Action must be either "accept" or "reject"' },
         { status: 400 }
       );
     }
+
+    if (action === 'reject' && !rejectionReason) {
+      return NextResponse.json(
+        { error: 'Rejection reason is required when rejecting an application' },
+        { status: 400 }
+      );
+    }
+
+    if (action === 'accept') {
+      await unifiedDb.respondToApplication(applicationId, 'accept', respondedBy);
+    } else {
+      await unifiedDb.respondToApplication(applicationId, 'reject', respondedBy, rejectionReason);
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: `Application ${action}ed successfully`
+    });
   } catch (error) {
-    console.error('Respond to application error:', error);
+    console.error('Error responding to application:', error);
     return NextResponse.json(
       { error: 'Failed to respond to application' },
       { status: 500 }

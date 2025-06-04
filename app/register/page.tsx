@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { generateEODSAId } from '@/lib/database';
+import { useToast } from '@/components/ui/simple-toast';
 
 interface GuardianInfo {
   name: string;
@@ -90,6 +91,7 @@ export default function RegisterPage() {
   const [submitted, setSubmitted] = useState(false);
   const [eodsaId, setEodsaId] = useState('');
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
+  const { success, error, warning, info } = useToast();
 
   // Calculate age from date of birth
   const calculateAge = (dateOfBirth: string): number => {
@@ -149,14 +151,14 @@ export default function RegisterPage() {
     try {
       // Validate privacy policy acceptance
       if (!formData.privacyPolicyAccepted) {
-        alert('Please accept the Privacy Policy to continue.');
+        warning('Please accept the Privacy Policy to continue with registration.', 6000);
         setIsSubmitting(false);
         return;
       }
 
       // Validate individual dancer fields
       if (!formData.name || !formData.dateOfBirth || !formData.nationalId) {
-        alert('Name, date of birth, and national ID are required for individual dancer registration.');
+        warning('Name, date of birth, and national ID are required for dancer registration.', 6000);
         setIsSubmitting(false);
         return;
       }
@@ -165,11 +167,13 @@ export default function RegisterPage() {
       const age = calculateAge(formData.dateOfBirth);
       if (age < 18) {
         if (!formData.guardianInfo?.name || !formData.guardianInfo?.email || !formData.guardianInfo?.cell) {
-          alert('Guardian information is required for dancers under 18 years old.');
+          warning('Complete guardian information is required for dancers under 18 years old.', 7000);
           setIsSubmitting(false);
           return;
         }
       }
+
+      info('Creating your dancer profile...', 3000);
 
       // Register individual dancer
       const response = await fetch('/api/dancers/register', {
@@ -192,14 +196,15 @@ export default function RegisterPage() {
       if (response.ok) {
         const result = await response.json();
         setEodsaId(result.dancer.eodsaId);
+        success(`Welcome to EODSA! Your dancer ID is ${result.dancer.eodsaId}`, 8000);
         setSubmitted(true);
       } else {
-        const error = await response.json();
-        alert(`Registration failed: ${error.error}`);
+        const errorData = await response.json();
+        error(errorData.error || 'Unable to complete registration. Please try again.', 8000);
       }
-    } catch (error) {
-      console.error('Registration error:', error);
-      alert('Registration failed. Please try again.');
+    } catch (err) {
+      console.error('Registration error:', err);
+      error('Unable to connect to registration service. Please check your connection and try again.', 8000);
     } finally {
       setIsSubmitting(false);
     }

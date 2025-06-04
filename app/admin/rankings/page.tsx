@@ -23,6 +23,7 @@ export default function AdminRankingsPage() {
   const [filteredRankings, setFilteredRankings] = useState<RankingData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   
   // Filters
   const [selectedRegion, setSelectedRegion] = useState('');
@@ -32,7 +33,26 @@ export default function AdminRankingsPage() {
   const [viewMode, setViewMode] = useState<'all' | 'top5_age' | 'top5_style'>('all');
 
   useEffect(() => {
-    loadRankings();
+    // Check admin authentication
+    const judgeSession = localStorage.getItem('judgeSession');
+    if (judgeSession) {
+      try {
+        const session = JSON.parse(judgeSession);
+        if (session.isAdmin) {
+          setIsAuthenticated(true);
+          loadRankings();
+        } else {
+          setError('Admin access required to view rankings');
+          setIsLoading(false);
+        }
+      } catch {
+        setError('Invalid session. Please login as admin.');
+        setIsLoading(false);
+      }
+    } else {
+      setError('Admin authentication required. Please login.');
+      setIsLoading(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -40,6 +60,8 @@ export default function AdminRankingsPage() {
   }, [rankings, selectedRegion, selectedAgeCategory, selectedPerformanceType, selectedStyle, viewMode]);
 
   const loadRankings = async () => {
+    if (!isAuthenticated) return;
+    
     setIsLoading(true);
     setError('');
     
@@ -164,6 +186,28 @@ export default function AdminRankingsPage() {
     itemStyle: string;
     rankings: RankingData[];
   }>);
+
+  // Authentication check
+  if (!isAuthenticated && !isLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-red-50 via-orange-50 to-pink-50 flex items-center justify-center">
+        <div className="text-center bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl p-8 border border-red-200">
+          <div className="w-20 h-20 mx-auto mb-6 bg-gradient-to-br from-red-100 to-orange-100 rounded-full flex items-center justify-center">
+            <span className="text-3xl">🔒</span>
+          </div>
+          <h2 className="text-2xl font-bold text-gray-900 mb-3">Access Restricted</h2>
+          <p className="text-gray-700 mb-6 max-w-md mx-auto">{error}</p>
+          <Link 
+            href="/admin"
+            className="inline-flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-xl hover:from-blue-600 hover:to-indigo-700 transition-all duration-200 transform hover:scale-105 shadow-lg font-medium"
+          >
+            <span>←</span>
+            <span>Go to Admin Login</span>
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { unifiedDb, initializeDatabase } from '@/lib/database';
+import { emailService } from '@/lib/email';
 
 // Individual dancer registration
 export async function POST(request: NextRequest) {
@@ -38,6 +39,17 @@ export async function POST(request: NextRequest) {
       guardianEmail,
       guardianPhone
     });
+
+    // Send registration confirmation email if email is provided
+    if (email) {
+      try {
+        await emailService.sendDancerRegistrationEmail(name, email, result.eodsaId);
+        console.log('Registration email sent successfully to:', email);
+      } catch (emailError) {
+        console.error('Failed to send registration email:', emailError);
+        // Don't fail the registration if email fails
+      }
+    }
 
     return NextResponse.json({
       success: true,

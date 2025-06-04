@@ -118,8 +118,12 @@ export default function HomePage() {
                 Judge Portal
               </Link>
               <span className="text-gray-600">•</span>
-              <Link href="/portal" className="text-purple-400 hover:text-purple-300 transition-colors">
-                Rankings Portal
+              <Link href="/dancer-login" className="text-purple-400 hover:text-purple-300 transition-colors">
+                Dancer Portal
+              </Link>
+              <span className="text-gray-600">•</span>
+              <Link href="/competition-entry" className="text-indigo-400 hover:text-indigo-300 transition-colors">
+                Competition Entry
               </Link>
             </div>
           </div>

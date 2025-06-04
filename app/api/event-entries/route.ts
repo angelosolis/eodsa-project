@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db, initializeDatabase } from '@/lib/database';
+import { db, initializeDatabase, unifiedDb } from '@/lib/database';
+import { emailService } from '@/lib/email';
 
 // Initialize database on first request
 let dbInitialized = false;
@@ -63,6 +64,57 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // UNIFIED SYSTEM VALIDATION: Check dancer eligibility
+    // Validate each participant has proper approvals
+    for (const participantId of body.participantIds) {
+      // Check if this is a unified system dancer
+      const dancer = await unifiedDb.getDancerById(participantId);
+      
+      if (dancer) {
+        // This is a unified system dancer - requires admin approval
+        if (!dancer.approved) {
+          return NextResponse.json(
+            { 
+              error: `Dancer ${dancer.name} (${dancer.eodsaId}) is not approved by admin. Please wait for admin approval before entering competitions.`,
+              requiresAdminApproval: true,
+              dancerId: participantId
+            },
+            { status: 403 }
+          );
+        }
+
+        // Check if dancer has studio affiliation - if so, needs studio approval too
+        const studioApplications = await unifiedDb.getDancerApplications(participantId);
+        const acceptedApplications = studioApplications.filter(app => app.status === 'accepted');
+        
+        if (acceptedApplications.length === 0) {
+          // Dancer has no studio affiliation - this is allowed for independent dancers
+          console.log(`Independent dancer ${dancer.name} entering competition`);
+        } else {
+          // Dancer has studio affiliation - this is also valid
+          console.log(`Studio-affiliated dancer ${dancer.name} entering competition`);
+        }
+      } else {
+        // Check if this is an old system participant (fallback compatibility)
+        const contestant = await db.getContestantById(body.contestantId);
+        if (!contestant) {
+          return NextResponse.json(
+            { error: 'Invalid contestant or participant data' },
+            { status: 400 }
+          );
+        }
+        
+        // For old system - validate participant exists in contestant's dancers
+        const participantExists = contestant.dancers?.some((d: any) => d.id === participantId);
+        if (!participantExists) {
+          return NextResponse.json(
+            { error: `Participant ${participantId} not found in contestant record` },
+            { status: 400 }
+          );
+        }
+      }
+    }
+
     // Validate performance type participant limits
     const participantCount = body.participantIds.length;
     const performanceType = event.performanceType;
@@ -105,6 +157,26 @@ export async function POST(request: NextRequest) {
       itemStyle: body.itemStyle,
       estimatedDuration: body.estimatedDuration
     });
+
+    // Send competition entry confirmation email
+    try {
+      // Get contestant details for email
+      const contestant = await db.getContestantById(body.contestantId);
+      if (contestant && contestant.email) {
+        await emailService.sendCompetitionEntryEmail(
+          contestant.name,
+          contestant.email,
+          event.name,
+          body.itemName,
+          event.performanceType,
+          body.calculatedFee
+        );
+        console.log('Competition entry email sent successfully to:', contestant.email);
+      }
+    } catch (emailError) {
+      console.error('Failed to send competition entry email:', emailError);
+      // Don't fail the entry if email fails
+    }
 
     return NextResponse.json(eventEntry, { status: 201 });
   } catch (error: any) {

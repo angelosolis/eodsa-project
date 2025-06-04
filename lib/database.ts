@@ -132,6 +132,16 @@ export const initializeDatabase = async () => {
         console.log('Adding date_of_birth column to contestants table...');
         await sqlClient`ALTER TABLE contestants ADD COLUMN IF NOT EXISTS date_of_birth TEXT`;
       }
+
+      // Check and fix studios table schema for approval workflow
+      try {
+        await sqlClient`SELECT approved_by FROM studios LIMIT 1`;
+      } catch {
+        console.log('Adding approval columns to studios table...');
+        await sqlClient`ALTER TABLE studios ADD COLUMN IF NOT EXISTS approved_by TEXT`;
+        await sqlClient`ALTER TABLE studios ADD COLUMN IF NOT EXISTS approved_at TEXT`;
+        await sqlClient`ALTER TABLE studios ADD COLUMN IF NOT EXISTS rejection_reason TEXT`;
+      }
       
       console.log('✅ All database tables exist and are properly configured');
       return;
@@ -257,6 +267,17 @@ export const initializeDatabase = async () => {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `;
+
+    // Ensure studios table has all required columns (for existing databases)
+    try {
+      await sqlClient`ALTER TABLE studios ADD COLUMN IF NOT EXISTS approved BOOLEAN DEFAULT FALSE`;
+      await sqlClient`ALTER TABLE studios ADD COLUMN IF NOT EXISTS approved_by TEXT`;
+      await sqlClient`ALTER TABLE studios ADD COLUMN IF NOT EXISTS approved_at TEXT`;
+      await sqlClient`ALTER TABLE studios ADD COLUMN IF NOT EXISTS rejection_reason TEXT`;
+    } catch (error) {
+      // Columns might already exist, that's okay
+      console.log('Studio columns already exist or error adding them:', error);
+    }
 
     // Keep existing tables for competitions...
     await sqlClient`
@@ -409,7 +430,15 @@ export const initializeDatabase = async () => {
       await sqlClient`CREATE INDEX IF NOT EXISTS idx_events_region ON events(region)`;
       await sqlClient`CREATE INDEX IF NOT EXISTS idx_events_date ON events(event_date)`;
       
-      console.log('Database indexes created successfully');
+      // Phase 3 Database Optimization - Additional composite indexes for unified system
+      await sqlClient`CREATE INDEX IF NOT EXISTS idx_dancers_approved_created ON dancers(approved, created_at DESC)`;
+      await sqlClient`CREATE INDEX IF NOT EXISTS idx_studio_apps_dancer_status ON studio_applications(dancer_id, status)`;
+      await sqlClient`CREATE INDEX IF NOT EXISTS idx_studio_apps_studio_status ON studio_applications(studio_id, status)`;
+      await sqlClient`CREATE INDEX IF NOT EXISTS idx_studios_approved_created ON studios(approved, created_at DESC)`;
+      await sqlClient`CREATE INDEX IF NOT EXISTS idx_dancers_national_id ON dancers(national_id)`;
+      await sqlClient`CREATE INDEX IF NOT EXISTS idx_dancers_email ON dancers(email)`;
+      
+      console.log('Database indexes created successfully (including unified system optimizations)');
     } catch (indexError) {
       console.warn('Some indexes may already exist, continuing...', indexError);
     }
@@ -1754,20 +1783,41 @@ export const unifiedDb = {
   // Get all dancers for admin approval
   async getAllDancers(status?: 'pending' | 'approved' | 'rejected') {
     const sqlClient = getSql();
-    let query = `SELECT d.*, j.name as approved_by_name FROM dancers d 
-                 LEFT JOIN judges j ON d.approved_by = j.id`;
+    
+    let result: any[];
     
     if (status === 'pending') {
-      query += ' WHERE d.approved = false AND d.rejection_reason IS NULL';
+      result = await sqlClient`
+        SELECT d.*, j.name as approved_by_name 
+        FROM dancers d 
+        LEFT JOIN judges j ON d.approved_by = j.id
+        WHERE d.approved = false AND d.rejection_reason IS NULL
+        ORDER BY d.created_at DESC
+      ` as any[];
     } else if (status === 'approved') {
-      query += ' WHERE d.approved = true';
+      result = await sqlClient`
+        SELECT d.*, j.name as approved_by_name 
+        FROM dancers d 
+        LEFT JOIN judges j ON d.approved_by = j.id
+        WHERE d.approved = true
+        ORDER BY d.created_at DESC
+      ` as any[];
     } else if (status === 'rejected') {
-      query += ' WHERE d.approved = false AND d.rejection_reason IS NOT NULL';
+      result = await sqlClient`
+        SELECT d.*, j.name as approved_by_name 
+        FROM dancers d 
+        LEFT JOIN judges j ON d.approved_by = j.id
+        WHERE d.approved = false AND d.rejection_reason IS NOT NULL
+        ORDER BY d.created_at DESC
+      ` as any[];
+    } else {
+      result = await sqlClient`
+        SELECT d.*, j.name as approved_by_name 
+        FROM dancers d 
+        LEFT JOIN judges j ON d.approved_by = j.id
+        ORDER BY d.created_at DESC
+      ` as any[];
     }
-    
-    query += ' ORDER BY d.created_at DESC';
-    
-    const result = (await sqlClient.unsafe(query)) as unknown as any[];
     
     return result.map((row: any) => ({
       id: row.id,
@@ -1828,21 +1878,28 @@ export const unifiedDb = {
   // Get studio applications for a studio
   async getStudioApplications(studioId: string, status?: string) {
     const sqlClient = getSql();
-    let query = `
-      SELECT sa.*, d.name as dancer_name, d.age, d.date_of_birth, d.national_id, 
-             d.email as dancer_email, d.phone as dancer_phone, d.approved as dancer_approved
-      FROM studio_applications sa
-      JOIN dancers d ON sa.dancer_id = d.id
-      WHERE sa.studio_id = '${studioId}'
-    `;
+    
+    let result: any[];
     
     if (status) {
-      query += ` AND sa.status = '${status}'`;
+      result = await sqlClient`
+        SELECT sa.*, d.name as dancer_name, d.age, d.date_of_birth, d.national_id, 
+               d.email as dancer_email, d.phone as dancer_phone, d.approved as dancer_approved
+        FROM studio_applications sa
+        JOIN dancers d ON sa.dancer_id = d.id
+        WHERE sa.studio_id = ${studioId} AND sa.status = ${status}
+        ORDER BY sa.applied_at DESC
+      ` as any[];
+    } else {
+      result = await sqlClient`
+        SELECT sa.*, d.name as dancer_name, d.age, d.date_of_birth, d.national_id, 
+               d.email as dancer_email, d.phone as dancer_phone, d.approved as dancer_approved
+        FROM studio_applications sa
+        JOIN dancers d ON sa.dancer_id = d.id
+        WHERE sa.studio_id = ${studioId}
+        ORDER BY sa.applied_at DESC
+      ` as any[];
     }
-    
-    query += ' ORDER BY sa.applied_at DESC';
-    
-    const result = (await sqlClient.unsafe(query)) as unknown as any[];
     
     return result.map((row: any) => ({
       id: row.id,
@@ -1893,11 +1950,14 @@ export const unifiedDb = {
     }));
   },
 
-  // Studio accept/reject application
-  async respondToApplication(applicationId: string, action: 'accept' | 'reject', respondedBy: string, rejectionReason?: string) {
+  // Studio accept/reject application or dancer withdraw
+  async respondToApplication(applicationId: string, action: 'accept' | 'reject' | 'withdraw', respondedBy: string, rejectionReason?: string) {
     const sqlClient = getSql();
     const respondedAt = new Date().toISOString();
-    const status = action === 'accept' ? 'accepted' : 'rejected';
+    let status: string = action;
+    if (action === 'accept') status = 'accepted';
+    if (action === 'reject') status = 'rejected';
+    if (action === 'withdraw') status = 'withdrawn';
     
     await sqlClient`
       UPDATE studio_applications 
@@ -1954,6 +2014,151 @@ export const unifiedDb = {
       phone: row.phone,
       registrationNumber: row.registration_number
     }));
+  },
+
+  // Studio management functions
+  async getAllStudios() {
+    const sqlClient = getSql();
+    const result = await sqlClient`
+      SELECT s.*, 
+             j.name as approved_by_name
+      FROM studios s
+      LEFT JOIN judges j ON s.approved_by = j.id
+      ORDER BY s.created_at DESC
+    ` as any[];
+    
+    return result.map((row: any) => ({
+      id: row.id,
+      name: row.name,
+      email: row.email,
+      registrationNumber: row.registration_number,
+      approved: row.approved,
+      approvedBy: row.approved_by,
+      approvedAt: row.approved_at,
+      rejectionReason: row.rejection_reason,
+      approvedByName: row.approved_by_name,
+      createdAt: row.created_at
+    }));
+  },
+
+  async approveStudio(studioId: string, adminId: string) {
+    const sqlClient = getSql();
+    const approvedAt = new Date().toISOString();
+    
+    await sqlClient`
+      UPDATE studios 
+      SET approved = true, approved_by = ${adminId}, approved_at = ${approvedAt}, rejection_reason = null
+      WHERE id = ${studioId}
+    `;
+  },
+
+  async rejectStudio(studioId: string, adminId: string, rejectionReason: string) {
+    const sqlClient = getSql();
+    
+    await sqlClient`
+      UPDATE studios 
+      SET approved = false, approved_by = ${adminId}, approved_at = null, rejection_reason = ${rejectionReason}
+      WHERE id = ${studioId}
+    `;
+  },
+
+  // Get all studio applications for admin overview
+  async getAllStudioApplications() {
+    const sqlClient = getSql();
+    const result = await sqlClient`
+      SELECT sa.*, 
+             d.eodsa_id as dancer_eodsa_id, d.name as dancer_name, d.age as dancer_age, d.approved as dancer_approved,
+             s.name as studio_name, s.registration_number as studio_registration_number
+      FROM studio_applications sa
+      JOIN dancers d ON sa.dancer_id = d.id
+      JOIN studios s ON sa.studio_id = s.id
+      ORDER BY sa.applied_at DESC
+    ` as any[];
+    
+    return result.map((row: any) => ({
+      id: row.id,
+      dancerId: row.dancer_id,
+      studioId: row.studio_id,
+      status: row.status,
+      appliedAt: row.applied_at,
+      respondedAt: row.responded_at,
+      respondedBy: row.responded_by,
+      rejectionReason: row.rejection_reason,
+      dancer: {
+        eodsaId: row.dancer_eodsa_id,
+        name: row.dancer_name,
+        age: row.dancer_age,
+        approved: row.dancer_approved
+      },
+      studio: {
+        name: row.studio_name,
+        registrationNumber: row.studio_registration_number
+      }
+    }));
+  },
+
+  // Get dancer by ID
+  async getDancerById(dancerId: string) {
+    const sqlClient = getSql();
+    const result = await sqlClient`
+      SELECT * FROM dancers WHERE id = ${dancerId}
+    ` as any[];
+    
+    if (result.length === 0) {
+      return null;
+    }
+    
+    const row = result[0];
+    return {
+      id: row.id,
+      eodsaId: row.eodsa_id,
+      name: row.name,
+      age: row.age,
+      dateOfBirth: row.date_of_birth,
+      nationalId: row.national_id,
+      email: row.email,
+      phone: row.phone,
+      guardianName: row.guardian_name,
+      guardianEmail: row.guardian_email,
+      guardianPhone: row.guardian_phone,
+      approved: row.approved,
+      approvedBy: row.approved_by,
+      approvedAt: row.approved_at,
+      rejectionReason: row.rejection_reason,
+      createdAt: row.created_at
+    };
+  },
+
+  // Get dancer by EODSA ID for authentication
+  async getDancerByEodsaId(eodsaId: string) {
+    const sqlClient = getSql();
+    const result = await sqlClient`
+      SELECT * FROM dancers WHERE eodsa_id = ${eodsaId}
+    ` as any[];
+    
+    if (result.length === 0) {
+      return null;
+    }
+    
+    const row = result[0];
+    return {
+      id: row.id,
+      eodsaId: row.eodsa_id,
+      name: row.name,
+      age: row.age,
+      dateOfBirth: row.date_of_birth,
+      nationalId: row.national_id,
+      email: row.email,
+      phone: row.phone,
+      guardianName: row.guardian_name,
+      guardianEmail: row.guardian_email,
+      guardianPhone: row.guardian_phone,
+      approved: row.approved,
+      approvedBy: row.approved_by,
+      approvedAt: row.approved_at,
+      rejectionReason: row.rejection_reason,
+      createdAt: row.created_at
+    };
   },
 
   // Utility function to calculate age

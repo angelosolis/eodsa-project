@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { REGIONS, PERFORMANCE_TYPES, AGE_CATEGORIES } from '@/lib/types';
 import Link from 'next/link';
+import { useToast } from '@/components/ui/simple-toast';
 
 interface Event {
   id: string;
@@ -60,13 +61,49 @@ interface Dancer {
   createdAt: string;
 }
 
+interface Studio {
+  id: string;
+  name: string;
+  email: string;
+  registrationNumber: string;
+  approved: boolean;
+  approvedBy?: string;
+  approvedAt?: string;
+  rejectionReason?: string;
+  createdAt: string;
+}
+
+interface StudioApplication {
+  id: string;
+  dancerId: string;
+  studioId: string;
+  status: 'pending' | 'accepted' | 'rejected' | 'withdrawn';
+  appliedAt: string;
+  respondedAt?: string;
+  respondedBy?: string;
+  rejectionReason?: string;
+  dancer: {
+    eodsaId: string;
+    name: string;
+    age: number;
+    approved: boolean;
+  };
+  studio: {
+    name: string;
+    registrationNumber: string;
+  };
+}
+
 export default function AdminDashboard() {
   const [events, setEvents] = useState<Event[]>([]);
   const [judges, setJudges] = useState<Judge[]>([]);
   const [assignments, setAssignments] = useState<JudgeAssignment[]>([]);
   const [dancers, setDancers] = useState<Dancer[]>([]);
-  const [activeTab, setActiveTab] = useState<'events' | 'judges' | 'assignments' | 'dancers'>('events');
+  const [studios, setStudios] = useState<Studio[]>([]);
+  const [studioApplications, setStudioApplications] = useState<StudioApplication[]>([]);
+  const [activeTab, setActiveTab] = useState<'events' | 'judges' | 'assignments' | 'dancers' | 'studios' | 'relationships'>('events');
   const [isLoading, setIsLoading] = useState(true);
+  const { success, error, warning, info } = useToast();
   
   // Event creation state
   const [newEvent, setNewEvent] = useState({
@@ -106,14 +143,27 @@ export default function AdminDashboard() {
   const [isCleaningDatabase, setIsCleaningDatabase] = useState(false);
   const [cleanDatabaseMessage, setCleanDatabaseMessage] = useState('');
 
+  // Email testing state
+  const [emailTestResults, setEmailTestResults] = useState('');
+  const [testEmail, setTestEmail] = useState('');
+  const [isTestingEmail, setIsTestingEmail] = useState(false);
+
   // Dancer search and filter state
   const [dancerSearchTerm, setDancerSearchTerm] = useState('');
   const [dancerStatusFilter, setDancerStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all');
+
+  // Studio search and filter state
+  const [studioSearchTerm, setStudioSearchTerm] = useState('');
+  const [studioStatusFilter, setStudioStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all');
+
+  // Relationship filter state
+  const [relationshipStatusFilter, setRelationshipStatusFilter] = useState<'all' | 'pending' | 'accepted' | 'rejected'>('all');
 
   // Modal states
   const [showCreateEventModal, setShowCreateEventModal] = useState(false);
   const [showCreateJudgeModal, setShowCreateJudgeModal] = useState(false);
   const [showAssignJudgeModal, setShowAssignJudgeModal] = useState(false);
+  const [showEmailTestModal, setShowEmailTestModal] = useState(false);
 
   const router = useRouter();
 
@@ -136,22 +186,28 @@ export default function AdminDashboard() {
   const fetchData = async () => {
     setIsLoading(true);
     try {
-      const [eventsRes, judgesRes, assignmentsRes, dancersRes] = await Promise.all([
+      const [eventsRes, judgesRes, assignmentsRes, dancersRes, studiosRes, applicationsRes] = await Promise.all([
         fetch('/api/events'),
         fetch('/api/judges'),
         fetch('/api/judge-assignments'),
-        fetch('/api/admin/dancers')
+        fetch('/api/admin/dancers'),
+        fetch('/api/admin/studios'),
+        fetch('/api/admin/studio-applications')
       ]);
 
       const eventsData = await eventsRes.json();
       const judgesData = await judgesRes.json();
       const assignmentsData = await assignmentsRes.json();
       const dancersData = await dancersRes.json();
+      const studiosData = await studiosRes.json();
+      const applicationsData = await applicationsRes.json();
 
       if (eventsData.success) setEvents(eventsData.events);
       if (judgesData.success) setJudges(judgesData.judges);
       if (assignmentsData.success) setAssignments(assignmentsData.assignments);
       if (dancersData.success) setDancers(dancersData.dancers);
+      if (studiosData.success) setStudios(studiosData.studios);
+      if (applicationsData.success) setStudioApplications(applicationsData.applications);
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {
@@ -462,6 +518,85 @@ export default function AdminDashboard() {
     }
   };
 
+  const handleApproveStudio = async (studioId: string) => {
+    try {
+      const session = localStorage.getItem('judgeSession');
+      if (!session) {
+        error('Session expired. Please log in again to continue.', 7000);
+        return;
+      }
+
+      const judgeData = JSON.parse(session);
+
+      const response = await fetch('/api/admin/studios', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          studioId,
+          action: 'approve',
+          adminId: judgeData.id
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        success('Studio approved! They can now receive dancer applications.', 6000);
+        fetchData(); // Refresh the data
+      } else {
+        error(data.error || 'An unknown error occurred while approving the studio.', 8000);
+      }
+    } catch (err) {
+      console.error('Error approving studio:', err);
+      error('Unable to approve studio. Please check your connection and try again.', 8000);
+    }
+  };
+
+  const handleRejectStudio = async (studioId: string) => {
+    const rejectionReason = prompt('Please provide a reason for rejection:');
+    if (!rejectionReason || rejectionReason.trim() === '') {
+      warning('Please provide a reason for rejecting this studio registration.', 5000);
+      return;
+    }
+
+    try {
+      const session = localStorage.getItem('judgeSession');
+      if (!session) {
+        error('Session expired. Please log in again to continue.', 7000);
+        return;
+      }
+
+      const judgeData = JSON.parse(session);
+
+      const response = await fetch('/api/admin/studios', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          studioId,
+          action: 'reject',
+          rejectionReason: rejectionReason.trim(),
+          adminId: judgeData.id
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        success('Studio rejected and they have been notified.', 6000);
+        fetchData(); // Refresh the data
+      } else {
+        error(data.error || 'An unknown error occurred while rejecting the studio.', 8000);
+      }
+    } catch (err) {
+      console.error('Error rejecting studio:', err);
+      error('Unable to reject studio. Please check your connection and try again.', 8000);
+    }
+  };
+
   const handleLogout = () => {
     localStorage.removeItem('judgeSession');
     router.push('/portal/admin');
@@ -472,9 +607,68 @@ export default function AdminDashboard() {
     setCreateJudgeMessage('');
     setAssignmentMessage('');
     setCleanDatabaseMessage('');
+    setEmailTestResults('');
     setShowCreateEventModal(false);
     setShowCreateJudgeModal(false);
     setShowAssignJudgeModal(false);
+    setShowEmailTestModal(false);
+  };
+
+  // Email testing functions
+  const handleTestEmailConnection = async () => {
+    setIsTestingEmail(true);
+    setEmailTestResults('');
+    
+    try {
+      const response = await fetch('/api/email/test');
+      const data = await response.json();
+      
+      if (data.success) {
+        setEmailTestResults('✅ SMTP Connection successful! Email system is working properly.');
+      } else {
+        setEmailTestResults(`❌ SMTP Connection failed: ${data.error}`);
+      }
+    } catch (error) {
+      setEmailTestResults('❌ Failed to test email connection. Please check server logs.');
+    } finally {
+      setIsTestingEmail(false);
+    }
+  };
+
+  const handleSendTestEmail = async () => {
+    if (!testEmail) {
+      setEmailTestResults('❌ Please enter an email address to test.');
+      return;
+    }
+
+    setIsTestingEmail(true);
+    setEmailTestResults('');
+    
+    try {
+      const response = await fetch('/api/email/test', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: testEmail,
+          name: 'Test User'
+        })
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        setEmailTestResults(`✅ Test email sent successfully to ${testEmail}! Check the inbox.`);
+        setTestEmail('');
+      } else {
+        setEmailTestResults(`❌ Failed to send test email: ${data.error}`);
+      }
+    } catch (error) {
+      setEmailTestResults('❌ Failed to send test email. Please check server logs.');
+    } finally {
+      setIsTestingEmail(false);
+    }
   };
 
   useEffect(() => {
@@ -539,6 +733,13 @@ export default function AdminDashboard() {
                 <span className="text-xs sm:text-sm font-medium text-gray-700">System Online</span>
               </div>
               <button
+                onClick={() => setShowEmailTestModal(true)}
+                className="inline-flex items-center space-x-1 sm:space-x-2 px-3 sm:px-5 py-2 sm:py-2.5 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg sm:rounded-xl hover:from-green-600 hover:to-emerald-700 transition-all duration-200 transform hover:scale-105 shadow-lg text-sm sm:text-base"
+              >
+                <span className="text-sm sm:text-base">📧</span>
+                <span className="font-medium">Email Test</span>
+              </button>
+              <button
                 onClick={handleCleanDatabase}
                 disabled={isCleaningDatabase}
                 className="inline-flex items-center space-x-1 sm:space-x-2 px-3 sm:px-5 py-2 sm:py-2.5 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-lg sm:rounded-xl hover:from-red-600 hover:to-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 transform hover:scale-105 shadow-lg text-sm sm:text-base"
@@ -600,7 +801,9 @@ export default function AdminDashboard() {
               { id: 'events', label: 'Events', icon: '🏆', color: 'indigo' },
               { id: 'judges', label: 'Judges', icon: '👨‍⚖️', color: 'purple' },
               { id: 'assignments', label: 'Assignments', icon: '🔗', color: 'pink' },
-              { id: 'dancers', label: 'Dancers', icon: '💃', color: 'rose' }
+              { id: 'dancers', label: 'Dancers', icon: '💃', color: 'rose' },
+              { id: 'studios', label: 'Studios', icon: '🏢', color: 'orange' },
+              { id: 'relationships', label: 'Relationships', icon: '🤝', color: 'teal' }
             ].map((tab) => (
                 <button
                   key={tab.id}
@@ -1096,6 +1299,366 @@ export default function AdminDashboard() {
             </div>
           </div>
         )}
+
+        {/* Studios Tab - New */}
+        {activeTab === 'studios' && (
+          <div className="space-y-8 animate-fadeIn">
+            {/* Enhanced Studios List */}
+            <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl overflow-hidden border border-orange-100">
+              <div className="px-6 py-4 bg-gradient-to-r from-orange-500/10 to-red-500/10 border-b border-orange-100">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-8 h-8 bg-gradient-to-br from-orange-500 to-red-600 rounded-lg flex items-center justify-center">
+                      <span className="text-white text-sm">🏢</span>
+                    </div>
+                    <h2 className="text-xl font-bold text-gray-900">Studio Registrations</h2>
+                    <div className="px-3 py-1 bg-orange-100 text-orange-800 rounded-full text-sm font-medium">
+                      {studios.filter(s => {
+                        const matchesSearch = !studioSearchTerm || 
+                          s.name.toLowerCase().includes(studioSearchTerm.toLowerCase()) ||
+                          s.email.toLowerCase().includes(studioSearchTerm.toLowerCase()) ||
+                          s.registrationNumber.toLowerCase().includes(studioSearchTerm.toLowerCase());
+                        const matchesFilter = studioStatusFilter === 'all' ||
+                          (studioStatusFilter === 'pending' && !s.approved && !s.rejectionReason) ||
+                          (studioStatusFilter === 'approved' && s.approved) ||
+                          (studioStatusFilter === 'rejected' && s.rejectionReason);
+                        return matchesSearch && matchesFilter;
+                      }).length} of {studios.length} studios
+                    </div>
+                  </div>
+                  
+                  {/* Search and Filter Controls */}
+                  <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+                    <div className="relative">
+                      <input
+                        type="text"
+                        placeholder="Search studios..."
+                        value={studioSearchTerm}
+                        onChange={(e) => setStudioSearchTerm(e.target.value)}
+                        className="w-full sm:w-64 px-4 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-sm"
+                      />
+                      <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                        <span className="text-gray-400">🔍</span>
+                      </div>
+                    </div>
+                    
+                    <select
+                      value={studioStatusFilter}
+                      onChange={(e) => setStudioStatusFilter(e.target.value as any)}
+                      className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-sm"
+                    >
+                      <option value="all">All Status</option>
+                      <option value="pending">⏳ Pending</option>
+                      <option value="approved">✅ Approved</option>
+                      <option value="rejected">❌ Rejected</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {(() => {
+                // Filter and sort studios
+                const filteredStudios = studios
+                  .filter(s => {
+                    const matchesSearch = !studioSearchTerm || 
+                      s.name.toLowerCase().includes(studioSearchTerm.toLowerCase()) ||
+                      s.email.toLowerCase().includes(studioSearchTerm.toLowerCase()) ||
+                      s.registrationNumber.toLowerCase().includes(studioSearchTerm.toLowerCase());
+                    const matchesFilter = studioStatusFilter === 'all' ||
+                      (studioStatusFilter === 'pending' && !s.approved && !s.rejectionReason) ||
+                      (studioStatusFilter === 'approved' && s.approved) ||
+                      (studioStatusFilter === 'rejected' && s.rejectionReason);
+                    return matchesSearch && matchesFilter;
+                  })
+                  .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()); // Sort by newest first
+
+                return filteredStudios.length === 0 ? (
+                  <div className="text-center py-12 text-gray-500">
+                    <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
+                      <span className="text-2xl">🏢</span>
+                    </div>
+                    <h3 className="text-lg font-medium mb-2">
+                      {studios.length === 0 ? 'No studio registrations yet' : 'No studios match your filters'}
+                    </h3>
+                    <p className="text-sm mb-4">
+                      {studios.length === 0 
+                        ? 'Dance studios will appear here after they register'
+                        : 'Try adjusting your search or filter criteria'
+                      }
+                    </p>
+                    {studios.length > 0 && (
+                      <button
+                        onClick={() => {
+                          setStudioSearchTerm('');
+                          setStudioStatusFilter('all');
+                        }}
+                        className="inline-flex items-center space-x-2 px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors"
+                      >
+                        <span>🔄</span>
+                        <span>Clear Filters</span>
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-gray-50/80">
+                        <tr>
+                          <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Studio</th>
+                          <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Contact</th>
+                          <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Registration</th>
+                          <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Status</th>
+                          <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white/50 divide-y divide-gray-200">
+                        {filteredStudios.map((studio) => (
+                          <tr key={studio.id} className="hover:bg-orange-50/50 transition-colors duration-200">
+                            <td className="px-6 py-4">
+                              <div>
+                                <div className="text-sm font-bold text-gray-900">{studio.name}</div>
+                                <div className="text-xs text-gray-500">Reg: {studio.registrationNumber}</div>
+                                <div className="text-xs text-gray-500">Registered: {new Date(studio.createdAt).toLocaleDateString()}</div>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4">
+                              <div className="text-sm font-medium text-gray-900">{studio.email}</div>
+                            </td>
+                            <td className="px-6 py-4">
+                              <div className="text-sm font-medium text-gray-900">{studio.registrationNumber}</div>
+                              <div className="text-xs text-gray-500">{new Date(studio.createdAt).toLocaleDateString()}</div>
+                            </td>
+                            <td className="px-6 py-4">
+                              {studio.approved ? (
+                                <div>
+                                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                    ✅ Approved
+                                  </span>
+                                  {studio.approvedAt && (
+                                    <div className="text-xs text-gray-500 mt-1">
+                                      {new Date(studio.approvedAt).toLocaleDateString()}
+                                    </div>
+                                  )}
+                                </div>
+                              ) : studio.rejectionReason ? (
+                                <div>
+                                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                                    ❌ Rejected
+                                  </span>
+                                  <div className="text-xs text-gray-500 mt-1" title={studio.rejectionReason}>
+                                    {studio.rejectionReason.length > 30 
+                                      ? studio.rejectionReason.substring(0, 30) + '...' 
+                                      : studio.rejectionReason}
+                                  </div>
+                                </div>
+                              ) : (
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                                  ⏳ Pending
+                                </span>
+                              )}
+                            </td>
+                            <td className="px-6 py-4">
+                              {!studio.approved && !studio.rejectionReason ? (
+                                <div className="flex space-x-2">
+                                  <button
+                                    onClick={() => handleApproveStudio(studio.id)}
+                                    className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors"
+                                  >
+                                    ✅ Approve
+                                  </button>
+                                  <button
+                                    onClick={() => handleRejectStudio(studio.id)}
+                                    className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors"
+                                  >
+                                    ❌ Reject
+                                  </button>
+                                </div>
+                              ) : (
+                                <span className="text-xs text-gray-400">No actions</span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+        )}
+
+        {/* Relationships Tab - New */}
+        {activeTab === 'relationships' && (
+          <div className="space-y-8 animate-fadeIn">
+            {/* Enhanced Studio Applications List */}
+            <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl overflow-hidden border border-teal-100">
+              <div className="px-6 py-4 bg-gradient-to-r from-teal-500/10 to-cyan-500/10 border-b border-teal-100">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-8 h-8 bg-gradient-to-br from-teal-500 to-cyan-600 rounded-lg flex items-center justify-center">
+                      <span className="text-white text-sm">🤝</span>
+                    </div>
+                    <h2 className="text-xl font-bold text-gray-900">Dancer-Studio Relationships</h2>
+                    <div className="px-3 py-1 bg-teal-100 text-teal-800 rounded-full text-sm font-medium">
+                      {studioApplications.filter(a => {
+                        const matchesFilter = relationshipStatusFilter === 'all' || a.status === relationshipStatusFilter;
+                        return matchesFilter;
+                      }).length} of {studioApplications.length} applications
+                    </div>
+                  </div>
+                  
+                  {/* Filter Controls */}
+                  <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+                    <select
+                      value={relationshipStatusFilter}
+                      onChange={(e) => setRelationshipStatusFilter(e.target.value as any)}
+                      className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 text-sm"
+                    >
+                      <option value="all">All Applications</option>
+                      <option value="pending">⏳ Pending</option>
+                      <option value="accepted">✅ Accepted</option>
+                      <option value="rejected">❌ Rejected</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {(() => {
+                // Filter and sort applications
+                const filteredApplications = studioApplications
+                  .filter(a => {
+                    const matchesFilter = relationshipStatusFilter === 'all' || a.status === relationshipStatusFilter;
+                    return matchesFilter;
+                  })
+                  .sort((a, b) => new Date(b.appliedAt).getTime() - new Date(a.appliedAt).getTime()); // Sort by newest first
+
+                return filteredApplications.length === 0 ? (
+                  <div className="text-center py-12 text-gray-500">
+                    <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
+                      <span className="text-2xl">🤝</span>
+                    </div>
+                    <h3 className="text-lg font-medium mb-2">
+                      {studioApplications.length === 0 ? 'No applications yet' : 'No applications match your filter'}
+                    </h3>
+                    <p className="text-sm mb-4">
+                      {studioApplications.length === 0 
+                        ? 'Dancer-studio applications will appear here when dancers apply to studios'
+                        : 'Try adjusting your filter criteria'
+                      }
+                    </p>
+                    {studioApplications.length > 0 && (
+                      <button
+                        onClick={() => setRelationshipStatusFilter('all')}
+                        className="inline-flex items-center space-x-2 px-4 py-2 bg-teal-500 text-white rounded-lg hover:bg-teal-600 transition-colors"
+                      >
+                        <span>🔄</span>
+                        <span>Clear Filters</span>
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-gray-50/80">
+                        <tr>
+                          <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Dancer</th>
+                          <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Studio</th>
+                          <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Applied</th>
+                          <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Status</th>
+                          <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Response</th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white/50 divide-y divide-gray-200">
+                        {filteredApplications.map((application) => (
+                          <tr key={application.id} className="hover:bg-teal-50/50 transition-colors duration-200">
+                            <td className="px-6 py-4">
+                              <div>
+                                <div className="text-sm font-bold text-gray-900">{application.dancer.name}</div>
+                                <div className="text-xs text-gray-500">EODSA: {application.dancer.eodsaId}</div>
+                                <div className="text-xs text-gray-500">Age: {application.dancer.age}</div>
+                                <div className="flex items-center mt-1">
+                                  {application.dancer.approved ? (
+                                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                                      ✅ Admin Approved
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-800">
+                                      ⏳ Pending Admin
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4">
+                              <div>
+                                <div className="text-sm font-bold text-gray-900">{application.studio.name}</div>
+                                <div className="text-xs text-gray-500">Reg: {application.studio.registrationNumber}</div>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4">
+                              <div className="text-sm font-medium text-gray-900">
+                                {new Date(application.appliedAt).toLocaleDateString()}
+                              </div>
+                              <div className="text-xs text-gray-500">
+                                {new Date(application.appliedAt).toLocaleTimeString()}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4">
+                              {application.status === 'pending' && (
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                                  ⏳ Pending
+                                </span>
+                              )}
+                              {application.status === 'accepted' && (
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                  ✅ Accepted
+                                </span>
+                              )}
+                              {application.status === 'rejected' && (
+                                <div>
+                                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                                    ❌ Rejected
+                                  </span>
+                                  {application.rejectionReason && (
+                                    <div className="text-xs text-gray-500 mt-1" title={application.rejectionReason}>
+                                      {application.rejectionReason.length > 30 
+                                        ? application.rejectionReason.substring(0, 30) + '...' 
+                                        : application.rejectionReason}
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                              {application.status === 'withdrawn' && (
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                                  🔄 Withdrawn
+                                </span>
+                              )}
+                            </td>
+                            <td className="px-6 py-4">
+                              {application.respondedAt ? (
+                                <div>
+                                  <div className="text-sm font-medium text-gray-900">
+                                    {new Date(application.respondedAt).toLocaleDateString()}
+                                  </div>
+                                  <div className="text-xs text-gray-500">
+                                    {new Date(application.respondedAt).toLocaleTimeString()}
+                                  </div>
+                                </div>
+                              ) : (
+                                <span className="text-xs text-gray-400">No response yet</span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Modal Components */}
@@ -1516,6 +2079,135 @@ export default function AdminDashboard() {
         </div>
             </form>
       </div>
+        </div>
+      )}
+
+      {/* Email Test Modal */}
+      {showEmailTestModal && (
+        <div className="fixed inset-0 bg-white/20 backdrop-blur-md flex items-center justify-center p-4 z-50">
+          <div className="bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-white/30">
+            <div className="p-6 border-b border-gray-200/50">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <div className="w-10 h-10 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl flex items-center justify-center">
+                    <span className="text-white text-lg">📧</span>
+                  </div>
+                  <h2 className="text-xl font-bold text-gray-900">Email System Test</h2>
+                </div>
+                <button
+                  onClick={() => setShowEmailTestModal(false)}
+                  className="text-gray-400 hover:text-gray-600 p-2 rounded-lg hover:bg-gray-100/50 transition-colors"
+                >
+                  <span className="text-2xl">×</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="p-6 space-y-6">
+              {/* SMTP Connection Test */}
+              <div className="bg-gray-50 rounded-xl p-4">
+                <h3 className="text-lg font-semibold text-gray-900 mb-3">SMTP Connection Test</h3>
+                <p className="text-gray-600 mb-4">Test the connection to your email server (mail.upstreamcreatives.co.za)</p>
+                <button
+                  onClick={handleTestEmailConnection}
+                  disabled={isTestingEmail}
+                  className="inline-flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg hover:from-blue-600 hover:to-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 font-medium"
+                >
+                  {isTestingEmail ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                      <span>Testing...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>🔗</span>
+                      <span>Test Connection</span>
+                    </>
+                  )}
+                </button>
+              </div>
+
+              {/* Send Test Email */}
+              <div className="bg-gray-50 rounded-xl p-4">
+                <h3 className="text-lg font-semibold text-gray-900 mb-3">Send Test Email</h3>
+                <p className="text-gray-600 mb-4">Send a test registration email to verify email delivery</p>
+                <div className="flex space-x-3">
+                  <input
+                    type="email"
+                    value={testEmail}
+                    onChange={(e) => setTestEmail(e.target.value)}
+                    placeholder="Enter email address to test"
+                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all"
+                  />
+                  <button
+                    onClick={handleSendTestEmail}
+                    disabled={isTestingEmail || !testEmail}
+                    className="inline-flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg hover:from-green-600 hover:to-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 font-medium"
+                  >
+                    {isTestingEmail ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                        <span>Sending...</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>📤</span>
+                        <span>Send Test</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              {/* Email Configuration Info */}
+              <div className="bg-blue-50 rounded-xl p-4">
+                <h3 className="text-lg font-semibold text-blue-900 mb-3">Current Email Configuration</h3>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-blue-700 font-medium">SMTP Host:</span>
+                    <span className="text-blue-900">mail.upstreamcreatives.co.za</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-blue-700 font-medium">Port:</span>
+                    <span className="text-blue-900">587 (STARTTLS)</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-blue-700 font-medium">From Address:</span>
+                    <span className="text-blue-900">devops@upstreamcreatives.co.za</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-blue-700 font-medium">Security:</span>
+                    <span className="text-blue-900">STARTTLS</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Test Results */}
+              {emailTestResults && (
+                <div className={`p-4 rounded-xl font-medium animate-slideIn ${
+                  emailTestResults.includes('✅') 
+                    ? 'bg-green-50 text-green-700 border border-green-200' 
+                    : 'bg-red-50 text-red-700 border border-red-200'
+                }`}>
+                  <div className="flex items-start space-x-2">
+                    <span className="text-lg mt-0.5">
+                      {emailTestResults.includes('✅') ? '✅' : '❌'}
+                    </span>
+                    <span className="flex-1">{emailTestResults}</span>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex justify-end space-x-4 pt-6 border-t border-gray-200">
+                <button
+                  onClick={() => setShowEmailTestModal(false)}
+                  className="px-6 py-3 border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 transition-colors font-medium"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
