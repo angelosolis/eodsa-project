@@ -172,7 +172,7 @@ export default function AdminDashboard() {
   useEffect(() => {
     const session = localStorage.getItem('judgeSession');
     if (!session) {
-      router.push('/portal/judge');
+      router.push('/portal/admin');
       return;
     }
     
@@ -480,7 +480,7 @@ export default function AdminDashboard() {
     }
   };
 
-  const handleRejectDancer = async (dancerId: string) => {
+  const handleRejectDancer = (dancerId: string) => {
     showPrompt(
       'Please provide a reason for rejection:',
       (rejectionReason) => {
@@ -569,7 +569,7 @@ export default function AdminDashboard() {
     }
   };
 
-  const handleRejectStudio = async (studioId: string) => {
+  const handleRejectStudio = (studioId: string) => {
     showPrompt(
       'Please provide a reason for rejection:',
       (rejectionReason) => {

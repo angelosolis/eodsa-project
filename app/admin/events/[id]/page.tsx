@@ -75,7 +75,7 @@ export default function EventParticipantsPage() {
   useEffect(() => {
     const session = localStorage.getItem('judgeSession');
     if (!session) {
-      router.push('/portal/judge');
+      router.push('/portal/admin');
       return;
     }
     
