@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useAlert } from '@/components/ui/custom-alert';
 
 interface DancerSession {
   id: string;
@@ -42,6 +43,7 @@ export default function DancerDashboardPage() {
   const [showStudioBrowser, setShowStudioBrowser] = useState(false);
   const [applyingToStudio, setApplyingToStudio] = useState<string | null>(null);
   const router = useRouter();
+  const { showConfirm } = useAlert();
 
   useEffect(() => {
     // Check for dancer session
@@ -115,9 +117,15 @@ export default function DancerDashboardPage() {
   };
 
   const handleWithdrawApplication = async (applicationId: string) => {
-    if (!confirm('Are you sure you want to withdraw this application?')) {
-      return;
-    }
+    showConfirm(
+      'Are you sure you want to withdraw this application?',
+      () => {
+        performWithdrawApplication(applicationId);
+      }
+    );
+  };
+
+  const performWithdrawApplication = async (applicationId: string) => {
 
     try {
       const response = await fetch(`/api/dancers/applications/${applicationId}`, {

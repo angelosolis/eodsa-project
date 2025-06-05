@@ -77,8 +77,38 @@ export async function POST(request: NextRequest) {
       message: 'Dancer added successfully',
       dancer: result
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Add dancer error:', error);
+    
+    // Handle specific database errors with user-friendly messages
+    if (error.message) {
+      if (error.message.includes('already exists') || error.message.includes('duplicate key') || error.message.includes('UNIQUE constraint')) {
+        if (error.message.includes('national') || error.message.includes('nationalId')) {
+          return NextResponse.json(
+            { error: 'A dancer with this National ID is already registered' },
+            { status: 409 }
+          );
+        }
+        return NextResponse.json(
+          { error: 'This dancer is already registered in the studio' },
+          { status: 409 }
+        );
+      }
+      
+      if (error.message.includes('not found')) {
+        return NextResponse.json(
+          { error: 'Studio not found' },
+          { status: 404 }
+        );
+      }
+      
+      // Return the specific error message from the database layer
+      return NextResponse.json(
+        { error: error.message },
+        { status: 400 }
+      );
+    }
+    
     return NextResponse.json(
       { error: 'Failed to add dancer' },
       { status: 500 }

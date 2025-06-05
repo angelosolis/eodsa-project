@@ -44,8 +44,25 @@ export async function POST(request: Request) {
       success: true,
       judge: judgeSession
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Authentication error:', error);
+    
+    // Handle specific authentication errors
+    if (error.message) {
+      if (error.message.includes('not found') || error.message.includes('Invalid')) {
+        return NextResponse.json(
+          { success: false, error: 'Invalid email or password' },
+          { status: 401 }
+        );
+      }
+      
+      // For other specific errors, return the message
+      return NextResponse.json(
+        { success: false, error: error.message },
+        { status: 400 }
+      );
+    }
+    
     return NextResponse.json(
       { success: false, error: 'Authentication failed' },
       { status: 500 }

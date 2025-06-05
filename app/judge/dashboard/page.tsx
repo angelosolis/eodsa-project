@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { useAlert } from '@/components/ui/custom-alert';
 
 interface Assignment {
   id: string;
@@ -74,6 +75,7 @@ export default function JudgeDashboard() {
   const [searchTerm, setSearchTerm] = useState('');
   const [itemNumberSearch, setItemNumberSearch] = useState('');
   const router = useRouter();
+  const { showAlert } = useAlert();
 
   useEffect(() => {
     const session = localStorage.getItem('judgeSession');
@@ -192,7 +194,7 @@ export default function JudgeDashboard() {
     if (performance) {
       handleStartScoring(performance);
     } else {
-      alert(`No performance found with item number ${itemNumber}`);
+      showAlert(`No performance found with item number ${itemNumber}`, 'warning');
     }
   };
 

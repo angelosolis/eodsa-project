@@ -61,8 +61,31 @@ export async function POST(request: NextRequest) {
       studioId: result.id,
       registrationNumber: result.registrationNumber
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Studio registration error:', error);
+    
+    // Handle specific database errors with user-friendly messages
+    if (error.message) {
+      if (error.message.includes('already exists') || error.message.includes('duplicate key') || error.message.includes('UNIQUE constraint')) {
+        if (error.message.includes('email')) {
+          return NextResponse.json(
+            { error: 'A studio with this email address is already registered' },
+            { status: 409 }
+          );
+        }
+        return NextResponse.json(
+          { error: 'This studio is already registered' },
+          { status: 409 }
+        );
+      }
+      
+      // Return the specific error message from the database layer
+      return NextResponse.json(
+        { error: error.message },
+        { status: 400 }
+      );
+    }
+    
     return NextResponse.json(
       { error: 'Studio registration failed' },
       { status: 500 }

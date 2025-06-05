@@ -70,8 +70,32 @@ export async function POST(request: NextRequest) {
       success: true,
       message: `Application ${action}ed successfully`
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error responding to application:', error);
+    
+    // Handle specific database errors with user-friendly messages
+    if (error.message) {
+      if (error.message.includes('not found')) {
+        return NextResponse.json(
+          { error: 'Application not found' },
+          { status: 404 }
+        );
+      }
+      
+      if (error.message.includes('already processed') || error.message.includes('already responded')) {
+        return NextResponse.json(
+          { error: 'This application has already been processed' },
+          { status: 409 }
+        );
+      }
+      
+      // Return the specific error message from the database layer
+      return NextResponse.json(
+        { error: error.message },
+        { status: 400 }
+      );
+    }
+    
     return NextResponse.json(
       { error: 'Failed to respond to application' },
       { status: 500 }

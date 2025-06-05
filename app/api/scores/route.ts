@@ -68,8 +68,39 @@ export async function POST(request: Request) {
         message: 'Score submitted successfully'
       });
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error submitting score:', error);
+    
+    // Handle specific database errors with user-friendly messages
+    if (error.message) {
+      if (error.message.includes('not found')) {
+        return NextResponse.json(
+          { success: false, error: 'Performance or judge not found' },
+          { status: 404 }
+        );
+      }
+      
+      if (error.message.includes('FOREIGN KEY')) {
+        return NextResponse.json(
+          { success: false, error: 'Invalid judge or performance ID' },
+          { status: 400 }
+        );
+      }
+      
+      if (error.message.includes('CHECK constraint') || error.message.includes('score')) {
+        return NextResponse.json(
+          { success: false, error: 'Invalid score values. Scores must be between 1 and 10' },
+          { status: 400 }
+        );
+      }
+      
+      // Return the specific error message from the database layer
+      return NextResponse.json(
+        { success: false, error: error.message },
+        { status: 400 }
+      );
+    }
+    
     return NextResponse.json(
       { success: false, error: 'Failed to submit score' },
       { status: 500 }

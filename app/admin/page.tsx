@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { REGIONS, PERFORMANCE_TYPES, AGE_CATEGORIES } from '@/lib/types';
 import Link from 'next/link';
 import { useToast } from '@/components/ui/simple-toast';
+import { useAlert } from '@/components/ui/custom-alert';
 
 interface Event {
   id: string;
@@ -104,6 +105,7 @@ export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState<'events' | 'judges' | 'assignments' | 'dancers' | 'studios' | 'relationships'>('events');
   const [isLoading, setIsLoading] = useState(true);
   const { success, error, warning, info } = useToast();
+  const { showAlert, showConfirm, showPrompt } = useAlert();
   
   // Event creation state
   const [newEvent, setNewEvent] = useState({
@@ -382,8 +384,8 @@ export default function AdminDashboard() {
       return;
     }
 
-    // Confirm the action
-    const confirmed = window.confirm(
+    // Confirm the action with custom modal
+    showConfirm(
       '⚠️ WARNING: This will permanently delete ALL data except admin users!\n\n' +
       'This includes:\n' +
       '• All events\n' +
@@ -392,12 +394,15 @@ export default function AdminDashboard() {
       '• All scores and rankings\n' +
       '• All judge assignments\n' +
       '• All non-admin judges\n\n' +
-      'Are you absolutely sure you want to continue?'
+      'Are you absolutely sure you want to continue?',
+      () => {
+        // Confirmed - proceed with cleanup
+        performCleanDatabase();
+      }
     );
+  };
 
-    if (!confirmed) {
-      return;
-    }
+  const performCleanDatabase = async () => {
 
     setIsCleaningDatabase(true);
     setCleanDatabaseMessage('');
@@ -443,7 +448,7 @@ export default function AdminDashboard() {
     try {
       const session = localStorage.getItem('judgeSession');
       if (!session) {
-        alert('Session expired. Please log in again.');
+        showAlert('Session expired. Please log in again.', 'error');
         return;
       }
 
@@ -464,23 +469,33 @@ export default function AdminDashboard() {
       const data = await response.json();
 
       if (data.success) {
-        alert('✅ Dancer approved successfully! They can now apply to studios.');
+        showAlert('Dancer approved successfully! They can now apply to studios.', 'success');
         fetchData(); // Refresh the data
       } else {
-        alert(`❌ Error: ${data.error || 'Unknown error occurred'}`);
+        showAlert(`Error: ${data.error || 'Unknown error occurred'}`, 'error');
       }
     } catch (error) {
       console.error('Error approving dancer:', error);
-      alert('❌ Error approving dancer. Please check your connection and try again.');
+      showAlert('Error approving dancer. Please check your connection and try again.', 'error');
     }
   };
 
   const handleRejectDancer = async (dancerId: string) => {
-    const rejectionReason = prompt('Please provide a reason for rejection:');
-    if (!rejectionReason || rejectionReason.trim() === '') {
-      alert('Rejection reason is required.');
-      return;
-    }
+    showPrompt(
+      'Please provide a reason for rejection:',
+      (rejectionReason) => {
+        if (!rejectionReason || rejectionReason.trim() === '') {
+          showAlert('Rejection reason is required.', 'warning');
+          return;
+        }
+        performDancerRejection(dancerId, rejectionReason.trim());
+      },
+      undefined,
+      'Enter rejection reason...'
+    );
+  };
+
+  const performDancerRejection = async (dancerId: string, rejectionReason: string) => {
 
     try {
       const session = localStorage.getItem('judgeSession');
@@ -499,7 +514,7 @@ export default function AdminDashboard() {
         body: JSON.stringify({
           dancerId,
           action: 'reject',
-          rejectionReason: rejectionReason.trim(),
+          rejectionReason: rejectionReason,
           adminId: judgeData.id
         }),
       });
@@ -507,14 +522,14 @@ export default function AdminDashboard() {
       const data = await response.json();
 
       if (data.success) {
-        alert('✅ Dancer registration rejected.');
+        showAlert('Dancer registration rejected.', 'success');
         fetchData(); // Refresh the data
       } else {
-        alert(`❌ Error: ${data.error || 'Unknown error occurred'}`);
+        showAlert(`Error: ${data.error || 'Unknown error occurred'}`, 'error');
       }
     } catch (error) {
       console.error('Error rejecting dancer:', error);
-      alert('❌ Error rejecting dancer. Please check your connection and try again.');
+      showAlert('Error rejecting dancer. Please check your connection and try again.', 'error');
     }
   };
 
@@ -555,11 +570,21 @@ export default function AdminDashboard() {
   };
 
   const handleRejectStudio = async (studioId: string) => {
-    const rejectionReason = prompt('Please provide a reason for rejection:');
-    if (!rejectionReason || rejectionReason.trim() === '') {
-      warning('Please provide a reason for rejecting this studio registration.', 5000);
-      return;
-    }
+    showPrompt(
+      'Please provide a reason for rejection:',
+      (rejectionReason) => {
+        if (!rejectionReason || rejectionReason.trim() === '') {
+          showAlert('Please provide a reason for rejecting this studio registration.', 'warning');
+          return;
+        }
+        performStudioRejection(studioId, rejectionReason.trim());
+      },
+      undefined,
+      'Enter rejection reason...'
+    );
+  };
+
+  const performStudioRejection = async (studioId: string, rejectionReason: string) => {
 
     try {
       const session = localStorage.getItem('judgeSession');

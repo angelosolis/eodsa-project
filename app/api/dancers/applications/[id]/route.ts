@@ -3,12 +3,12 @@ import { unifiedDb, initializeDatabase } from '@/lib/database';
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     await initializeDatabase();
     
-    const applicationId = params.id;
+    const { id: applicationId } = await params;
 
     if (!applicationId) {
       return NextResponse.json(

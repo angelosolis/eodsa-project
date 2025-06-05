@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { useAlert } from '@/components/ui/custom-alert';
 
 interface Event {
   id: string;
@@ -69,6 +70,7 @@ export default function EventParticipantsPage() {
   const [error, setError] = useState('');
   const [approvingEntries, setApprovingEntries] = useState<Set<string>>(new Set());
   const [isExporting, setIsExporting] = useState(false);
+  const { showAlert } = useAlert();
 
   useEffect(() => {
     const session = localStorage.getItem('judgeSession');
@@ -139,11 +141,11 @@ export default function EventParticipantsPage() {
         loadEventData(); // Reload data
       } else {
         const errorData = await response.json();
-        alert(`Failed to approve entry: ${errorData.error || 'Unknown error'}`);
+        showAlert(`Failed to approve entry: ${errorData.error || 'Unknown error'}`, 'error');
       }
     } catch (error) {
       console.error('Error approving entry:', error);
-      alert('Failed to approve entry. Please try again.');
+      showAlert('Failed to approve entry. Please try again.', 'error');
     } finally {
       // Remove from approving set to re-enable button
       setApprovingEntries(prev => {
@@ -200,7 +202,7 @@ export default function EventParticipantsPage() {
 
       // Convert to CSV format
       if (exportData.length === 0) {
-        alert('No data to export');
+        showAlert('No data to export', 'warning');
         return;
       }
 
@@ -228,7 +230,7 @@ export default function EventParticipantsPage() {
       document.body.removeChild(link);
     } catch (error) {
       console.error('Export failed:', error);
-      alert('Failed to export data. Please try again.');
+      showAlert('Failed to export data. Please try again.', 'error');
     } finally {
       setIsExporting(false);
     }

@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useSearchParams, useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { AGE_CATEGORIES, MASTERY_LEVELS, ITEM_STYLES, TIME_LIMITS, calculateEODSAFee } from '@/lib/types';
+import { useAlert } from '@/components/ui/custom-alert';
 
 interface Event {
   id: string;
@@ -78,6 +79,7 @@ export default function PerformanceTypeEntryPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [step, setStep] = useState(1); // 1: Event Selection, 2: Details, 3: Payment, 4: Review
+  const { showAlert } = useAlert();
 
   useEffect(() => {
     if (eodsaId) {
@@ -185,7 +187,7 @@ export default function PerformanceTypeEntryPage() {
         if (prev.participantIds.length < limits.max) {
           newParticipantIds = [...prev.participantIds, dancerId];
         } else {
-          alert(`Maximum ${limits.max} participants allowed for ${performanceType}`);
+          showAlert(`Maximum ${limits.max} participants allowed for ${performanceType}`, 'warning');
           return prev;
         }
       }
@@ -225,14 +227,14 @@ export default function PerformanceTypeEntryPage() {
       const limits = getParticipantLimits();
       
       if (formData.participantIds.length < limits.min) {
-        alert(`${performanceType} requires at least ${limits.min} participant(s)`);
+        showAlert(`${performanceType} requires at least ${limits.min} participant(s)`, 'warning');
         setIsSubmitting(false);
         return;
       }
 
       if (!validateDuration(formData.estimatedDuration)) {
         const maxTime = TIME_LIMITS[performanceType as keyof typeof TIME_LIMITS];
-        alert(`${performanceType} performances must be ${maxTime} minutes or less`);
+        showAlert(`${performanceType} performances must be ${maxTime} minutes or less`, 'warning');
         setIsSubmitting(false);
         return;
       }
@@ -266,11 +268,11 @@ export default function PerformanceTypeEntryPage() {
         setSubmitted(true);
       } else {
         const error = await response.json();
-        alert(`Entry failed: ${error.error}`);
+        showAlert(`Entry failed: ${error.error}`, 'error');
       }
     } catch (error) {
       console.error('Entry error:', error);
-      alert('Entry failed. Please try again.');
+      showAlert('Entry failed. Please try again.', 'error');
     } finally {
       setIsSubmitting(false);
     }
@@ -278,20 +280,20 @@ export default function PerformanceTypeEntryPage() {
 
   const nextStep = () => {
     if (step === 1 && !formData.eventId) {
-      alert('Please select an event first');
+      showAlert('Please select an event first', 'warning');
       return;
     }
     if (step === 2 && formData.participantIds.length === 0) {
-      alert('Please select participants');
+      showAlert('Please select participants', 'warning');
       return;
     }
     if (step === 2 && !formData.itemName) {
-      alert('Please fill in all performance details');
+      showAlert('Please fill in all performance details', 'warning');
       return;
     }
     if (step === 2 && !validateDuration(formData.estimatedDuration)) {
       const maxTime = TIME_LIMITS[performanceType as keyof typeof TIME_LIMITS];
-      alert(`${performanceType} performances must be ${maxTime} minutes or less`);
+      showAlert(`${performanceType} performances must be ${maxTime} minutes or less`, 'warning');
       return;
     }
     setStep(prev => Math.min(prev + 1, 4));

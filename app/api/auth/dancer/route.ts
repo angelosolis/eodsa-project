@@ -45,8 +45,31 @@ export async function POST(request: NextRequest) {
       }
     });
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Dancer authentication error:', error);
+    
+    // Handle specific authentication errors
+    if (error.message) {
+      if (error.message.includes('not found')) {
+        return NextResponse.json(
+          { error: 'Dancer not found with the provided EODSA ID' },
+          { status: 404 }
+        );
+      }
+      if (error.message.includes('invalid credentials') || error.message.includes('Authentication failed')) {
+        return NextResponse.json(
+          { error: 'Invalid EODSA ID or National ID combination' },
+          { status: 401 }
+        );
+      }
+      
+      // For other specific errors, return the message
+      return NextResponse.json(
+        { error: error.message },
+        { status: 400 }
+      );
+    }
+    
     return NextResponse.json(
       { error: 'Authentication failed' },
       { status: 500 }

@@ -370,7 +370,7 @@ export const emailService = {
       return { success: true };
     } catch (error) {
       console.error('Error sending competition entry email:', error);
-      return { success: false, error: error.message };
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
     }
   },
 
@@ -382,7 +382,7 @@ export const emailService = {
       return { success: true, message: 'SMTP connection verified' };
     } catch (error) {
       console.error('❌ SMTP connection failed:', error);
-      return { success: false, error: error.message };
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
     }
   }
 };

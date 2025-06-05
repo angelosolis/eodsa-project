@@ -184,8 +184,8 @@ export const initializeDatabase = async () => {
         name TEXT NOT NULL,
         date_of_birth TEXT NOT NULL,
         age INTEGER NOT NULL,
-        national_id TEXT NOT NULL,
-        email TEXT,
+        national_id TEXT UNIQUE NOT NULL,
+        email TEXT UNIQUE,
         phone TEXT,
         guardian_name TEXT,
         guardian_email TEXT,
@@ -285,7 +285,7 @@ export const initializeDatabase = async () => {
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
         description TEXT NOT NULL,
-        region TEXT CHECK(region IN ('Gauteng', 'Free State', 'Mpumalanga')) NOT NULL,
+        region TEXT CHECK(region IN ('Gauteng', 'Free State', 'Mpumalanga', 'Western Cape', 'Eastern Cape', 'Northern Cape', 'North West', 'Limpopo', 'KwaZulu-Natal')) NOT NULL,
         age_category TEXT NOT NULL,
         performance_type TEXT CHECK(performance_type IN ('Solo', 'Duet', 'Trio', 'Group')) NOT NULL,
         event_date TEXT NOT NULL,
@@ -462,18 +462,30 @@ export const initializeDatabase = async () => {
       console.log('Default fee schedule inserted');
     }
 
-    // Create default admin user only if no users exist
+    // Create default admin user and judges only if no users exist
     const existingUsers = await sqlClient`SELECT COUNT(*) as count FROM judges` as any[];
     if (existingUsers[0]?.count === 0) {
       const bcrypt = require('bcryptjs');
       const hashedAdminPassword = await bcrypt.hash('admin123', 10);
+      const hashedJudgePassword = await bcrypt.hash('judge123', 10);
       
       await sqlClient`
         INSERT INTO judges (id, name, email, password, is_admin, specialization)
         VALUES 
-          ('admin1', 'System Admin', 'admin@competition.com', ${hashedAdminPassword}, true, NULL)
+          ('admin1', 'System Admin', 'admin@competition.com', ${hashedAdminPassword}, true, NULL),
+          ('judge1', 'Sarah Williams', 'judge@competition.com', ${hashedJudgePassword}, false, '["Ballet", "Contemporary"]'),
+          ('judge2', 'Michael Brown', 'judge2@competition.com', ${hashedJudgePassword}, false, '["Jazz", "Hip Hop"]'),
+          ('judge3', 'Emma Davis', 'judge3@competition.com', ${hashedJudgePassword}, false, '["Tap", "Musical Theatre"]'),
+          ('judge4', 'James Wilson', 'judge4@competition.com', ${hashedJudgePassword}, false, '["African", "Traditional"]'),
+          ('judge5', 'Lisa Thompson', 'judge5@competition.com', ${hashedJudgePassword}, false, '["Contemporary", "Lyrical"]')
       `;
-      console.log('Default admin user created: admin@competition.com / admin123');
+      console.log('Default admin and judges created:');
+      console.log('  - admin@competition.com / admin123 (Admin)');
+      console.log('  - judge@competition.com / judge123 (Judge)');
+      console.log('  - judge2@competition.com / judge123 (Judge)');
+      console.log('  - judge3@competition.com / judge123 (Judge)');
+      console.log('  - judge4@competition.com / judge123 (Judge)');
+      console.log('  - judge5@competition.com / judge123 (Judge)');
     }
 
     console.log('✅ Database initialized successfully - Ready for unified dancer-studio system');
@@ -1403,6 +1415,16 @@ export const studioDb = {
     phone: string;
   }) {
     const sqlClient = getSql();
+    
+    // Check for duplicate email
+    const existingEmail = await sqlClient`
+      SELECT id FROM studios WHERE email = ${studio.email}
+    ` as any[];
+    
+    if (existingEmail.length > 0) {
+      throw new Error('A studio with this email address is already registered');
+    }
+    
     const id = Date.now().toString();
     const registrationNumber = generateStudioRegistrationId();
     const createdAt = new Date().toISOString();
@@ -1765,6 +1787,27 @@ export const unifiedDb = {
     guardianPhone?: string;
   }) {
     const sqlClient = getSql();
+    
+    // Check for duplicate National ID
+    const existingNationalId = await sqlClient`
+      SELECT id FROM dancers WHERE national_id = ${dancer.nationalId}
+    ` as any[];
+    
+    if (existingNationalId.length > 0) {
+      throw new Error('A dancer with this National ID is already registered');
+    }
+    
+    // Check for duplicate email if provided
+    if (dancer.email) {
+      const existingEmail = await sqlClient`
+        SELECT id FROM dancers WHERE email = ${dancer.email}
+      ` as any[];
+      
+      if (existingEmail.length > 0) {
+        throw new Error('A dancer with this email address is already registered');
+      }
+    }
+    
     const id = Date.now().toString() + Math.random().toString(36).substring(2, 8);
     const eodsaId = generateEODSAId();
     const age = this.calculateAge(dancer.dateOfBirth);
@@ -1997,7 +2040,7 @@ export const unifiedDb = {
     const sqlClient = getSql();
     const result = await sqlClient`
       SELECT s.* FROM studios s
-      WHERE s.approved = true 
+      WHERE s.approved_by IS NOT NULL 
       AND s.id NOT IN (
         SELECT studio_id FROM studio_applications 
         WHERE dancer_id = ${dancerId} AND status IN ('pending', 'accepted')
@@ -2032,7 +2075,7 @@ export const unifiedDb = {
       name: row.name,
       email: row.email,
       registrationNumber: row.registration_number,
-      approved: row.approved,
+      approved: row.approved_by !== null,
       approvedBy: row.approved_by,
       approvedAt: row.approved_at,
       rejectionReason: row.rejection_reason,
@@ -2047,7 +2090,7 @@ export const unifiedDb = {
     
     await sqlClient`
       UPDATE studios 
-      SET approved = true, approved_by = ${adminId}, approved_at = ${approvedAt}, rejection_reason = null
+      SET approved_by = ${adminId}, approved_at = ${approvedAt}, rejection_reason = null
       WHERE id = ${studioId}
     `;
   },
