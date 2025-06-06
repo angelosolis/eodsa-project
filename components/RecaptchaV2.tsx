@@ -25,30 +25,78 @@ export const RecaptchaV2 = ({
   const captchaRef = useRef<HTMLDivElement>(null);
   const [isLoaded, setIsLoaded] = useState(false);
   const [widgetId, setWidgetId] = useState<number | null>(null);
+  const [isRendering, setIsRendering] = useState(false);
 
   useEffect(() => {
+    let isMounted = true;
+    
     const loadRecaptcha = () => {
-      if (window.grecaptcha && window.grecaptcha.render && captchaRef.current) {
-        // Clear any existing content first
-        if (captchaRef.current.hasChildNodes()) {
-          captchaRef.current.innerHTML = '';
-        }
+      // Prevent multiple renders and ensure element exists
+      if (isRendering || !captchaRef.current || widgetId !== null) {
+        return;
+      }
+
+      if (window.grecaptcha && window.grecaptcha.render) {
+        setIsRendering(true);
         
-        // Only render if we don't have a widget ID yet
-        if (widgetId === null) {
-          try {
-            const id = window.grecaptcha.render(captchaRef.current, {
-              sitekey: process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY,
-              callback: onVerify,
-              'expired-callback': onExpire,
-              'error-callback': onError,
-              theme: theme,
-              size: size
-            });
-            setWidgetId(id);
-            setIsLoaded(true);
-          } catch (error) {
-            console.error('Error rendering reCAPTCHA:', error);
+        try {
+          // Ensure the container is clean and visible
+          const container = captchaRef.current;
+          if (!container) {
+            setIsRendering(false);
+            return;
+          }
+
+          // Clear any existing content
+          container.innerHTML = '';
+          
+          // Add a small delay to ensure DOM is ready
+          setTimeout(() => {
+            if (!isMounted || !container || widgetId !== null) {
+              setIsRendering(false);
+              return;
+            }
+
+            try {
+              const id = window.grecaptcha.render(container, {
+                sitekey: process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY,
+                callback: (token: string) => {
+                  if (isMounted) {
+                    onVerify(token);
+                  }
+                },
+                'expired-callback': () => {
+                  if (isMounted && onExpire) {
+                    onExpire();
+                  }
+                },
+                'error-callback': () => {
+                  if (isMounted && onError) {
+                    onError();
+                  }
+                },
+                theme: theme,
+                size: size
+              });
+              
+              if (isMounted) {
+                setWidgetId(id);
+                setIsLoaded(true);
+              }
+            } catch (error) {
+              console.error('Error rendering reCAPTCHA:', error);
+              if (isMounted && onError) {
+                onError();
+              }
+            } finally {
+              setIsRendering(false);
+            }
+          }, 100);
+        } catch (error) {
+          console.error('Error preparing reCAPTCHA:', error);
+          setIsRendering(false);
+          if (onError) {
+            onError();
           }
         }
       }
@@ -57,7 +105,7 @@ export const RecaptchaV2 = ({
     if (window.grecaptcha && window.grecaptcha.render) {
       loadRecaptcha();
     } else {
-      // Only add script if it doesn't exist
+      // Check if script already exists
       const existingScript = document.querySelector('script[src*="recaptcha/api.js"]');
       if (!existingScript) {
         const script = document.createElement('script');
@@ -65,14 +113,26 @@ export const RecaptchaV2 = ({
         script.async = true;
         script.defer = true;
         
+        // Global callback
         window.onRecaptchaLoad = () => {
-          loadRecaptcha();
+          if (isMounted) {
+            loadRecaptcha();
+          }
+        };
+
+        script.onerror = () => {
+          console.error('Failed to load reCAPTCHA script');
+          if (isMounted && onError) {
+            onError();
+          }
         };
 
         document.head.appendChild(script);
       } else {
-        // Script exists, just wait for it to load
+        // Script exists, wait for it to be ready
         const checkLoaded = () => {
+          if (!isMounted) return;
+          
           if (window.grecaptcha && window.grecaptcha.render) {
             loadRecaptcha();
           } else {
@@ -84,45 +144,47 @@ export const RecaptchaV2 = ({
     }
 
     return () => {
-      // Cleanup function
+      isMounted = false;
+      
+      // Cleanup widget
       if (widgetId !== null && window.grecaptcha) {
         try {
           window.grecaptcha.reset(widgetId);
         } catch (e) {
-          console.log('Error resetting reCAPTCHA:', e);
+          // Ignore cleanup errors
         }
       }
     };
-  }, []);  // Remove dependencies to prevent re-rendering
+  }, []); // Only run once on mount
 
-  // Update callbacks when they change
-  useEffect(() => {
+  const reset = () => {
     if (widgetId !== null && window.grecaptcha && captchaRef.current) {
-      // Re-render with new callbacks if needed
       try {
         window.grecaptcha.reset(widgetId);
       } catch (e) {
-        // Ignore reset errors
+        console.error('Error resetting reCAPTCHA:', e);
       }
-    }
-  }, [onVerify, onExpire, onError, widgetId]);
-
-  const reset = () => {
-    if (widgetId !== null && window.grecaptcha) {
-      window.grecaptcha.reset(widgetId);
     }
   };
 
   const getResponse = () => {
     if (widgetId !== null && window.grecaptcha) {
-      return window.grecaptcha.getResponse(widgetId);
+      try {
+        return window.grecaptcha.getResponse(widgetId);
+      } catch (e) {
+        console.error('Error getting reCAPTCHA response:', e);
+        return '';
+      }
     }
     return '';
   };
 
   return (
     <div className="flex justify-center">
-      <div ref={captchaRef} />
+      <div 
+        ref={captchaRef} 
+        style={{ minHeight: '78px', minWidth: '304px' }}
+      />
     </div>
   );
 };
