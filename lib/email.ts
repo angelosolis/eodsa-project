@@ -269,6 +269,55 @@ export const emailTemplates = {
         </div>
       </div>
     `
+  }),
+
+  // Password reset email
+  passwordReset: (name: string, resetToken: string, userType: 'judge' | 'admin' | 'studio') => ({
+    subject: 'Reset Your EODSA Password',
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+          <h1 style="color: white; margin: 0; font-size: 28px;">🔐 Password Reset</h1>
+          <p style="color: #f0f0f0; margin: 10px 0 0 0; font-size: 16px;">EODSA Account Recovery</p>
+        </div>
+        
+        <div style="background: #f8f9fa; padding: 30px; border-radius: 0 0 10px 10px; border: 1px solid #e9ecef;">
+          <h2 style="color: #333; margin: 0 0 20px 0;">Hello ${name},</h2>
+          
+          <p style="color: #555; font-size: 16px; line-height: 1.6;">
+            We received a request to reset your password for your EODSA ${userType === 'studio' ? 'Studio' : userType === 'admin' ? 'Admin' : 'Judge'} account.
+          </p>
+          
+          <div style="background: #e3f2fd; padding: 20px; border-radius: 8px; border-left: 4px solid #2196f3; margin: 20px 0;">
+            <p style="margin: 0; color: #0d47a1; font-size: 16px; line-height: 1.6;">
+              <strong>⚠️ Important:</strong> This password reset link will expire in 1 hour for security reasons.
+            </p>
+          </div>
+          
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/reset-password?token=${resetToken}&type=${userType}" 
+               style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 15px 30px; text-decoration: none; border-radius: 25px; font-weight: bold; display: inline-block; font-size: 16px;">
+              Reset Password
+            </a>
+          </div>
+          
+          <p style="color: #555; font-size: 14px; line-height: 1.6;">
+            If you didn't request this password reset, you can safely ignore this email. Your password will remain unchanged.
+          </p>
+          
+          <p style="color: #555; font-size: 14px; line-height: 1.6;">
+            If the button above doesn't work, copy and paste this link into your browser:
+          </p>
+          <p style="color: #667eea; font-size: 12px; word-break: break-all; background: #f5f5f5; padding: 10px; border-radius: 4px;">
+            ${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/reset-password?token=${resetToken}&type=${userType}
+          </p>
+          
+          <p style="color: #777; font-size: 14px; text-align: center; margin-top: 30px; border-top: 1px solid #e9ecef; padding-top: 20px;">
+            Need help? Contact us at <a href="mailto:devops@upstreamcreatives.co.za" style="color: #667eea;">devops@upstreamcreatives.co.za</a>
+          </p>
+        </div>
+      </div>
+    `
   })
 };
 
@@ -370,6 +419,27 @@ export const emailService = {
       return { success: true };
     } catch (error) {
       console.error('Error sending competition entry email:', error);
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  },
+
+  // Send password reset email
+  async sendPasswordResetEmail(email: string, name: string, resetToken: string, userType: 'judge' | 'admin' | 'studio') {
+    try {
+      const emailTemplate = emailTemplates.passwordReset(name, resetToken, userType);
+      
+      const mailOptions = {
+        from: '"EODSA Password Reset" <devops@upstreamcreatives.co.za>',
+        to: email,
+        subject: emailTemplate.subject,
+        html: emailTemplate.html
+      };
+
+      const result = await transporter.sendMail(mailOptions);
+      console.log(`✅ Password reset email sent to ${email} - Message ID: ${result.messageId}`);
+      return { success: true, messageId: result.messageId };
+    } catch (error) {
+      console.error(`❌ Failed to send password reset email to ${email}:`, error);
       return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
     }
   },

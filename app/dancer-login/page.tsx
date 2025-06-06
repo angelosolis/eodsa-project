@@ -15,6 +15,22 @@ export default function DancerLoginPage() {
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
+    
+    // Validate National ID to only accept numbers
+    if (name === 'nationalId') {
+      // Remove any non-numeric characters
+      const numericValue = value.replace(/\D/g, '');
+      // Limit to 13 digits (South African ID length)
+      const limitedValue = numericValue.slice(0, 13);
+      
+      setFormData(prev => ({
+        ...prev,
+        [name]: limitedValue
+      }));
+      if (error) setError('');
+      return;
+    }
+    
     setFormData(prev => ({
       ...prev,
       [name]: value
@@ -109,7 +125,11 @@ export default function DancerLoginPage() {
                   value={formData.nationalId}
                   onChange={handleInputChange}
                   className="w-full px-4 py-4 border-2 border-gray-600 bg-gray-700 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200 text-base font-medium text-white placeholder-gray-400"
-                  placeholder="Enter your National ID"
+                  placeholder="13 digit ID number"
+                  pattern="[0-9]{13}"
+                  maxLength={13}
+                  inputMode="numeric"
+                  title="Please enter exactly 13 digits"
                   required
                 />
               </div>

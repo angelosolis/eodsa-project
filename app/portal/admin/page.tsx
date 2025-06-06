@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import ForgotPasswordLink from '@/app/components/ForgotPasswordLink';
 
 export default function AdminPortalPage() {
   const router = useRouter();
@@ -183,6 +184,11 @@ export default function AdminPortalPage() {
                 )}
               </button>
             </form>
+
+            {/* Forgot Password Link */}
+            <div className="mt-6 text-center">
+              <ForgotPasswordLink userType="admin" />
+            </div>
 
             {/* Demo Credentials */}
             <div className="mt-6 sm:mt-8 p-3 sm:p-4 bg-white/5 backdrop-blur-sm rounded-lg sm:rounded-xl border border-white/10">

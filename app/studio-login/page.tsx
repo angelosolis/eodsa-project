@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import ForgotPasswordLink from '@/app/components/ForgotPasswordLink';
 
 export default function StudioLoginPage() {
   const [email, setEmail] = useState('');
@@ -113,6 +114,11 @@ export default function StudioLoginPage() {
                 )}
               </button>
             </form>
+
+            {/* Forgot Password Link */}
+            <div className="mt-6 text-center">
+              <ForgotPasswordLink userType="studio" />
+            </div>
 
             {/* Additional Options */}
             <div className="mt-8 pt-6 border-t border-gray-600">

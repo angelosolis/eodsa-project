@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import ForgotPasswordLink from '@/app/components/ForgotPasswordLink';
 
 export default function JudgeLogin() {
   const [formData, setFormData] = useState({
@@ -153,6 +154,11 @@ export default function JudgeLogin() {
                 )}
               </button>
             </form>
+
+            {/* Forgot Password Link */}
+            <div className="mt-6 text-center">
+              <ForgotPasswordLink userType="judge" />
+            </div>
             </div>
           </div>
 

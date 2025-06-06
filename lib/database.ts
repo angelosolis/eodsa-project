@@ -50,6 +50,7 @@ export const initializeDatabase = async () => {
       try {
         await sqlClient`DROP TABLE IF EXISTS studio_applications`;  // Drop dependent table first
         await sqlClient`DROP TABLE IF EXISTS waivers`;  // Drop dependent table first
+        await sqlClient`DROP TABLE IF EXISTS password_reset_tokens`;  // Drop dependent table first
         await sqlClient`DROP TABLE IF EXISTS dancers`;
         console.log('Dropped old dancers table');
       } catch (dropError) {
@@ -412,6 +413,21 @@ export const initializeDatabase = async () => {
       // Columns might already exist, that's okay
       console.log('Studio columns already exist or error adding them:', error);
     }
+
+    // Create password reset tokens table
+    await sqlClient`
+      CREATE TABLE IF NOT EXISTS password_reset_tokens (
+        id TEXT PRIMARY KEY,
+        email TEXT NOT NULL,
+        token TEXT UNIQUE NOT NULL,
+        user_type TEXT CHECK(user_type IN ('judge', 'admin', 'studio')) NOT NULL,
+        user_id TEXT NOT NULL,
+        expires_at TIMESTAMP NOT NULL,
+        used BOOLEAN DEFAULT FALSE,
+        used_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `;
 
     // Keep existing tables for competitions...
     await sqlClient`
@@ -2921,6 +2937,95 @@ export const unifiedDb = {
       age--;
     }
     return age;
+  },
+
+  // Password reset token functions
+  async createPasswordResetToken(email: string, userType: 'judge' | 'admin' | 'studio', userId: string) {
+    const sqlClient = getSql();
+    
+    // Generate a secure random token
+    const crypto = require('crypto');
+    const token = crypto.randomBytes(32).toString('hex');
+    const tokenId = `reset-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    
+    // Token expires in 1 hour
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+    const createdAt = new Date().toISOString();
+    
+    // Clean up any existing unused tokens for this email
+    await sqlClient`
+      DELETE FROM password_reset_tokens 
+      WHERE email = ${email} AND used = FALSE
+    `;
+    
+    // Insert new token
+    await sqlClient`
+      INSERT INTO password_reset_tokens (
+        id, email, token, user_type, user_id, expires_at, created_at
+      ) VALUES (
+        ${tokenId}, ${email}, ${token}, ${userType}, ${userId}, ${expiresAt}, ${createdAt}
+      )
+    `;
+    
+    return {
+      id: tokenId,
+      token: token,
+      expiresAt: expiresAt
+    };
+  },
+
+  async validatePasswordResetToken(token: string) {
+    const sqlClient = getSql();
+    
+    const result = await sqlClient`
+      SELECT * FROM password_reset_tokens 
+      WHERE token = ${token} AND used = FALSE AND expires_at > CURRENT_TIMESTAMP
+    ` as any[];
+    
+    if (result.length === 0) {
+      return null;
+    }
+    
+    const row = result[0];
+    return {
+      id: row.id,
+      email: row.email,
+      userType: row.user_type,
+      userId: row.user_id,
+      expiresAt: row.expires_at,
+      createdAt: row.created_at
+    };
+  },
+
+  async markPasswordResetTokenAsUsed(tokenId: string) {
+    const sqlClient = getSql();
+    const usedAt = new Date().toISOString();
+    
+    await sqlClient`
+      UPDATE password_reset_tokens 
+      SET used = TRUE, used_at = ${usedAt}
+      WHERE id = ${tokenId}
+    `;
+  },
+
+  async updatePassword(userType: 'judge' | 'admin' | 'studio', userId: string, hashedPassword: string) {
+    const sqlClient = getSql();
+    
+    if (userType === 'judge' || userType === 'admin') {
+      await sqlClient`
+        UPDATE judges 
+        SET password = ${hashedPassword}
+        WHERE id = ${userId}
+      `;
+    } else if (userType === 'studio') {
+      await sqlClient`
+        UPDATE studios 
+        SET password = ${hashedPassword}
+        WHERE id = ${userId}
+      `;
+    } else {
+      throw new Error('Invalid user type');
+    }
   }
 };
 

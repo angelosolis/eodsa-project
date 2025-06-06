@@ -926,9 +926,17 @@ export default function StudioDashboardPage() {
                   <input
                     type="text"
                     value={editDancerData.nationalId}
-                    onChange={(e) => setEditDancerData(prev => ({ ...prev, nationalId: e.target.value }))}
+                    onChange={(e) => {
+                      // Only allow numeric input and limit to 13 digits
+                      const numericValue = e.target.value.replace(/\D/g, '').slice(0, 13);
+                      setEditDancerData(prev => ({ ...prev, nationalId: numericValue }));
+                    }}
                     className="w-full px-4 py-3 border border-gray-600 bg-gray-700 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all text-white placeholder-gray-400 font-mono"
+                    placeholder="13 digit ID number"
+                    pattern="[0-9]{13}"
                     maxLength={13}
+                    inputMode="numeric"
+                    title="Please enter exactly 13 digits"
                     required
                   />
                 </div>

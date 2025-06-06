@@ -122,6 +122,20 @@ export default function RegisterPage() {
       return;
     }
 
+    // Validate National ID to only accept numbers
+    if (name === 'nationalId') {
+      // Remove any non-numeric characters
+      const numericValue = value.replace(/\D/g, '');
+      // Limit to 13 digits (South African ID length)
+      const limitedValue = numericValue.slice(0, 13);
+      
+      setFormData(prev => {
+        const newFormData = { ...prev, [name]: limitedValue };
+        return newFormData;
+      });
+      return;
+    }
+
     setFormData(prev => {
       const newFormData = { ...prev, [name]: value };
       
@@ -432,8 +446,12 @@ export default function RegisterPage() {
                         name="nationalId"
                         value={formData.nationalId}
                         onChange={handleInputChange}
-                          className="w-full px-6 py-4 bg-white/10 border border-white/20 rounded-2xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all text-white placeholder-gray-300 text-lg"
-                          placeholder="13 digit ID number"
+                        className="w-full px-6 py-4 bg-white/10 border border-white/20 rounded-2xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all text-white placeholder-gray-300 text-lg"
+                        placeholder="13 digit ID number"
+                        pattern="[0-9]{13}"
+                        maxLength={13}
+                        inputMode="numeric"
+                        title="Please enter exactly 13 digits"
                         required={formData.type === 'individual_dancer'}
                       />
                       </div>
