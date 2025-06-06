@@ -36,9 +36,9 @@ export async function PUT(
       );
     }
 
-    if (updates.estimatedDuration && (updates.estimatedDuration < 1 || updates.estimatedDuration > 10)) {
+    if (updates.estimatedDuration && (updates.estimatedDuration < 0.5 || updates.estimatedDuration > 3.5)) {
       return NextResponse.json(
-        { error: 'Duration must be between 1 and 10 minutes' },
+        { error: 'Duration must be between 0.5 and 3.5 minutes. Maximum: Solo-2min, Duet/Trio-3min, Group-3:30' },
         { status: 400 }
       );
     }

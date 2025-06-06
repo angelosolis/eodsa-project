@@ -15,14 +15,14 @@ interface StudioSession {
 
 // Accepted dancer interface  
 interface AcceptedDancer {
-  id: string;
-  eodsaId: string;
-  name: string;
-  age: number;
-  dateOfBirth: string;
-  nationalId: string;
-  email?: string;
-  phone?: string;
+    id: string;
+    eodsaId: string;
+    name: string;
+    age: number;
+    dateOfBirth: string;
+    nationalId: string;
+    email?: string;
+    phone?: string;
   joinedAt: string;
 }
 
@@ -695,36 +695,36 @@ export default function StudioDashboardPage() {
             </div>
 
             {competitionEntries.length === 0 ? (
-              <div className="p-8 text-center">
-                <div className="w-16 h-16 bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                </div>
-                <p className="text-gray-400 mb-2">No competition entries yet</p>
-                <p className="text-gray-500 text-sm mb-6">
-                  Your dancers haven't entered any competitions yet. Use the buttons below to get started.
-                </p>
-                
-                <div className="max-w-md mx-auto space-y-3">
-                  <h4 className="text-white font-medium">Quick Entry Access:</h4>
-                  {acceptedDancers.slice(0, 3).map((dancer) => (
-                    <Link
-                      key={dancer.id}
-                      href={`/event-dashboard?eodsaId=${dancer.eodsaId}`}
-                      className="block p-3 bg-gray-700/50 border border-gray-600 rounded-lg hover:bg-gray-600/50 transition-colors"
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="text-white font-medium">{dancer.name}</span>
-                        <span className="text-gray-400 text-sm font-mono">{dancer.eodsaId}</span>
-                      </div>
-                    </Link>
-                  ))}
-                  {acceptedDancers.length > 3 && (
-                    <p className="text-gray-500 text-sm">+ {acceptedDancers.length - 3} more dancers</p>
-                  )}
-                </div>
+            <div className="p-8 text-center">
+              <div className="w-16 h-16 bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
               </div>
+                <p className="text-gray-400 mb-2">No competition entries yet</p>
+              <p className="text-gray-500 text-sm mb-6">
+                  Your dancers haven't entered any competitions yet. Use the buttons below to get started.
+              </p>
+              
+              <div className="max-w-md mx-auto space-y-3">
+                <h4 className="text-white font-medium">Quick Entry Access:</h4>
+                {acceptedDancers.slice(0, 3).map((dancer) => (
+                  <Link
+                    key={dancer.id}
+                    href={`/event-dashboard?eodsaId=${dancer.eodsaId}`}
+                    className="block p-3 bg-gray-700/50 border border-gray-600 rounded-lg hover:bg-gray-600/50 transition-colors"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-white font-medium">{dancer.name}</span>
+                      <span className="text-gray-400 text-sm font-mono">{dancer.eodsaId}</span>
+                    </div>
+                  </Link>
+                ))}
+                {acceptedDancers.length > 3 && (
+                  <p className="text-gray-500 text-sm">+ {acceptedDancers.length - 3} more dancers</p>
+                )}
+              </div>
+            </div>
             ) : (
               <div className="divide-y divide-gray-700">
                 {competitionEntries.map((entry) => (
@@ -809,20 +809,20 @@ export default function StudioDashboardPage() {
                       </div>
                       
                       <div className="flex items-center space-x-2 ml-4">
-                        <button
+                <button
                           onClick={() => handleEditEntry(entry)}
                           className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
-                        >
+                >
                           Edit
-                        </button>
-                        <button
+                </button>
+                <button
                           onClick={() => handleDeleteEntry(entry)}
                           className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm"
                         >
                           Withdraw
-                        </button>
-                      </div>
-                    </div>
+                </button>
+              </div>
+            </div>
                   </div>
                 ))}
               </div>
@@ -1064,13 +1064,17 @@ export default function StudioDashboardPage() {
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">
                     Estimated Duration (minutes) *
+                    <span className="text-purple-400 ml-2 text-xs">
+                      (Max: Solo-2min, Duet/Trio-3min, Group-3:30)
+                    </span>
                   </label>
                   <input
                     type="number"
-                    min={1}
-                    max={10}
+                    min={0.5}
+                    max={3.5}
+                    step={0.5}
                     value={editEntryData.estimatedDuration}
-                    onChange={(e) => setEditEntryData(prev => ({ ...prev, estimatedDuration: parseInt(e.target.value) || 0 }))}
+                    onChange={(e) => setEditEntryData(prev => ({ ...prev, estimatedDuration: parseFloat(e.target.value) || 0 }))}
                     className="w-full px-4 py-3 border border-gray-600 bg-gray-700 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all text-white"
                     required
                   />

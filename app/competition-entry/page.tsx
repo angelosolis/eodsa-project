@@ -111,11 +111,11 @@ export default function CompetitionEntry() {
   const getDancerStatus = () => {
     if (!dancer) return { eligible: false, reason: 'Not logged in' };
     
-    if (!dancer.approved) {
+    if (dancer.rejectionReason) {
       return { 
         eligible: false, 
-        reason: 'Waiting for admin approval', 
-        message: 'Your registration is pending admin approval. You cannot enter competitions until approved.' 
+        reason: 'Account disabled', 
+        message: 'Your account has been disabled. Please contact support for assistance.' 
       };
     }
 
@@ -123,7 +123,7 @@ export default function CompetitionEntry() {
     
     return {
       eligible: true,
-      reason: 'Approved',
+      reason: 'Active',
       isIndependent: acceptedApplications.length === 0,
       studioAffiliation: acceptedApplications.length > 0 ? acceptedApplications[0].studio.name : null
     };

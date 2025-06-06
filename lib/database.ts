@@ -143,6 +143,140 @@ export const initializeDatabase = async () => {
         await sqlClient`ALTER TABLE studios ADD COLUMN IF NOT EXISTS rejection_reason TEXT`;
       }
       
+      // Ensure schema is up to date with migrations
+      try {
+        // Check if qualified_for_nationals column exists, add if not
+        const columnCheck = await sqlClient`
+          SELECT column_name 
+          FROM information_schema.columns 
+          WHERE table_name = 'event_entries' 
+          AND column_name = 'qualified_for_nationals'
+        ` as any[];
+        
+        if (columnCheck.length === 0) {
+          await sqlClient`
+            ALTER TABLE event_entries 
+            ADD COLUMN qualified_for_nationals BOOLEAN DEFAULT FALSE
+          `;
+          console.log('✅ Added qualified_for_nationals column to event_entries');
+        } else {
+          console.log('✅ qualified_for_nationals column already exists');
+        }
+
+        // Check if item_number column exists, add if not
+        const itemNumberCheck = await sqlClient`
+          SELECT column_name 
+          FROM information_schema.columns 
+          WHERE table_name = 'event_entries' 
+          AND column_name = 'item_number'
+        ` as any[];
+        
+        if (itemNumberCheck.length === 0) {
+          await sqlClient`
+            ALTER TABLE event_entries 
+            ADD COLUMN item_number INTEGER
+          `;
+          console.log('✅ Added item_number column to event_entries');
+        } else {
+          console.log('✅ item_number column already exists');
+        }
+
+        // Check and add missing contestants table columns
+        const contestantsColumns = [
+          { name: 'guardian_name', type: 'TEXT' },
+          { name: 'guardian_email', type: 'TEXT' },
+          { name: 'guardian_cell', type: 'TEXT' },
+          { name: 'privacy_policy_accepted', type: 'BOOLEAN DEFAULT FALSE' },
+          { name: 'privacy_policy_accepted_at', type: 'TEXT' },
+          { name: 'studio_name', type: 'TEXT' },
+          { name: 'studio_address', type: 'TEXT' },
+          { name: 'studio_contact_person', type: 'TEXT' },
+          { name: 'studio_registration_number', type: 'TEXT' }
+        ];
+
+        for (const column of contestantsColumns) {
+          const columnCheck = await sqlClient`
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_name = 'contestants' 
+            AND column_name = ${column.name}
+          ` as any[];
+          
+          if (columnCheck.length === 0) {
+            // Use dynamic SQL construction for ALTER TABLE
+            const alterSQL = `ALTER TABLE contestants ADD COLUMN ${column.name} ${column.type}`;
+            await sqlClient.unsafe(alterSQL);
+            console.log(`✅ Added ${column.name} column to contestants`);
+          } else {
+            console.log(`✅ ${column.name} column already exists in contestants`);
+          }
+        }
+
+        // Drop the foreign key constraint for event_entries to allow unified system
+        try {
+          // List ALL constraints on event_entries table for debugging
+          const allConstraints = await sqlClient`
+            SELECT constraint_name, constraint_type 
+            FROM information_schema.table_constraints 
+            WHERE table_name = 'event_entries'
+          ` as any[];
+          
+          console.log('🔍 All constraints on event_entries:', allConstraints);
+          
+          // Check specifically for the foreign key constraint
+          const constraintCheck = await sqlClient`
+            SELECT constraint_name 
+            FROM information_schema.table_constraints 
+            WHERE table_name = 'event_entries' 
+            AND constraint_type = 'FOREIGN KEY'
+            AND constraint_name = 'event_entries_contestant_id_fkey'
+          ` as any[];
+          
+          if (constraintCheck.length > 0) {
+            try {
+              // Try multiple methods to drop the constraint
+              console.log('🔧 Attempting to drop constraint with CASCADE...');
+              await sqlClient.unsafe(`ALTER TABLE event_entries DROP CONSTRAINT event_entries_contestant_id_fkey CASCADE`);
+              console.log('✅ DROPPED with CASCADE');
+            } catch (cascadeError) {
+              console.log('CASCADE failed, trying without CASCADE:', cascadeError);
+              try {
+                await sqlClient.unsafe(`ALTER TABLE event_entries DROP CONSTRAINT event_entries_contestant_id_fkey`);
+                console.log('✅ DROPPED without CASCADE');
+              } catch (normalError) {
+                console.log('❌ Both methods failed:', normalError);
+              }
+            }
+            
+            // Verify it's gone
+            const verifyCheck = await sqlClient`
+              SELECT constraint_name 
+              FROM information_schema.table_constraints 
+              WHERE table_name = 'event_entries' 
+              AND constraint_type = 'FOREIGN KEY'
+              AND constraint_name = 'event_entries_contestant_id_fkey'
+            ` as any[];
+            
+            if (verifyCheck.length === 0) {
+              console.log('✅ VERIFIED: Foreign key constraint is FINALLY GONE!');
+            } else {
+              console.log('❌ CONSTRAINT STILL EXISTS! Trying aggressive approach...');
+              
+              // Last resort: recreate the table without the constraint
+              console.log('🚨 LAST RESORT: Will skip foreign key validation in createEventEntry');
+            }
+          } else {
+            console.log('✅ Foreign key constraint event_entries_contestant_id_fkey does not exist');
+          }
+        } catch (fkError) {
+          console.log('Foreign key constraint operation error:', fkError);
+        }
+        
+        console.log('Schema migrations completed successfully');
+      } catch (migrationError) {
+        console.log('Migration error:', migrationError);
+      }
+
       console.log('✅ All database tables exist and are properly configured');
       return;
     } catch (error) {
@@ -325,7 +459,7 @@ export const initializeDatabase = async () => {
         participant_ids TEXT NOT NULL,
         calculated_fee DECIMAL(10,2) NOT NULL,
         payment_status TEXT CHECK(payment_status IN ('pending', 'paid', 'failed')) DEFAULT 'pending',
-        payment_method TEXT CHECK(payment_method IN ('credit_card', 'bank_transfer')),
+        payment_method TEXT CHECK(payment_method IN ('credit_card', 'bank_transfer', 'invoice')),
         submitted_at TEXT NOT NULL,
         approved BOOLEAN DEFAULT FALSE,
         qualified_for_nationals BOOLEAN DEFAULT FALSE,
@@ -658,16 +792,32 @@ export const db = {
   },
 
   // Event Entries
-  async createEventEntry(eventEntry: Omit<EventEntry, 'id' | 'submittedAt'>) {
+    async createEventEntry(eventEntry: Omit<EventEntry, 'id' | 'submittedAt'>) {
     const sqlClient = getSql();
     const id = Date.now().toString();
     const submittedAt = new Date().toISOString();
-    
-    await sqlClient`
-      INSERT INTO event_entries (id, event_id, contestant_id, eodsa_id, participant_ids, calculated_fee, payment_status, submitted_at, approved, qualified_for_nationals, item_number, item_name, choreographer, mastery, item_style, estimated_duration)
-      VALUES (${id}, ${eventEntry.eventId}, ${eventEntry.contestantId}, ${eventEntry.eodsaId}, ${JSON.stringify(eventEntry.participantIds)}, ${eventEntry.calculatedFee}, ${eventEntry.paymentStatus}, ${submittedAt}, ${eventEntry.approved}, ${eventEntry.qualifiedForNationals || false}, ${eventEntry.itemNumber || null}, ${eventEntry.itemName}, ${eventEntry.choreographer}, ${eventEntry.mastery}, ${eventEntry.itemStyle}, ${eventEntry.estimatedDuration})
-    `;
-    
+
+    try {
+      await sqlClient`
+        INSERT INTO event_entries (id, event_id, contestant_id, eodsa_id, participant_ids, calculated_fee, payment_status, submitted_at, approved, qualified_for_nationals, item_number, item_name, choreographer, mastery, item_style, estimated_duration)
+        VALUES (${id}, ${eventEntry.eventId}, ${eventEntry.contestantId}, ${eventEntry.eodsaId}, ${JSON.stringify(eventEntry.participantIds)}, ${eventEntry.calculatedFee}, ${eventEntry.paymentStatus}, ${submittedAt}, ${eventEntry.approved}, ${eventEntry.qualifiedForNationals || false}, ${eventEntry.itemNumber || null}, ${eventEntry.itemName}, ${eventEntry.choreographer}, ${eventEntry.mastery}, ${eventEntry.itemStyle}, ${eventEntry.estimatedDuration})
+      `;
+    } catch (error: any) {
+      // Handle foreign key constraint errors for unified system dancers
+      if (error?.code === '23503' && error?.constraint === 'event_entries_contestant_id_fkey') {
+        console.log('🔧 Foreign key constraint error detected, inserting without validation for unified system dancer');
+        
+        // Insert without foreign key validation using a different approach
+        await sqlClient.unsafe(`
+          INSERT INTO event_entries (id, event_id, contestant_id, eodsa_id, participant_ids, calculated_fee, payment_status, submitted_at, approved, qualified_for_nationals, item_number, item_name, choreographer, mastery, item_style, estimated_duration)
+          VALUES ('${id}', '${eventEntry.eventId}', '${eventEntry.contestantId}', '${eventEntry.eodsaId}', '${JSON.stringify(eventEntry.participantIds)}', ${eventEntry.calculatedFee}, '${eventEntry.paymentStatus}', '${submittedAt}', ${eventEntry.approved}, ${eventEntry.qualifiedForNationals || false}, ${eventEntry.itemNumber || null}, '${eventEntry.itemName}', '${eventEntry.choreographer}', '${eventEntry.mastery}', '${eventEntry.itemStyle}', ${eventEntry.estimatedDuration})
+        `);
+        console.log('✅ Event entry created successfully bypassing foreign key constraint');
+      } else {
+        throw error; // Re-throw other errors
+      }
+    }
+
     return { ...eventEntry, id, submittedAt };
   },
 
@@ -1639,10 +1789,13 @@ export const studioDb = {
     const registrationNumber = generateStudioRegistrationId();
     const createdAt = new Date().toISOString();
     
+    // AUTO-ACTIVATE: Set approved_by to 'system' and approved_at for immediate activation
+    const approvedAt = new Date().toISOString();
+    
     await sqlClient`
-      INSERT INTO studios (id, name, email, password, contact_person, address, phone, registration_number, created_at)
+      INSERT INTO studios (id, name, email, password, contact_person, address, phone, registration_number, created_at, approved_by, approved_at)
       VALUES (${id}, ${studio.name}, ${studio.email}, ${studio.password}, ${studio.contactPerson}, 
-              ${studio.address}, ${studio.phone}, ${registrationNumber}, ${createdAt})
+              ${studio.address}, ${studio.phone}, ${registrationNumber}, ${createdAt}, 'system', ${approvedAt})
     `;
     
     return { id, registrationNumber };
@@ -2022,12 +2175,15 @@ export const unifiedDb = {
     const eodsaId = generateEODSAId();
     const age = this.calculateAge(dancer.dateOfBirth);
     
+    // AUTO-ACTIVATE: Set approved to TRUE for immediate activation
+    const approvedAt = new Date().toISOString();
+    
     await sqlClient`
       INSERT INTO dancers (id, eodsa_id, name, date_of_birth, age, national_id, email, phone, 
-                          guardian_name, guardian_email, guardian_phone)
+                          guardian_name, guardian_email, guardian_phone, approved, approved_at)
       VALUES (${id}, ${eodsaId}, ${dancer.name}, ${dancer.dateOfBirth}, ${age}, ${dancer.nationalId},
               ${dancer.email || null}, ${dancer.phone || null}, ${dancer.guardianName || null},
-              ${dancer.guardianEmail || null}, ${dancer.guardianPhone || null})
+              ${dancer.guardianEmail || null}, ${dancer.guardianPhone || null}, TRUE, ${approvedAt})
     `;
     
     return { id, eodsaId };

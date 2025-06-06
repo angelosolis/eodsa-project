@@ -71,27 +71,27 @@ export async function POST(request: NextRequest) {
       const dancer = await unifiedDb.getDancerById(participantId);
       
       if (dancer) {
-        // This is a unified system dancer - requires admin approval
-        if (!dancer.approved) {
+        // Check if dancer account is disabled (rejected)
+        if (dancer.rejectionReason) {
           return NextResponse.json(
             { 
-              error: `Dancer ${dancer.name} (${dancer.eodsaId}) is not approved by admin. Please wait for admin approval before entering competitions.`,
-              requiresAdminApproval: true,
+              error: `Dancer ${dancer.name} (${dancer.eodsaId}) account has been disabled. Please contact support.`,
+              accountDisabled: true,
               dancerId: participantId
             },
             { status: 403 }
           );
         }
 
-        // Check if dancer has studio affiliation - if so, needs studio approval too
+        // All active dancers can participate - both independent and studio dancers allowed
         const studioApplications = await unifiedDb.getDancerApplications(participantId);
         const acceptedApplications = studioApplications.filter(app => app.status === 'accepted');
         
         if (acceptedApplications.length === 0) {
-          // Dancer has no studio affiliation - this is allowed for independent dancers
+          // Independent dancer - allowed
           console.log(`Independent dancer ${dancer.name} entering competition`);
         } else {
-          // Dancer has studio affiliation - this is also valid
+          // Studio-affiliated dancer - also allowed
           console.log(`Studio-affiliated dancer ${dancer.name} entering competition`);
         }
       } else {
@@ -115,15 +115,16 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Validate performance type participant limits
+    // Validate performance type participant limits and time limits
     const participantCount = body.participantIds.length;
     const performanceType = event.performanceType;
+    const estimatedDurationMinutes = body.estimatedDuration;
     
     const limits = {
-      'Solo': { min: 1, max: 1 },
-      'Duet': { min: 2, max: 2 },
-      'Trio': { min: 3, max: 3 },
-      'Group': { min: 4, max: 30 }
+      'Solo': { min: 1, max: 1, maxTimeMinutes: 2 },
+      'Duet': { min: 2, max: 2, maxTimeMinutes: 3 },
+      'Trio': { min: 3, max: 3, maxTimeMinutes: 3 },
+      'Group': { min: 4, max: 30, maxTimeMinutes: 3.5 }
     };
     
     const limit = limits[performanceType as keyof typeof limits];
@@ -134,17 +135,38 @@ export async function POST(request: NextRequest) {
       );
     }
     
+    // Validate participant count
     if (participantCount < limit.min || participantCount > limit.max) {
       return NextResponse.json(
         { error: `${performanceType} requires ${limit.min === limit.max ? limit.min : `${limit.min}-${limit.max}`} participant(s)` },
         { status: 400 }
       );
     }
+    
+    // Validate time limit
+    if (estimatedDurationMinutes > limit.maxTimeMinutes) {
+      const maxTimeDisplay = limit.maxTimeMinutes === 3.5 ? '3:30' : `${limit.maxTimeMinutes}:00`;
+      return NextResponse.json(
+        { error: `${performanceType} performances cannot exceed ${maxTimeDisplay} minutes. Your estimated duration is ${estimatedDurationMinutes} minutes.` },
+        { status: 400 }
+      );
+    }
+
+    // UNIFIED SYSTEM: For unified system dancers, use a special contestant ID format
+    let finalContestantId = body.contestantId;
+    
+    // Check if this is a unified system dancer
+    const firstParticipant = await unifiedDb.getDancerById(body.participantIds[0]);
+    if (firstParticipant) {
+      // Use the dancer's ID as the contestant ID for unified system
+      finalContestantId = firstParticipant.id;
+      console.log(`Using unified dancer ID ${finalContestantId} as contestant ID for ${firstParticipant.name}`);
+    }
 
     // Create event entry
     const eventEntry = await db.createEventEntry({
       eventId: body.eventId,
-      contestantId: body.contestantId,
+      contestantId: finalContestantId,
       eodsaId: body.eodsaId,
       participantIds: body.participantIds,
       calculatedFee: body.calculatedFee,

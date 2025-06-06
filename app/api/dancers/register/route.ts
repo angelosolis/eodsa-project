@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { unifiedDb, initializeDatabase } from '@/lib/database';
 import { emailService } from '@/lib/email';
+import { verifyRecaptcha, checkRateLimit, getClientIP } from '@/lib/recaptcha';
 
 // Individual dancer registration
 export async function POST(request: NextRequest) {
@@ -9,7 +10,43 @@ export async function POST(request: NextRequest) {
     await initializeDatabase();
     
     const body = await request.json();
-    const { name, dateOfBirth, nationalId, email, phone, guardianName, guardianEmail, guardianPhone } = body;
+    const { name, dateOfBirth, nationalId, email, phone, guardianName, guardianEmail, guardianPhone, recaptchaToken } = body;
+    
+    // Get client IP for rate limiting
+    const clientIP = getClientIP(request);
+    
+    // Check rate limit (3 registrations per IP per hour)
+    const rateLimitCheck = checkRateLimit(clientIP);
+    if (!rateLimitCheck.allowed) {
+      const resetTime = new Date(rateLimitCheck.resetTime!);
+      return NextResponse.json(
+        { 
+          error: `Rate limit exceeded. You can only register 3 accounts per hour. Try again after ${resetTime.toLocaleTimeString()}.`,
+          rateLimited: true,
+          resetTime: rateLimitCheck.resetTime
+        },
+        { status: 429 }
+      );
+    }
+    
+    // Verify reCAPTCHA token
+    if (!recaptchaToken) {
+      return NextResponse.json(
+        { error: 'reCAPTCHA verification is required' },
+        { status: 400 }
+      );
+    }
+    
+    const recaptchaResult = await verifyRecaptcha(recaptchaToken, clientIP);
+    if (!recaptchaResult.success) {
+      return NextResponse.json(
+        { 
+          error: `Security verification failed: ${recaptchaResult.error}`,
+          recaptchaFailed: true 
+        },
+        { status: 400 }
+      );
+    }
 
     if (!name || !dateOfBirth || !nationalId) {
       return NextResponse.json(
@@ -53,13 +90,13 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: 'Dancer registered successfully. Awaiting admin approval.',
+      message: 'Dancer registered successfully. Your account is now active!',
       dancer: {
         id: result.id,
         eodsaId: result.eodsaId,
         name,
         age,
-        approved: false
+        approved: true // Show as immediately approved
       }
     });
   } catch (error: any) {
@@ -67,16 +104,16 @@ export async function POST(request: NextRequest) {
     
     // Handle specific database errors with user-friendly messages
     if (error.message) {
-      if (error.message.includes('already registered') || error.message.includes('duplicate key') || error.message.includes('UNIQUE constraint')) {
-        if (error.message.includes('email')) {
+      if (error.message.includes('already exists') || error.message.includes('duplicate key') || error.message.includes('UNIQUE constraint')) {
+        if (error.message.includes('national_id')) {
           return NextResponse.json(
-            { error: 'A dancer with this email address is already registered' },
+            { error: 'A dancer with this National ID is already registered' },
             { status: 409 }
           );
         }
-        if (error.message.includes('national') || error.message.includes('nationalId')) {
+        if (error.message.includes('email')) {
           return NextResponse.json(
-            { error: 'A dancer with this National ID is already registered' },
+            { error: 'A dancer with this email address is already registered' },
             { status: 409 }
           );
         }
@@ -94,7 +131,7 @@ export async function POST(request: NextRequest) {
     }
     
     return NextResponse.json(
-      { error: 'Failed to register dancer' },
+      { error: 'Registration failed. Please try again.' },
       { status: 500 }
     );
   }

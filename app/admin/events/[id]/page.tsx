@@ -494,7 +494,7 @@ export default function EventParticipantsPage() {
                                 if (e.key === 'Enter') handleItemNumberSave(entry.id);
                                 if (e.key === 'Escape') handleItemNumberCancel();
                               }}
-                              className="w-20 px-2 py-1 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                              className="w-20 px-2 py-1 text-sm text-gray-900 bg-white border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                               placeholder="Item #"
                               min="1"
                               autoFocus

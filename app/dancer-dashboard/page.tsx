@@ -144,29 +144,21 @@ export default function DancerDashboardPage() {
         <div className="bg-gray-800/80 rounded-2xl p-6 border border-gray-700/20 mb-8">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-xl font-semibold text-white mb-2">Registration Status</h2>
+              <h2 className="text-xl font-semibold text-white mb-2">Account Information</h2>
               <p className="text-gray-300">EODSA ID: {dancerSession.eodsaId}</p>
               <div className="flex items-center mt-2">
-                <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-                  dancerSession.approved 
-                    ? 'bg-green-500/20 text-green-300' 
-                    : 'bg-yellow-500/20 text-yellow-300'
-                }`}>
-                  {dancerSession.approved ? '✅ Approved' : '⏳ Pending Admin Approval'}
+                <span className="px-3 py-1 rounded-full text-sm font-medium bg-green-500/20 text-green-300">
+                  ✅ Active Account
                 </span>
               </div>
             </div>
-            
-
           </div>
           
-          {!dancerSession.approved && (
-            <div className="mt-4 p-4 bg-blue-900/20 border border-blue-500/30 rounded-lg">
-              <p className="text-blue-200 text-sm">
-                📋 Your registration is pending admin approval. Once approved, you'll be able to participate in competitions when added to a dance studio by the studio head.
-              </p>
-            </div>
-          )}
+          <div className="mt-4 p-4 bg-green-900/20 border border-green-500/30 rounded-lg">
+            <p className="text-green-200 text-sm">
+              🎉 Your account is active! You can participate in competitions and be added to studios. Welcome to EODSA!
+            </p>
+          </div>
         </div>
 
         {/* Applications Section */}

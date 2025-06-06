@@ -83,7 +83,7 @@ export interface EventEntry {
   participantIds: string[]; // E-O-D-S-A-IDs of participating dancers
   calculatedFee: number;
   paymentStatus: 'pending' | 'paid' | 'failed';
-  paymentMethod?: 'credit_card' | 'bank_transfer';
+  paymentMethod?: 'credit_card' | 'bank_transfer' | 'invoice';
   submittedAt: string;
   approved: boolean;
   qualifiedForNationals: boolean;
@@ -241,9 +241,9 @@ export const ITEM_STYLES = [
 // UPDATED: Time limits to match EODSA requirements exactly
 export const TIME_LIMITS = {
   Solo: 2, // minutes
-  Duet: 2, // minutes (EODSA shows 2 mins for Duo/Trio)
-  Trio: 2, // minutes (EODSA shows 2 mins for Duo/Trio)
-  Group: 3 // minutes (EODSA shows 3 mins for Groups/Teams)
+  Duet: 3, // minutes
+  Trio: 3, // minutes
+  Group: 3.5 // minutes (3:30)
 };
 
 // EODSA Fee Structure based on official pricing

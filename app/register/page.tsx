@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { useRecaptcha } from '@/hooks/useRecaptcha';
 import { generateEODSAId } from '@/lib/database';
 import { useToast } from '@/components/ui/simple-toast';
 
@@ -92,6 +93,7 @@ export default function RegisterPage() {
   const [eodsaId, setEodsaId] = useState('');
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
   const { success, error, warning, info } = useToast();
+  const { isLoaded: recaptchaLoaded, executeRecaptcha } = useRecaptcha();
 
   // Calculate age from date of birth
   const calculateAge = (dateOfBirth: string): number => {
@@ -175,6 +177,14 @@ export default function RegisterPage() {
 
       info('Creating your dancer profile...', 3000);
 
+      // Execute reCAPTCHA
+      const recaptchaToken = await executeRecaptcha('dancer_registration');
+      if (!recaptchaToken) {
+        error('Security verification failed. Please try again.', 5000);
+        setIsSubmitting(false);
+        return;
+      }
+
       // Register individual dancer
       const response = await fetch('/api/dancers/register', {
         method: 'POST',
@@ -189,7 +199,8 @@ export default function RegisterPage() {
           phone: formData.phone,
           guardianName: formData.guardianInfo?.name,
           guardianEmail: formData.guardianInfo?.email,
-          guardianPhone: formData.guardianInfo?.cell
+          guardianPhone: formData.guardianInfo?.cell,
+          recaptchaToken: recaptchaToken
         }),
       });
 
@@ -200,7 +211,16 @@ export default function RegisterPage() {
         setSubmitted(true);
       } else {
         const errorData = await response.json();
-        error(errorData.error || 'Unable to complete registration. Please try again.', 8000);
+        
+        // Handle specific error types
+        if (errorData.rateLimited) {
+          const resetTime = new Date(errorData.resetTime).toLocaleTimeString();
+          error(`⏰ Rate limit exceeded! You can only register 3 accounts per hour. Please try again after ${resetTime}.`, 8000);
+        } else if (errorData.recaptchaFailed) {
+          error(`🔒 Security verification failed. Please refresh the page and try again.`, 6000);
+        } else {
+          error(errorData.error || 'Unable to complete registration. Please try again.', 8000);
+        }
       }
     } catch (err) {
       console.error('Registration error:', err);
@@ -239,8 +259,8 @@ export default function RegisterPage() {
             </div>
             
             <p className="text-gray-300 mb-8 leading-relaxed">
-              Your dancer registration is now <strong>pending admin approval</strong>. Once approved, 
-              you can apply to dance studios. Check back later for your approval status.
+              Your dancer registration is now <strong>active</strong>! You can immediately start 
+              participating in competitions and applying to dance studios.
             </p>
             
             <div className="space-y-4">
@@ -573,7 +593,7 @@ export default function RegisterPage() {
                 <div className="pt-6">
                 <button
                   type="submit"
-                  disabled={isSubmitting || !formData.privacyPolicyAccepted}
+                  disabled={isSubmitting || !formData.privacyPolicyAccepted || !recaptchaLoaded}
                     className="w-full px-8 py-4 bg-gradient-to-r from-purple-500 via-pink-500 to-purple-600 text-white rounded-2xl hover:from-purple-600 hover:via-pink-600 hover:to-purple-700 focus:ring-4 focus:ring-purple-500/50 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 font-bold text-lg shadow-xl hover:shadow-2xl transform hover:scale-105"
                 >
                   {isSubmitting ? (

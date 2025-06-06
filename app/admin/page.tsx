@@ -102,7 +102,9 @@ export default function AdminDashboard() {
   const [dancers, setDancers] = useState<Dancer[]>([]);
   const [studios, setStudios] = useState<Studio[]>([]);
   const [studioApplications, setStudioApplications] = useState<StudioApplication[]>([]);
-  const [activeTab, setActiveTab] = useState<'events' | 'judges' | 'assignments' | 'dancers' | 'studios'>('events');
+  const [verificationDancers, setVerificationDancers] = useState<Dancer[]>([]);
+  const [verificationStudios, setVerificationStudios] = useState<Studio[]>([]);
+  const [activeTab, setActiveTab] = useState<'events' | 'judges' | 'assignments' | 'dancers' | 'studios' | 'verification'>('events');
   const [isLoading, setIsLoading] = useState(true);
   const { success, error, warning, info } = useToast();
   const { showAlert, showConfirm, showPrompt } = useAlert();
@@ -187,13 +189,14 @@ export default function AdminDashboard() {
   const fetchData = async () => {
     setIsLoading(true);
     try {
-      const [eventsRes, judgesRes, assignmentsRes, dancersRes, studiosRes, applicationsRes] = await Promise.all([
+      const [eventsRes, judgesRes, assignmentsRes, dancersRes, studiosRes, applicationsRes, verificationRes] = await Promise.all([
         fetch('/api/events'),
         fetch('/api/judges'),
         fetch('/api/judge-assignments'),
         fetch('/api/admin/dancers'),
         fetch('/api/admin/studios'),
-        fetch('/api/admin/studio-applications')
+        fetch('/api/admin/studio-applications'),
+        fetch('/api/admin/pending-verification')
       ]);
 
       const eventsData = await eventsRes.json();
@@ -202,6 +205,7 @@ export default function AdminDashboard() {
       const dancersData = await dancersRes.json();
       const studiosData = await studiosRes.json();
       const applicationsData = await applicationsRes.json();
+      const verificationData = await verificationRes.json();
 
       if (eventsData.success) setEvents(eventsData.events);
       if (judgesData.success) setJudges(judgesData.judges);
@@ -209,6 +213,10 @@ export default function AdminDashboard() {
       if (dancersData.success) setDancers(dancersData.dancers);
       if (studiosData.success) setStudios(studiosData.studios);
       if (applicationsData.success) setStudioApplications(applicationsData.applications);
+      if (verificationData.success) {
+        setVerificationDancers(verificationData.data.dancers);
+        setVerificationStudios(verificationData.data.studios);
+      }
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {
@@ -654,6 +662,43 @@ export default function AdminDashboard() {
     }
   };
 
+  const handleRejectAccount = async (accountId: string, accountType: 'dancer' | 'studio', accountName: string) => {
+    try {
+      const session = localStorage.getItem('judgeSession');
+      if (!session) {
+        error('Session expired. Please log in again.', 7000);
+        return;
+      }
+
+      const judgeData = JSON.parse(session);
+
+      const response = await fetch('/api/admin/reject-account', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          accountId,
+          accountType,
+          reason: 'Flagged as potential spam account during 48-hour verification period',
+          adminId: judgeData.id
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        success(`${accountType === 'dancer' ? 'Dancer' : 'Studio'} "${accountName}" has been rejected and disabled.`, 6000);
+        fetchData(); // Refresh the data
+      } else {
+        error(data.error || 'An unknown error occurred while rejecting the account.', 8000);
+      }
+    } catch (err) {
+      console.error('Error rejecting account:', err);
+      error('Unable to reject account. Please check your connection and try again.', 8000);
+    }
+  };
+
   const handleLogout = () => {
     localStorage.removeItem('judgeSession');
     router.push('/portal/admin');
@@ -860,7 +905,8 @@ export default function AdminDashboard() {
               { id: 'judges', label: 'Judges', icon: '👨‍⚖️', color: 'purple' },
               { id: 'assignments', label: 'Assignments', icon: '🔗', color: 'pink' },
               { id: 'dancers', label: 'Dancers', icon: '💃', color: 'rose' },
-              { id: 'studios', label: 'Studios', icon: '🏢', color: 'orange' }
+              { id: 'studios', label: 'Studios', icon: '🏢', color: 'orange' },
+              { id: 'verification', label: 'Pending Verification', icon: '🔍', color: 'emerald' }
             ].map((tab) => (
                 <button
                   key={tab.id}
@@ -1556,6 +1602,156 @@ export default function AdminDashboard() {
           </div>
         )}
 
+        {/* Pending Verification Tab */}
+        {activeTab === 'verification' && (
+          <div className="space-y-8 animate-fadeIn">
+            {/* Verification Overview */}
+            <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl overflow-hidden border border-emerald-100">
+              <div className="px-6 py-4 bg-gradient-to-r from-emerald-500/10 to-green-500/10 border-b border-emerald-100">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-8 h-8 bg-gradient-to-br from-emerald-500 to-green-600 rounded-lg flex items-center justify-center">
+                      <span className="text-white text-sm">🔍</span>
+                    </div>
+                    <h2 className="text-xl font-bold text-gray-900">48-Hour Verification Window</h2>
+                  </div>
+                  <div className="px-3 py-1 bg-emerald-100 text-emerald-800 rounded-full text-sm font-medium">
+                    {verificationDancers.length + verificationStudios.length} accounts pending
+                  </div>
+                </div>
+              </div>
+              
+              <div className="p-6">
+                <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6">
+                  <div className="flex items-start space-x-3">
+                    <span className="text-blue-500 text-lg">ℹ️</span>
+                    <div>
+                      <h3 className="font-semibold text-blue-900 mb-2">Anti-Spam Protection</h3>
+                      <p className="text-blue-800 text-sm leading-relaxed">
+                        New accounts are automatically activated but monitored for 48 hours. Use the "Reject" button to disable spam accounts. 
+                        Accounts automatically clear from this list after 48 hours and remain active indefinitely.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Recent Dancers */}
+                {verificationDancers.length > 0 && (
+                  <div className="mb-8">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                      <span className="mr-2">💃</span>
+                      Recent Dancer Registrations ({verificationDancers.length})
+                    </h3>
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full divide-y divide-gray-200">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Dancer</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">EODSA ID</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Age</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Registered</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-200">
+                          {verificationDancers.map((dancer) => (
+                            <tr key={dancer.id} className="hover:bg-gray-50">
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="text-sm font-medium text-gray-900">{dancer.name}</div>
+                                <div className="text-sm text-gray-500">ID: {dancer.nationalId}</div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-mono">
+                                {dancer.eodsaId}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                {dancer.age}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                {dancer.email || 'Not provided'}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                {new Date(dancer.createdAt).toLocaleString()}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <button
+                                  onClick={() => handleRejectAccount(dancer.id, 'dancer', dancer.name)}
+                                  className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors"
+                                >
+                                  🚫 Reject
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* Recent Studios */}
+                {verificationStudios.length > 0 && (
+                  <div className="mb-8">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                      <span className="mr-2">🏢</span>
+                      Recent Studio Registrations ({verificationStudios.length})
+                    </h3>
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full divide-y divide-gray-200">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Studio</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Registration #</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Registered</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-200">
+                          {verificationStudios.map((studio) => (
+                            <tr key={studio.id} className="hover:bg-gray-50">
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="text-sm font-medium text-gray-900">{studio.name}</div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-mono">
+                                {studio.registrationNumber}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                {studio.email}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                {new Date(studio.createdAt).toLocaleString()}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <button
+                                  onClick={() => handleRejectAccount(studio.id, 'studio', studio.name)}
+                                  className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors"
+                                >
+                                  🚫 Reject
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* No pending accounts */}
+                {verificationDancers.length === 0 && verificationStudios.length === 0 && (
+                  <div className="text-center py-12">
+                    <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <span className="text-green-600 text-2xl">✅</span>
+                    </div>
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">All Clear!</h3>
+                    <p className="text-gray-500">No accounts pending verification in the last 48 hours.</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
       </div>
 

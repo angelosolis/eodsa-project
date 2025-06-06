@@ -247,14 +247,15 @@ export default function PerformanceTypeEntryPage() {
     }
   };
 
+  // Helper function to get time limit for current performance type
+  const getTimeLimit = () => {
+    const capitalizedType = performanceType?.charAt(0).toUpperCase() + performanceType?.slice(1).toLowerCase();
+    return TIME_LIMITS[capitalizedType as keyof typeof TIME_LIMITS] || 0;
+  };
+
   const validateDuration = (duration: number): boolean => {
-    const performanceTypeLower = performanceType?.toLowerCase();
-    const maxDuration = TIME_LIMITS[performanceType as keyof typeof TIME_LIMITS];
-    
-    if (maxDuration && duration > maxDuration) {
-      return false;
-    }
-    return true;
+    const maxDuration = getTimeLimit();
+    return maxDuration > 0 ? duration <= maxDuration : false;
   };
 
   const handleSubmit = async () => {
@@ -270,20 +271,28 @@ export default function PerformanceTypeEntryPage() {
       }
 
       if (!validateDuration(formData.estimatedDuration)) {
-        const maxTime = TIME_LIMITS[performanceType as keyof typeof TIME_LIMITS];
-        showAlert(`${performanceType} performances must be ${maxTime} minutes or less`, 'warning');
+        const maxTime = getTimeLimit();
+        const maxTimeDisplay = maxTime === 3.5 ? '3:30' : `${maxTime}:00`;
+        showAlert(`${performanceType} performances must be ${maxTimeDisplay} minutes or less`, 'warning');
         setIsSubmitting(false);
         return;
       }
+
+      // Calculate EODSA fee correctly
+      const feeBreakdown = calculateEODSAFee(
+        formData.mastery,
+        performanceType as 'Solo' | 'Duet' | 'Trio' | 'Group',
+        formData.participantIds.length
+      );
 
       const eventEntryData = {
         eventId: formData.eventId,
         contestantId: contestant!.id,
         eodsaId: eodsaId,
         participantIds: formData.participantIds,
-        calculatedFee,
+        calculatedFee: feeBreakdown.totalFee,
         paymentStatus: 'pending',
-        paymentMethod: formData.paymentMethod,
+        paymentMethod: 'invoice', // Phase 1: Invoice-based payment
         approved: false,
         itemName: formData.itemName,
         choreographer: formData.choreographer,
@@ -328,8 +337,9 @@ export default function PerformanceTypeEntryPage() {
       return;
     }
     if (step === 2 && !validateDuration(formData.estimatedDuration)) {
-      const maxTime = TIME_LIMITS[performanceType as keyof typeof TIME_LIMITS];
-      showAlert(`${performanceType} performances must be ${maxTime} minutes or less`, 'warning');
+      const maxTime = getTimeLimit();
+      const maxTimeDisplay = maxTime === 3.5 ? '3:30' : `${maxTime}:00`;
+      showAlert(`⏰ Duration too long! ${performanceType} performances must be ${maxTimeDisplay} minutes or less. Current: ${formData.estimatedDuration} minutes.`, 'warning');
       return;
     }
     setStep(prev => Math.min(prev + 1, 4));
@@ -348,9 +358,26 @@ export default function PerformanceTypeEntryPage() {
           <p className="text-gray-300 mb-6">
             Your {performanceType} entry for {region} has been submitted successfully.
           </p>
-          <div className="bg-gradient-to-r from-purple-900/50 to-pink-900/50 border-2 border-purple-500/30 rounded-2xl p-6 mb-6">
-            <p className="text-sm font-medium text-purple-300 mb-2">Status</p>
-            <p className="text-lg font-bold text-purple-200">⏳ Awaiting Judging</p>
+          
+          {/* Fee Summary in Success */}
+          {formData.mastery && formData.participantIds.length > 0 && (() => {
+            const feeBreakdown = calculateEODSAFee(
+              formData.mastery,
+              performanceType as 'Solo' | 'Duet' | 'Trio' | 'Group',
+              formData.participantIds.length
+            );
+            return (
+              <div className="bg-gradient-to-r from-green-900/30 to-emerald-900/30 border-2 border-green-500/40 rounded-2xl p-6 mb-6">
+                <p className="text-lg font-bold text-green-300 mb-4">📧 Expect an Email Invoice for:</p>
+                <p className="text-3xl font-bold text-green-100">R{feeBreakdown.totalFee.toFixed(2)}</p>
+                <p className="text-sm text-green-400 mt-2">Gabriel's team will send payment instructions via email</p>
+              </div>
+            );
+          })()}
+          
+          <div className="bg-blue-900/30 border border-blue-500/40 rounded-xl p-4 mb-6">
+            <p className="text-sm font-medium text-blue-300 mb-2">Payment Instructions</p>
+            <p className="text-blue-200 text-sm">Check your email for Yoco card payment link or EFT details</p>
           </div>
           <div className="space-y-3">
             <Link 
@@ -433,8 +460,8 @@ export default function PerformanceTypeEntryPage() {
             <div className="flex justify-between mt-2 text-sm text-gray-300">
               <span>Event</span>
               <span>Details</span>
-              <span>Payment</span>
-              <span>Review</span>
+              <span>Fees</span>
+              <span>Submit</span>
             </div>
           </div>
         </div>
@@ -601,31 +628,77 @@ export default function PerformanceTypeEntryPage() {
 
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-2">
-                      Estimated Duration (minutes) * 
-                      {performanceType && TIME_LIMITS[performanceType as keyof typeof TIME_LIMITS] && (
-                        <span className="text-purple-400 ml-2">
-                          (Max: {TIME_LIMITS[performanceType as keyof typeof TIME_LIMITS]} min)
-                        </span>
-                      )}
+                      Estimated Duration (minutes) *
                     </label>
+                    
+                    {/* Time Limit Information */}
+                    <div className="bg-yellow-900/20 border border-yellow-500/30 rounded-lg p-4 mb-4">
+                      <div className="flex items-center mb-2">
+                        <svg className="w-5 h-5 text-yellow-400 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <span className="text-yellow-300 font-semibold">EODSA Max Time Limits</span>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+                        <div className="bg-yellow-900/30 p-2 rounded">
+                          <div className="text-yellow-200 font-medium">Solos</div>
+                          <div className="text-yellow-100 text-lg">2:00 mins</div>
+                        </div>
+                        <div className="bg-yellow-900/30 p-2 rounded">
+                          <div className="text-yellow-200 font-medium">Duos/Trios</div>
+                          <div className="text-yellow-100 text-lg">3:00 mins</div>
+                        </div>
+                        <div className="bg-yellow-900/30 p-2 rounded">
+                          <div className="text-yellow-200 font-medium">Groups</div>
+                          <div className="text-yellow-100 text-lg">3:30 mins</div>
+                        </div>
+                      </div>
+                                             <div className="mt-3 p-2 bg-yellow-900/40 rounded text-center">
+                         <span className="text-yellow-100 font-bold">
+                           Your {performanceType} limit: {getTimeLimit() === 3.5 ? '3:30' : `${getTimeLimit()}:00`} minutes
+                         </span>
+                       </div>
+                    </div>
+
                     <input
                       type="number"
                       name="estimatedDuration"
                       value={formData.estimatedDuration}
                       onChange={handleInputChange}
                       min="0.5"
-                      max={TIME_LIMITS[performanceType as keyof typeof TIME_LIMITS] || 10}
-                      step="0.5"
-                      className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-white placeholder-gray-400 ${
+                      max={getTimeLimit() || 10}
+                      step="0.1"
+                      placeholder={`Maximum ${getTimeLimit() === 3.5 ? '3:30' : getTimeLimit()} minutes`}
+                      className={`w-full px-4 py-3 border rounded-xl focus:ring-2 text-white placeholder-gray-400 transition-all ${
                         validateDuration(formData.estimatedDuration) 
-                          ? 'border-gray-600 bg-gray-700' 
-                          : 'border-red-500 bg-red-900/30'
+                          ? 'border-gray-600 bg-gray-700 focus:ring-purple-500 focus:border-purple-500' 
+                          : 'border-red-500 bg-red-900/30 focus:ring-red-500 focus:border-red-500'
                       }`}
                       required
                     />
-                    {!validateDuration(formData.estimatedDuration) && (
-                      <p className="text-red-400 text-xs mt-1">
-                        Duration exceeds maximum allowed for {performanceType} ({TIME_LIMITS[performanceType as keyof typeof TIME_LIMITS]} minutes)
+                    
+                    {/* Validation Messages */}
+                    {!validateDuration(formData.estimatedDuration) && formData.estimatedDuration > 0 && (
+                      <div className="mt-3 p-3 bg-red-900/30 border border-red-500/40 rounded-lg">
+                        <p className="text-red-300 text-sm font-medium flex items-center">
+                          <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          Duration too long!
+                        </p>
+                                                 <p className="text-red-200 text-sm mt-1">
+                           <strong>{performanceType} performances</strong> cannot exceed <strong>{getTimeLimit() === 3.5 ? '3:30' : `${getTimeLimit()}:00`} minutes</strong>.
+                           <br />Your current duration: <strong>{formData.estimatedDuration} minutes</strong>
+                         </p>
+                      </div>
+                    )}
+                    
+                    {validateDuration(formData.estimatedDuration) && formData.estimatedDuration > 0 && (
+                      <p className="text-green-400 text-sm mt-2 flex items-center">
+                        <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                                                 Perfect! Duration is within the {getTimeLimit() === 3.5 ? '3:30' : `${getTimeLimit()}:00`} minute limit
                       </p>
                     )}
                   </div>
@@ -633,81 +706,62 @@ export default function PerformanceTypeEntryPage() {
               </div>
             )}
 
-            {/* Step 3: Payment Method */}
+            {/* Step 3: Fee Preview */}
             {step === 3 && (
               <div>
-                <h2 className="text-2xl font-bold text-white mb-6">Payment Method</h2>
+                <h2 className="text-2xl font-bold text-white mb-6">Fee Preview</h2>
                 
-                <div className="mb-6">
-                  <div className="bg-gradient-to-r from-purple-900/50 to-pink-900/50 border-2 border-purple-500/30 rounded-2xl p-6">
-                    <h3 className="text-lg font-bold text-purple-300 mb-4">EODSA Fee Breakdown</h3>
-                    {formData.mastery && formData.participantIds.length > 0 && (() => {
-                      const feeBreakdown = calculateEODSAFee(
-                        formData.mastery,
-                        performanceType as 'Solo' | 'Duet' | 'Trio' | 'Group',
-                        formData.participantIds.length
-                      );
-                      return (
-                        <div className="space-y-3">
-                          <div className="flex justify-between items-center text-purple-200">
-                            <span>Registration Fee ({formData.participantIds.length} participant{formData.participantIds.length > 1 ? 's' : ''})</span>
-                            <span className="font-semibold">R{feeBreakdown.registrationFee.toFixed(2)}</span>
-                          </div>
-                          <div className="flex justify-between items-center text-purple-200">
-                            <span>Performance Fee ({performanceType})</span>
-                            <span className="font-semibold">R{feeBreakdown.performanceFee.toFixed(2)}</span>
-                          </div>
-                          <div className="border-t border-purple-400/30 pt-3">
-                            <div className="flex justify-between items-center">
-                              <span className="text-xl font-bold text-purple-100">Total Amount Due:</span>
-                              <span className="text-2xl font-bold text-purple-100">R{feeBreakdown.totalFee.toFixed(2)}</span>
-                            </div>
-                          </div>
-                          <div className="text-sm text-purple-400 mt-2">
-                            <p>Mastery Level: {formData.mastery}</p>
-                            <p>Performance Type: {performanceType}</p>
+                <div className="bg-gradient-to-r from-purple-900/50 to-pink-900/50 border-2 border-purple-500/30 rounded-2xl p-6 mb-6">
+                  <h3 className="text-xl font-bold text-purple-300 mb-4">💰 EODSA Fee Breakdown</h3>
+                  {formData.mastery && formData.participantIds.length > 0 && (() => {
+                    const feeBreakdown = calculateEODSAFee(
+                      formData.mastery,
+                      performanceType as 'Solo' | 'Duet' | 'Trio' | 'Group',
+                      formData.participantIds.length
+                    );
+                    return (
+                      <div className="space-y-3">
+                        <div className="flex justify-between items-center text-purple-200 text-lg">
+                          <span>Registration Fee ({formData.participantIds.length} participant{formData.participantIds.length > 1 ? 's' : ''})</span>
+                          <span className="font-semibold">R{feeBreakdown.registrationFee.toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between items-center text-purple-200 text-lg">
+                          <span>Performance Fee ({performanceType})</span>
+                          <span className="font-semibold">R{feeBreakdown.performanceFee.toFixed(2)}</span>
+                        </div>
+                        <div className="border-t border-purple-400/30 pt-3">
+                          <div className="flex justify-between items-center">
+                            <span className="text-2xl font-bold text-purple-100">Total Amount Due:</span>
+                            <span className="text-3xl font-bold text-green-300">R{feeBreakdown.totalFee.toFixed(2)}</span>
                           </div>
                         </div>
-                      );
-                    })()}
-                  </div>
+                        <div className="bg-purple-900/30 rounded-lg p-3 mt-4">
+                          <div className="text-sm text-purple-300">
+                            <p><strong>Mastery Level:</strong> {formData.mastery}</p>
+                            <p><strong>Performance Type:</strong> {performanceType}</p>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
 
-                <div className="space-y-4">
-                  <h3 className="text-lg font-semibold text-white">Select Payment Method</h3>
-                  
-                  <div
-                    onClick={() => setFormData(prev => ({ ...prev, paymentMethod: 'credit_card' }))}
-                    className={`border-2 rounded-xl p-6 cursor-pointer transition-all duration-300 ${
-                      formData.paymentMethod === 'credit_card'
-                        ? 'border-purple-400 bg-purple-900/30'
-                        : 'border-gray-600 hover:border-purple-400 bg-gray-700/50'
-                    }`}
-                  >
-                    <div className="flex items-center space-x-4">
-                      <div className="text-2xl">💳</div>
-                      <div>
-                        <h4 className="font-semibold text-white">Credit Card</h4>
-                        <p className="text-sm text-gray-300">Pay securely with your credit or debit card</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div
-                    onClick={() => setFormData(prev => ({ ...prev, paymentMethod: 'bank_transfer' }))}
-                    className={`border-2 rounded-xl p-6 cursor-pointer transition-all duration-300 ${
-                      formData.paymentMethod === 'bank_transfer'
-                        ? 'border-purple-400 bg-purple-900/30'
-                        : 'border-gray-600 hover:border-purple-400 bg-gray-700/50'
-                    }`}
-                  >
-                    <div className="flex items-center space-x-4">
-                      <div className="text-2xl">🏦</div>
-                      <div>
-                        <h4 className="font-semibold text-white">Bank Transfer</h4>
-                        <p className="text-sm text-gray-300">Direct bank transfer (EFT)</p>
-                      </div>
-                    </div>
+                <div className="bg-blue-900/20 border border-blue-500/30 rounded-xl p-6">
+                  <h3 className="text-lg font-semibold text-blue-300 mb-4 flex items-center">
+                    <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Payment Information
+                  </h3>
+                  <div className="text-blue-200 space-y-2">
+                    <p>After submitting your entry, Gabriel's team will send you an email invoice with:</p>
+                    <ul className="list-disc list-inside space-y-1 ml-4">
+                      <li><strong>Yoco card payment</strong> - Pay online with any card</li>
+                      <li><strong>EFT details</strong> - For direct bank transfer</li>
+                    </ul>
+                    <p className="text-sm text-blue-300 mt-3 bg-blue-900/30 p-3 rounded-lg">
+                      <strong>No payment is required now.</strong> Complete payment after receiving your invoice.
+                    </p>
                   </div>
                 </div>
               </div>
@@ -749,9 +803,9 @@ export default function PerformanceTypeEntryPage() {
                     </div>
                   </div>
 
-                  {/* Payment Summary */}
+                  {/* Fee Summary */}
                   <div className="bg-gradient-to-r from-purple-900/50 to-pink-900/50 border-2 border-purple-500/30 rounded-xl p-6">
-                    <h3 className="font-semibold text-purple-300 mb-3">EODSA Payment Summary</h3>
+                    <h3 className="text-xl font-bold text-purple-300 mb-4">💰 Fee Summary</h3>
                     {formData.mastery && formData.participantIds.length > 0 && (() => {
                       const feeBreakdown = calculateEODSAFee(
                         formData.mastery,
@@ -759,27 +813,46 @@ export default function PerformanceTypeEntryPage() {
                         formData.participantIds.length
                       );
                       return (
-                        <div className="space-y-2">
-                          <div className="flex justify-between text-purple-200">
+                        <div className="space-y-3">
+                          <div className="flex justify-between text-purple-200 text-lg">
                             <span>Registration Fee ({formData.participantIds.length} participant{formData.participantIds.length > 1 ? 's' : ''})</span>
-                            <span>R{feeBreakdown.registrationFee.toFixed(2)}</span>
+                            <span className="font-semibold">R{feeBreakdown.registrationFee.toFixed(2)}</span>
                           </div>
-                          <div className="flex justify-between text-purple-200">
+                          <div className="flex justify-between text-purple-200 text-lg">
                             <span>Performance Fee ({performanceType})</span>
-                            <span>R{feeBreakdown.performanceFee.toFixed(2)}</span>
+                            <span className="font-semibold">R{feeBreakdown.performanceFee.toFixed(2)}</span>
                           </div>
-                          <div className="border-t border-purple-400/30 pt-2 mt-3">
+                          <div className="border-t border-purple-400/30 pt-3 mt-4">
                             <div className="flex justify-between items-center">
-                              <span className="text-lg font-bold text-purple-100">Total Amount Due:</span>
-                              <span className="text-xl font-bold text-purple-100">R{feeBreakdown.totalFee.toFixed(2)}</span>
+                              <span className="text-2xl font-bold text-purple-100">Total Amount Due:</span>
+                              <span className="text-3xl font-bold text-green-300">R{feeBreakdown.totalFee.toFixed(2)}</span>
                             </div>
                           </div>
-                          <p className="text-sm text-purple-400 mt-2">
-                            Payment Method: {formData.paymentMethod === 'credit_card' ? 'Credit Card' : 'Bank Transfer'}
-                          </p>
                         </div>
                       );
                     })()}
+                  </div>
+
+                  {/* Payment Information (Phase 1) */}
+                  <div className="bg-blue-900/20 border border-blue-500/30 rounded-xl p-6">
+                    <h3 className="text-lg font-semibold text-blue-300 mb-4 flex items-center">
+                      <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 003 3z" />
+                      </svg>
+                      How to Pay
+                    </h3>
+                    <div className="text-blue-200 space-y-3">
+                      <p>After you click <strong>"Submit Entries"</strong>, you'll receive an email invoice with:</p>
+                      <ul className="list-disc list-inside space-y-1 ml-4">
+                        <li>A link to pay by card (Yoco)</li>
+                        <li>Our bank details for EFT</li>
+                      </ul>
+                      <div className="bg-blue-900/30 border border-blue-500/40 rounded-lg p-3 mt-4">
+                        <p className="text-sm text-blue-300">
+                          <strong>⏰ Important:</strong> Please complete payment before the entry deadline.
+                        </p>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -806,9 +879,21 @@ export default function PerformanceTypeEntryPage() {
                 <button
                   onClick={handleSubmit}
                   disabled={isSubmitting}
-                  className="px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-600 text-white rounded-xl hover:from-purple-600 hover:to-pink-700 transition-all duration-300 font-semibold disabled:opacity-50"
+                  className="px-8 py-4 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-xl hover:from-green-600 hover:to-emerald-700 transition-all duration-300 font-bold text-lg shadow-lg hover:shadow-xl transform hover:scale-105 disabled:opacity-50"
                 >
-                  {isSubmitting ? 'Submitting...' : 'Submit Entry'}
+                  {isSubmitting ? (
+                    <div className="flex items-center justify-center">
+                      <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin mr-3"></div>
+                      Submitting Entries...
+                    </div>
+                  ) : (
+                    <span className="flex items-center justify-center">
+                      <svg className="w-6 h-6 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      Submit Entries
+                    </span>
+                  )}
                 </button>
               )}
             </div>

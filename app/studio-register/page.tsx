@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { useRecaptcha } from '@/hooks/useRecaptcha';
 import { useRouter } from 'next/navigation';
 
 interface StudioRegistrationForm {
@@ -28,6 +29,7 @@ export default function StudioRegisterPage() {
   const [submitted, setSubmitted] = useState(false);
   const [registrationNumber, setRegistrationNumber] = useState('');
   const [error, setError] = useState('');
+  const { isLoaded: recaptchaLoaded, executeRecaptcha } = useRecaptcha();
   const router = useRouter();
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -58,16 +60,25 @@ export default function StudioRegisterPage() {
     }
 
     try {
+      // Execute reCAPTCHA
+      const recaptchaToken = await executeRecaptcha('studio_registration');
+      if (!recaptchaToken) {
+        setError('Security verification failed. Please try again.');
+        setIsSubmitting(false);
+        return;
+      }
+
       const registrationData = {
         name: formData.name,
         email: formData.email,
         password: formData.password,
         contactPerson: formData.contactPerson,
         address: formData.address,
-        phone: formData.phone
+        phone: formData.phone,
+        recaptchaToken: recaptchaToken
       };
 
-      const response = await fetch('/api/studios', {
+      const response = await fetch('/api/studios/register', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -81,7 +92,15 @@ export default function StudioRegisterPage() {
         setRegistrationNumber(result.registrationNumber);
         setSubmitted(true);
       } else {
-        setError(result.error || 'Registration failed');
+        // Handle specific error types
+        if (result.rateLimited) {
+          const resetTime = new Date(result.resetTime).toLocaleTimeString();
+          setError(`⏰ Rate limit exceeded! You can only register 3 accounts per hour. Please try again after ${resetTime}.`);
+        } else if (result.recaptchaFailed) {
+          setError(`🔒 Security verification failed. Please refresh the page and try again.`);
+        } else {
+          setError(result.error || 'Registration failed');
+        }
       }
     } catch (error) {
       console.error('Registration error:', error);
@@ -310,7 +329,7 @@ export default function StudioRegisterPage() {
               {/* Submit Button */}
               <button
                 type="submit"
-                disabled={isSubmitting}
+                disabled={isSubmitting || !recaptchaLoaded}
                 className="w-full px-6 py-4 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-2xl hover:from-purple-600 hover:to-pink-600 transition-all duration-300 font-semibold shadow-lg hover:shadow-xl transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
               >
                 {isSubmitting ? (
