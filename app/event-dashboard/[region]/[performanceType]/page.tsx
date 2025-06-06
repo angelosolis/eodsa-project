@@ -48,7 +48,6 @@ interface EventEntryForm {
   mastery: string;
   itemStyle: string;
   estimatedDuration: number;
-  itemNumber?: number;
 }
 
 export default function PerformanceTypeEntryPage() {
@@ -71,8 +70,7 @@ export default function PerformanceTypeEntryPage() {
     choreographer: '',
     mastery: '',
     itemStyle: '',
-    estimatedDuration: 3,
-    itemNumber: undefined
+    estimatedDuration: 3
   });
   const [calculatedFee, setCalculatedFee] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
@@ -291,8 +289,7 @@ export default function PerformanceTypeEntryPage() {
         choreographer: formData.choreographer,
         mastery: formData.mastery,
         itemStyle: formData.itemStyle,
-        estimatedDuration: formData.estimatedDuration,
-        itemNumber: formData.itemNumber
+        estimatedDuration: formData.estimatedDuration
       };
 
       const response = await fetch('/api/event-entries', {
@@ -566,21 +563,7 @@ export default function PerformanceTypeEntryPage() {
                     />
                   </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">Item Number</label>
-                    <input
-                      type="number"
-                      name="itemNumber"
-                      value={formData.itemNumber || ''}
-                      onChange={handleInputChange}
-                      placeholder="Optional program order number"
-                      className="w-full px-4 py-3 border border-gray-600 bg-gray-700 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-white placeholder-gray-400"
-                      min="1"
-                    />
-                    <p className="text-xs text-gray-400 mt-1">
-                      Optional: For program ordering (can be assigned later by admin)
-                    </p>
-                  </div>
+
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
@@ -763,9 +746,6 @@ export default function PerformanceTypeEntryPage() {
                       <p><strong>Item Style:</strong> {formData.itemStyle}</p>
                       <p><strong>Duration:</strong> {formData.estimatedDuration} minutes</p>
                       <p><strong>Participants:</strong> {formData.participantIds.length}</p>
-                      {formData.itemNumber && (
-                        <p><strong>Item Number:</strong> {formData.itemNumber}</p>
-                      )}
                     </div>
                   </div>
 

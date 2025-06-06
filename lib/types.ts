@@ -86,6 +86,7 @@ export interface EventEntry {
   paymentMethod?: 'credit_card' | 'bank_transfer';
   submittedAt: string;
   approved: boolean;
+  qualifiedForNationals: boolean;
   itemNumber?: number; // NEW: Item Number for program order
   // EODSA Regional Entry Form fields
   itemName: string;

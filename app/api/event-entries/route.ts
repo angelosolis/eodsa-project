@@ -151,6 +151,8 @@ export async function POST(request: NextRequest) {
       paymentStatus: body.paymentStatus || 'pending',
       paymentMethod: body.paymentMethod,
       approved: body.approved || false,
+      qualifiedForNationals: body.qualifiedForNationals || false,
+      itemNumber: body.itemNumber || null, // Allow admin to set this, but not required from contestants
       itemName: body.itemName,
       choreographer: body.choreographer,
       mastery: body.mastery,

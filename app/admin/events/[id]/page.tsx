@@ -31,6 +31,7 @@ interface EventEntry {
   paymentMethod?: string;
   submittedAt: string;
   approved: boolean;
+  qualifiedForNationals: boolean;
   itemName: string;
   choreographer: string;
   mastery: string;
@@ -69,6 +70,10 @@ export default function EventParticipantsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [approvingEntries, setApprovingEntries] = useState<Set<string>>(new Set());
+  const [qualifyingEntries, setQualifyingEntries] = useState<Set<string>>(new Set());
+  const [assigningItemNumbers, setAssigningItemNumbers] = useState<Set<string>>(new Set());
+  const [editingItemNumber, setEditingItemNumber] = useState<string | null>(null);
+  const [tempItemNumber, setTempItemNumber] = useState<string>('');
   const [isExporting, setIsExporting] = useState(false);
   const { showAlert } = useAlert();
 
@@ -170,6 +175,99 @@ export default function EventParticipantsPage() {
     }
   };
 
+  const toggleQualification = async (entryId: string, currentStatus: boolean) => {
+    if (qualifyingEntries.has(entryId)) return;
+    
+    setQualifyingEntries(prev => new Set(prev).add(entryId));
+    
+    try {
+      const response = await fetch(`/api/admin/entries/${entryId}/qualify`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer admin', // Simple auth for demo
+        },
+        body: JSON.stringify({
+          qualifiedForNationals: !currentStatus
+        }),
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        showAlert(result.message, 'success');
+        loadEventData(); // Reload data
+      } else {
+        const error = await response.json();
+        showAlert(`Failed to update qualification: ${error.error}`, 'error');
+      }
+    } catch (error) {
+      console.error('Error updating qualification:', error);
+      showAlert('Failed to update qualification status', 'error');
+    } finally {
+      setQualifyingEntries(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(entryId);
+        return newSet;
+      });
+    }
+  };
+
+  const assignItemNumber = async (entryId: string, itemNumber: number) => {
+    if (assigningItemNumbers.has(entryId)) return;
+    
+    setAssigningItemNumbers(prev => new Set(prev).add(entryId));
+    
+    try {
+      const response = await fetch(`/api/admin/entries/${entryId}/assign-item-number`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer admin',
+        },
+        body: JSON.stringify({ itemNumber }),
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        showAlert(result.message, 'success');
+        setEditingItemNumber(null);
+        setTempItemNumber('');
+        loadEventData(); // Reload data
+      } else {
+        const error = await response.json();
+        showAlert(`Failed to assign item number: ${error.error}`, 'error');
+      }
+    } catch (error) {
+      console.error('Error assigning item number:', error);
+      showAlert('Failed to assign item number', 'error');
+    } finally {
+      setAssigningItemNumbers(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(entryId);
+        return newSet;
+      });
+    }
+  };
+
+  const handleItemNumberEdit = (entryId: string, currentNumber?: number) => {
+    setEditingItemNumber(entryId);
+    setTempItemNumber(currentNumber ? currentNumber.toString() : '');
+  };
+
+  const handleItemNumberSave = (entryId: string) => {
+    const itemNumber = parseInt(tempItemNumber);
+    if (isNaN(itemNumber) || itemNumber < 1) {
+      showAlert('Please enter a valid item number (positive integer)', 'warning');
+      return;
+    }
+    assignItemNumber(entryId, itemNumber);
+  };
+
+  const handleItemNumberCancel = () => {
+    setEditingItemNumber(null);
+    setTempItemNumber('');
+  };
+
   const getStatusBadge = (status: string) => {
     const badges = {
       pending: 'bg-yellow-100 text-yellow-800 border-yellow-200',
@@ -192,7 +290,7 @@ export default function EventParticipantsPage() {
         'Style': entry.itemStyle,
         'Age Category': event?.ageCategory || '',
         'Fee': `R${entry.calculatedFee.toFixed(2)}`,
-        'Qualified for Nationals': entry.approved && entry.paymentStatus === 'paid' ? 'Yes' : 'No',
+        'Qualified for Nationals': entry.qualifiedForNationals ? 'Yes' : 'No',
         'Payment Status': entry.paymentStatus.toUpperCase(),
         'Entry Status': entry.approved ? 'APPROVED' : 'PENDING',
         'Choreographer': entry.choreographer,
@@ -352,7 +450,7 @@ export default function EventParticipantsPage() {
                 </div>
                 {entries.length > 0 && (
                   <div className="px-3 py-1 bg-emerald-100 text-emerald-800 rounded-full text-sm font-medium">
-                    {entries.filter(e => e.approved && e.paymentStatus === 'paid').length} qualified
+                    {entries.filter(e => e.qualifiedForNationals).length} qualified
                   </div>
                 )}
               </div>
@@ -386,12 +484,50 @@ export default function EventParticipantsPage() {
                   {entries.map((entry) => (
                     <tr key={entry.id} className="hover:bg-indigo-50/50 transition-colors duration-200">
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-bold text-gray-900">
-                          {entry.itemNumber || 'TBA'}
-                        </div>
-                        <div className="text-xs text-gray-500">
-                          Program Order
-                        </div>
+                        {editingItemNumber === entry.id ? (
+                          <div className="flex flex-col space-y-1">
+                            <input
+                              type="number"
+                              value={tempItemNumber}
+                              onChange={(e) => setTempItemNumber(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') handleItemNumberSave(entry.id);
+                                if (e.key === 'Escape') handleItemNumberCancel();
+                              }}
+                              className="w-20 px-2 py-1 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                              placeholder="Item #"
+                              min="1"
+                              autoFocus
+                            />
+                            <div className="flex space-x-1">
+                              <button
+                                onClick={() => handleItemNumberSave(entry.id)}
+                                disabled={assigningItemNumbers.has(entry.id)}
+                                className="px-2 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
+                              >
+                                {assigningItemNumbers.has(entry.id) ? '...' : '✓'}
+                              </button>
+                              <button
+                                onClick={handleItemNumberCancel}
+                                className="px-2 py-1 text-xs bg-gray-500 text-white rounded hover:bg-gray-600"
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div 
+                            onClick={() => handleItemNumberEdit(entry.id, entry.itemNumber)}
+                            className="cursor-pointer hover:bg-gray-100 rounded p-1 transition-colors"
+                          >
+                            <div className="text-sm font-bold text-gray-900">
+                              {entry.itemNumber || 'Click to assign'}
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              Program Order
+                            </div>
+                          </div>
+                        )}
                       </td>
                       <td className="px-6 py-4">
                         <div>
@@ -427,23 +563,43 @@ export default function EventParticipantsPage() {
                           }`}>
                             {entry.approved ? 'APPROVED' : 'PENDING'}
                           </span>
-                          {entry.approved && entry.paymentStatus === 'paid' && (
+                          {entry.qualifiedForNationals && (
                             <span className="inline-flex px-2 py-1 text-xs font-medium rounded-full bg-purple-100 text-purple-800 border border-purple-200">
-                              QUALIFIED
+                              QUALIFIED FOR NATIONALS
                             </span>
                           )}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                        {!entry.approved && (
-                          <button
-                            onClick={() => approveEntry(entry.id)}
-                            disabled={approvingEntries.has(entry.id)}
-                            className="text-green-600 hover:text-green-900 disabled:opacity-50 font-medium"
-                          >
-                            {approvingEntries.has(entry.id) ? 'Approving...' : 'Approve'}
-                          </button>
-                        )}
+                        <div className="flex flex-col space-y-2">
+                          {!entry.approved && (
+                            <button
+                              onClick={() => approveEntry(entry.id)}
+                              disabled={approvingEntries.has(entry.id)}
+                              className="text-green-600 hover:text-green-900 disabled:opacity-50 font-medium"
+                            >
+                              {approvingEntries.has(entry.id) ? 'Approving...' : 'Approve'}
+                            </button>
+                          )}
+                          {entry.approved && (
+                            <button
+                              onClick={() => toggleQualification(entry.id, entry.qualifiedForNationals)}
+                              disabled={qualifyingEntries.has(entry.id)}
+                              className={`px-3 py-1 text-xs font-medium rounded-lg transition-colors ${
+                                entry.qualifiedForNationals
+                                  ? 'bg-purple-600 text-white hover:bg-purple-700'
+                                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                              } disabled:opacity-50`}
+                            >
+                              {qualifyingEntries.has(entry.id) 
+                                ? 'Updating...' 
+                                : entry.qualifiedForNationals 
+                                  ? 'Qualified ✓' 
+                                  : 'Qualify for Nationals'
+                              }
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}

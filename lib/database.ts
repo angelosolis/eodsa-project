@@ -328,6 +328,7 @@ export const initializeDatabase = async () => {
         payment_method TEXT CHECK(payment_method IN ('credit_card', 'bank_transfer')),
         submitted_at TEXT NOT NULL,
         approved BOOLEAN DEFAULT FALSE,
+        qualified_for_nationals BOOLEAN DEFAULT FALSE,
         item_number INTEGER,
         item_name TEXT NOT NULL,
         choreographer TEXT NOT NULL,
@@ -663,8 +664,8 @@ export const db = {
     const submittedAt = new Date().toISOString();
     
     await sqlClient`
-      INSERT INTO event_entries (id, event_id, contestant_id, eodsa_id, participant_ids, calculated_fee, payment_status, submitted_at, approved, item_number, item_name, choreographer, mastery, item_style, estimated_duration)
-      VALUES (${id}, ${eventEntry.eventId}, ${eventEntry.contestantId}, ${eventEntry.eodsaId}, ${JSON.stringify(eventEntry.participantIds)}, ${eventEntry.calculatedFee}, ${eventEntry.paymentStatus}, ${submittedAt}, ${eventEntry.approved}, ${eventEntry.itemNumber || null}, ${eventEntry.itemName}, ${eventEntry.choreographer}, ${eventEntry.mastery}, ${eventEntry.itemStyle}, ${eventEntry.estimatedDuration})
+      INSERT INTO event_entries (id, event_id, contestant_id, eodsa_id, participant_ids, calculated_fee, payment_status, submitted_at, approved, qualified_for_nationals, item_number, item_name, choreographer, mastery, item_style, estimated_duration)
+      VALUES (${id}, ${eventEntry.eventId}, ${eventEntry.contestantId}, ${eventEntry.eodsaId}, ${JSON.stringify(eventEntry.participantIds)}, ${eventEntry.calculatedFee}, ${eventEntry.paymentStatus}, ${submittedAt}, ${eventEntry.approved}, ${eventEntry.qualifiedForNationals || false}, ${eventEntry.itemNumber || null}, ${eventEntry.itemName}, ${eventEntry.choreographer}, ${eventEntry.mastery}, ${eventEntry.itemStyle}, ${eventEntry.estimatedDuration})
     `;
     
     return { ...eventEntry, id, submittedAt };
@@ -684,6 +685,7 @@ export const db = {
       paymentMethod: row.payment_method,
       submittedAt: row.submitted_at,
       approved: row.approved,
+      qualifiedForNationals: row.qualified_for_nationals,
       itemName: row.item_name,
       choreographer: row.choreographer,
       mastery: row.mastery,
@@ -706,6 +708,7 @@ export const db = {
       paymentMethod: row.payment_method,
       submittedAt: row.submitted_at,
       approved: row.approved,
+      qualifiedForNationals: row.qualified_for_nationals,
       itemName: row.item_name,
       choreographer: row.choreographer,
       mastery: row.mastery,
@@ -722,6 +725,22 @@ export const db = {
       await sqlClient`
         UPDATE event_entries 
         SET approved = ${updates.approved}
+        WHERE id = ${id}
+      `;
+    }
+    
+    if (updates.qualifiedForNationals !== undefined) {
+      await sqlClient`
+        UPDATE event_entries 
+        SET qualified_for_nationals = ${updates.qualifiedForNationals}
+        WHERE id = ${id}
+      `;
+    }
+    
+    if (updates.itemNumber !== undefined) {
+      await sqlClient`
+        UPDATE event_entries 
+        SET item_number = ${updates.itemNumber}
         WHERE id = ${id}
       `;
     }
@@ -2226,6 +2245,248 @@ export const unifiedDb = {
     }));
   },
 
+  // Get all competition entries for a studio's dancers
+  async getStudioEntries(studioId: string) {
+    const sqlClient = getSql();
+    
+    // First get all dancers belonging to the studio
+    const studioDancers = await this.getStudioDancers(studioId);
+    const dancerEodsaIds = studioDancers.map(d => d.eodsaId);
+    
+    if (dancerEodsaIds.length === 0) {
+      return [];
+    }
+    
+    // Get all event entries for these dancers
+    const result = await sqlClient`
+      SELECT ee.*, e.name as event_name, e.region, e.event_date, e.venue, e.performance_type,
+             c.name as contestant_name, c.type as contestant_type
+      FROM event_entries ee
+      JOIN events e ON ee.event_id = e.id
+      JOIN contestants c ON ee.contestant_id = c.id
+      WHERE ee.eodsa_id = ANY(${dancerEodsaIds})
+      ORDER BY ee.submitted_at DESC
+    ` as any[];
+    
+    // Enhance entries with participant names
+    const enhancedEntries = await Promise.all(
+      result.map(async (row: any) => {
+        try {
+          const contestant = await db.getContestantById(row.contestant_id);
+          const participantNames = JSON.parse(row.participant_ids).map((id: string) => {
+            const dancer = contestant?.dancers.find(d => d.id === id);
+            return dancer?.name || 'Unknown Dancer';
+          });
+          
+          return {
+            id: row.id,
+            eventId: row.event_id,
+            eventName: row.event_name,
+            region: row.region,
+            eventDate: row.event_date,
+            venue: row.venue,
+            performanceType: row.performance_type,
+            contestantId: row.contestant_id,
+            contestantName: row.contestant_name,
+            contestantType: row.contestant_type,
+            eodsaId: row.eodsa_id,
+            participantIds: JSON.parse(row.participant_ids),
+            participantNames,
+            calculatedFee: parseFloat(row.calculated_fee),
+            paymentStatus: row.payment_status,
+            paymentMethod: row.payment_method,
+            submittedAt: row.submitted_at,
+            approved: row.approved,
+            qualifiedForNationals: row.qualified_for_nationals,
+            itemNumber: row.item_number,
+            itemName: row.item_name,
+            choreographer: row.choreographer,
+            mastery: row.mastery,
+            itemStyle: row.item_style,
+            estimatedDuration: row.estimated_duration,
+            createdAt: row.created_at
+          };
+        } catch (error) {
+          console.error(`Error processing entry ${row.id}:`, error);
+          return null;
+        }
+      })
+    );
+    
+    return enhancedEntries.filter(entry => entry !== null);
+  },
+
+  // Update a competition entry (studio verification)
+  async updateStudioEntry(studioId: string, entryId: string, updates: {
+    itemName?: string;
+    choreographer?: string;
+    mastery?: string;
+    itemStyle?: string;
+    estimatedDuration?: number;
+    participantIds?: string[];
+  }) {
+    const sqlClient = getSql();
+    
+    // First verify this entry belongs to a dancer from this studio
+    const entry = await sqlClient`
+      SELECT ee.*, sa.studio_id
+      FROM event_entries ee
+      JOIN dancers d ON ee.eodsa_id = d.eodsa_id
+      JOIN studio_applications sa ON d.id = sa.dancer_id
+      WHERE ee.id = ${entryId} AND sa.studio_id = ${studioId} AND sa.status = 'accepted'
+      LIMIT 1
+    ` as any[];
+    
+    if (entry.length === 0) {
+      throw new Error('Entry not found or not owned by this studio');
+    }
+    
+    // Check if entry is still editable (not approved or event hasn't passed)
+    const eventResult = await sqlClient`
+      SELECT registration_deadline, event_date 
+      FROM events 
+      WHERE id = ${entry[0].event_id}
+    ` as any[];
+    
+    if (eventResult.length > 0) {
+      const deadline = new Date(eventResult[0].registration_deadline);
+      const now = new Date();
+      
+      if (now > deadline) {
+        throw new Error('Registration deadline has passed for this event');
+      }
+    }
+    
+    // Build update query dynamically
+    const updateFields = [];
+    const updateValues = [];
+    
+    if (updates.itemName !== undefined) {
+      updateFields.push('item_name = ?');
+      updateValues.push(updates.itemName);
+    }
+    if (updates.choreographer !== undefined) {
+      updateFields.push('choreographer = ?');
+      updateValues.push(updates.choreographer);
+    }
+    if (updates.mastery !== undefined) {
+      updateFields.push('mastery = ?');
+      updateValues.push(updates.mastery);
+    }
+    if (updates.itemStyle !== undefined) {
+      updateFields.push('item_style = ?');
+      updateValues.push(updates.itemStyle);
+    }
+    if (updates.estimatedDuration !== undefined) {
+      updateFields.push('estimated_duration = ?');
+      updateValues.push(updates.estimatedDuration);
+    }
+    if (updates.participantIds !== undefined) {
+      updateFields.push('participant_ids = ?');
+      updateValues.push(JSON.stringify(updates.participantIds));
+    }
+    
+    if (updateFields.length === 0) {
+      throw new Error('No valid updates provided');
+    }
+    
+    // Build the update query using postgres.js syntax
+    let updateQuery = 'UPDATE event_entries SET ';
+    const updateParts = [];
+    
+    if (updates.itemName !== undefined) {
+      updateParts.push(sqlClient`item_name = ${updates.itemName}`);
+    }
+    if (updates.choreographer !== undefined) {
+      updateParts.push(sqlClient`choreographer = ${updates.choreographer}`);
+    }
+    if (updates.mastery !== undefined) {
+      updateParts.push(sqlClient`mastery = ${updates.mastery}`);
+    }
+    if (updates.itemStyle !== undefined) {
+      updateParts.push(sqlClient`item_style = ${updates.itemStyle}`);
+    }
+    if (updates.estimatedDuration !== undefined) {
+      updateParts.push(sqlClient`estimated_duration = ${updates.estimatedDuration}`);
+    }
+    if (updates.participantIds !== undefined) {
+      updateParts.push(sqlClient`participant_ids = ${JSON.stringify(updates.participantIds)}`);
+    }
+    
+    // Execute the update
+    if (updates.itemName !== undefined) {
+      await sqlClient`UPDATE event_entries SET item_name = ${updates.itemName} WHERE id = ${entryId}`;
+    }
+    if (updates.choreographer !== undefined) {
+      await sqlClient`UPDATE event_entries SET choreographer = ${updates.choreographer} WHERE id = ${entryId}`;
+    }
+    if (updates.mastery !== undefined) {
+      await sqlClient`UPDATE event_entries SET mastery = ${updates.mastery} WHERE id = ${entryId}`;
+    }
+    if (updates.itemStyle !== undefined) {
+      await sqlClient`UPDATE event_entries SET item_style = ${updates.itemStyle} WHERE id = ${entryId}`;
+    }
+    if (updates.estimatedDuration !== undefined) {
+      await sqlClient`UPDATE event_entries SET estimated_duration = ${updates.estimatedDuration} WHERE id = ${entryId}`;
+    }
+    if (updates.participantIds !== undefined) {
+      await sqlClient`UPDATE event_entries SET participant_ids = ${JSON.stringify(updates.participantIds)} WHERE id = ${entryId}`;
+    }
+    
+    // Return updated entry
+    const updatedResult = await sqlClient`
+      SELECT * FROM event_entries WHERE id = ${entryId}
+    ` as any[];
+    
+    return updatedResult[0];
+  },
+
+  // Delete/withdraw a competition entry (studio verification)
+  async deleteStudioEntry(studioId: string, entryId: string) {
+    const sqlClient = getSql();
+    
+    // First verify this entry belongs to a dancer from this studio
+    const entry = await sqlClient`
+      SELECT ee.*, sa.studio_id
+      FROM event_entries ee
+      JOIN dancers d ON ee.eodsa_id = d.eodsa_id
+      JOIN studio_applications sa ON d.id = sa.dancer_id
+      WHERE ee.id = ${entryId} AND sa.studio_id = ${studioId} AND sa.status = 'accepted'
+      LIMIT 1
+    ` as any[];
+    
+    if (entry.length === 0) {
+      throw new Error('Entry not found or not owned by this studio');
+    }
+    
+    // Check if entry is still editable (not approved or event hasn't passed)
+    const eventResult = await sqlClient`
+      SELECT registration_deadline, event_date 
+      FROM events 
+      WHERE id = ${entry[0].event_id}
+    ` as any[];
+    
+    if (eventResult.length > 0) {
+      const deadline = new Date(eventResult[0].registration_deadline);
+      const now = new Date();
+      
+      if (now > deadline) {
+        throw new Error('Registration deadline has passed for this event');
+      }
+    }
+    
+    // Delete the entry and any associated performances
+    await sqlClient`DELETE FROM scores WHERE performance_id IN (
+      SELECT id FROM performances WHERE event_entry_id = ${entryId}
+    )`;
+    
+    await sqlClient`DELETE FROM performances WHERE event_entry_id = ${entryId}`;
+    
+    await sqlClient`DELETE FROM event_entries WHERE id = ${entryId}`;
+    
+    return { success: true, message: 'Entry withdrawn successfully' };
+  },
+
   // Get available studios for dancer applications
   async getAvailableStudios(dancerId: string) {
     const sqlClient = getSql();
@@ -2448,6 +2709,50 @@ export const unifiedDb = {
       respondedBy: addedBy,
       dancer: dancer
     };
+  },
+
+  // Update dancer information
+  async updateDancer(dancerId: string, updates: {
+    name?: string;
+    age?: number;
+    dateOfBirth?: string;
+    nationalId?: string;
+    email?: string;
+    phone?: string;
+  }) {
+    const sqlClient = getSql();
+    
+    // Update each field individually to avoid SQL injection
+    if (updates.name !== undefined) {
+      await sqlClient`UPDATE dancers SET name = ${updates.name} WHERE id = ${dancerId}`;
+    }
+    if (updates.age !== undefined) {
+      await sqlClient`UPDATE dancers SET age = ${updates.age} WHERE id = ${dancerId}`;
+    }
+    if (updates.dateOfBirth !== undefined) {
+      await sqlClient`UPDATE dancers SET date_of_birth = ${updates.dateOfBirth} WHERE id = ${dancerId}`;
+    }
+    if (updates.nationalId !== undefined) {
+      await sqlClient`UPDATE dancers SET national_id = ${updates.nationalId} WHERE id = ${dancerId}`;
+    }
+    if (updates.email !== undefined) {
+      await sqlClient`UPDATE dancers SET email = ${updates.email} WHERE id = ${dancerId}`;
+    }
+    if (updates.phone !== undefined) {
+      await sqlClient`UPDATE dancers SET phone = ${updates.phone} WHERE id = ${dancerId}`;
+    }
+  },
+
+  // Remove dancer from studio
+  async removeDancerFromStudio(studioId: string, dancerId: string) {
+    const sqlClient = getSql();
+    
+    // Set application status to withdrawn
+    await sqlClient`
+      UPDATE studio_applications 
+      SET status = 'withdrawn', responded_at = CURRENT_TIMESTAMP
+      WHERE studio_id = ${studioId} AND dancer_id = ${dancerId} AND status = 'accepted'
+    `;
   },
 
   // Utility function to calculate age
