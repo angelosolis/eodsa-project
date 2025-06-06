@@ -10,8 +10,6 @@ export async function POST(request: NextRequest) {
     await initializeDatabase();
     
     const body = await request.json();
-    console.log('Registration request body:', JSON.stringify(body, null, 2));
-    
     const { name, dateOfBirth, nationalId, email, phone, guardianName, guardianEmail, guardianPhone, recaptchaToken } = body;
     
     // Get client IP for rate limiting
@@ -31,56 +29,43 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    // Verify reCAPTCHA token
+        // Verify reCAPTCHA token
     if (!recaptchaToken) {
       return NextResponse.json(
         { error: 'reCAPTCHA verification is required' },
         { status: 400 }
       );
     }
-    
-    console.log('About to verify reCAPTCHA...');
+
     const recaptchaResult = await verifyRecaptcha(recaptchaToken, clientIP);
-    console.log('reCAPTCHA result:', recaptchaResult);
     
-    if (!recaptchaResult.success) {
-      console.log('reCAPTCHA verification failed');
-      return NextResponse.json(
-        { 
-          error: `Security verification failed: ${recaptchaResult.error}`,
-          recaptchaFailed: true 
-        },
-        { status: 400 }
-      );
-    }
+          if (!recaptchaResult.success) {
+        return NextResponse.json(
+          { 
+            error: `Security verification failed: ${recaptchaResult.error}`,
+            recaptchaFailed: true 
+          },
+          { status: 400 }
+        );
+      }
     
-    console.log('reCAPTCHA verification passed!');
+          if (!name || !dateOfBirth || !nationalId) {
+        return NextResponse.json(
+          { error: 'Name, date of birth, and national ID are required' },
+          { status: 400 }
+        );
+      }
 
-    console.log('Validation check:', { name, dateOfBirth, nationalId });
-    
-    if (!name || !dateOfBirth || !nationalId) {
-      console.log('Validation failed - missing required fields');
-      return NextResponse.json(
-        { error: 'Name, date of birth, and national ID are required' },
-        { status: 400 }
-      );
-    }
-
-    // Calculate age
-    const age = unifiedDb.calculateAge(dateOfBirth);
-    console.log('Calculated age:', age);
-    console.log('Guardian info:', { guardianName, guardianEmail, guardianPhone });
-    
-    // If under 18, require guardian information
-    if (age < 18 && (!guardianName || !guardianEmail || !guardianPhone)) {
-      console.log('Guardian validation failed for minor');
-      return NextResponse.json(
-        { error: 'Guardian information is required for dancers under 18' },
-        { status: 400 }
-      );
-    }
-    
-    console.log('About to call registerDancer...');
+      // Calculate age
+      const age = unifiedDb.calculateAge(dateOfBirth);
+      
+      // If under 18, require guardian information
+      if (age < 18 && (!guardianName || !guardianEmail || !guardianPhone)) {
+        return NextResponse.json(
+          { error: 'Guardian information is required for dancers under 18' },
+          { status: 400 }
+        );
+      }
 
     const result = await unifiedDb.registerDancer({
       name,
@@ -91,9 +76,7 @@ export async function POST(request: NextRequest) {
       guardianName,
       guardianEmail,
       guardianPhone
-    });
-    
-    console.log('registerDancer result:', result);
+          });
 
     // Email system disabled for Phase 1
     // if (email) {

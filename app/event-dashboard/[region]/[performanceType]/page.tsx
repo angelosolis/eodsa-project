@@ -754,13 +754,13 @@ export default function PerformanceTypeEntryPage() {
                     Payment Information
                   </h3>
                   <div className="text-blue-200 space-y-2">
-                    <p>After submitting your entry, Gabriel's team will send you an email invoice with:</p>
+                    <p>Once your entry is submitted, you'll receive an invoice by email with:</p>
                     <ul className="list-disc list-inside space-y-1 ml-4">
-                      <li><strong>Yoco card payment</strong> - Pay online with any card</li>
-                      <li><strong>EFT details</strong> - For direct bank transfer</li>
+                      <li>A secure Yoco link for card payments</li>
+                      <li>Bank details for EFT (electronic funds transfer)</li>
                     </ul>
                     <p className="text-sm text-blue-300 mt-3 bg-blue-900/30 p-3 rounded-lg">
-                      <strong>No payment is required now.</strong> Complete payment after receiving your invoice.
+                      No payment is required at submission. Please complete your payment once you receive the invoice.
                     </p>
                   </div>
                 </div>
@@ -842,14 +842,14 @@ export default function PerformanceTypeEntryPage() {
                       How to Pay
                     </h3>
                     <div className="text-blue-200 space-y-3">
-                      <p>After you click <strong>"Submit Entries"</strong>, you'll receive an email invoice with:</p>
+                      <p>Once your entry is submitted, you'll receive an invoice by email with:</p>
                       <ul className="list-disc list-inside space-y-1 ml-4">
-                        <li>A link to pay by card (Yoco)</li>
-                        <li>Our bank details for EFT</li>
+                        <li>A secure Yoco link for card payments</li>
+                        <li>Bank details for EFT (electronic funds transfer)</li>
                       </ul>
                       <div className="bg-blue-900/30 border border-blue-500/40 rounded-lg p-3 mt-4">
                         <p className="text-sm text-blue-300">
-                          <strong>⏰ Important:</strong> Please complete payment before the entry deadline.
+                          No payment is required at submission. Please complete your payment once you receive the invoice.
                         </p>
                       </div>
                     </div>

@@ -86,18 +86,24 @@ export const verifyRecaptcha = async (token: string, ip?: string): Promise<{ suc
       };
     }
     
-    // For reCAPTCHA v3, check score (0.0 = bot, 1.0 = human)
-    const score = data.score || 0;
-    
-    if (score < 0.5) {
-      return { 
-        success: false, 
-        score,
-        error: `Suspicious activity detected (score: ${score})` 
-      };
+    // Check if this is reCAPTCHA v3 (has score) or v2 (no score)
+    if (data.score !== undefined) {
+      // reCAPTCHA v3 - check score (0.0 = bot, 1.0 = human)
+      const score = data.score;
+      
+      if (score < 0.5) {
+        return { 
+          success: false, 
+          score,
+          error: `Suspicious activity detected (score: ${score})` 
+        };
+      }
+      
+      return { success: true, score };
+    } else {
+      // reCAPTCHA v2 - just return success if verification passed
+      return { success: true };
     }
-    
-    return { success: true, score };
     
   } catch (error) {
     console.error('reCAPTCHA verification error:', error);

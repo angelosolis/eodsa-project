@@ -354,8 +354,8 @@ export default function RegisterPage() {
             </p>
             </div>
 
-            <div className="bg-gray-800/80 backdrop-blur-xl rounded-3xl shadow-2xl border border-gray-700/20 p-6 lg:p-12">
-              <form onSubmit={handleSubmit} className="space-y-8">
+            <div className="bg-white/5 backdrop-blur-xl rounded-3xl shadow-2xl border border-white/10 p-8 lg:p-12">
+              <form onSubmit={handleSubmit} className="space-y-10">
                 {/* Registration Header */}
                 <div className="text-center mb-8">
                   <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-r from-emerald-500 to-green-500 rounded-full mb-6 shadow-lg">
@@ -363,29 +363,52 @@ export default function RegisterPage() {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                     </svg>
                   </div>
-                  <h3 className="text-2xl font-bold text-white mb-2">Individual Dancer Registration</h3>
-                  <p className="text-gray-300">Register yourself as a dancer, then apply to dance studios</p>
-                  <div className="bg-blue-900/20 border border-blue-500/30 rounded-xl p-4 mt-4 max-w-2xl mx-auto">
+                  <h3 className="text-3xl font-bold text-white mb-3">Create Your Dancer Profile</h3>
+                  <p className="text-lg text-gray-300 mb-6">Get instant access to competitions and studio applications</p>
+                  
+                  {/* Progress Indicators */}
+                  <div className="flex items-center justify-center space-x-4 mb-6">
+                    <div className="flex items-center">
+                      <div className="w-8 h-8 bg-emerald-500 rounded-full flex items-center justify-center text-white text-sm font-semibold">1</div>
+                      <span className="ml-2 text-sm text-emerald-300">Fill Details</span>
+                    </div>
+                    <div className="w-8 h-px bg-gray-600"></div>
+                    <div className="flex items-center">
+                      <div className="w-8 h-8 bg-gray-600 rounded-full flex items-center justify-center text-gray-400 text-sm font-semibold">2</div>
+                      <span className="ml-2 text-sm text-gray-400">Verify Identity</span>
+                    </div>
+                    <div className="w-8 h-px bg-gray-600"></div>
+                    <div className="flex items-center">
+                      <div className="w-8 h-8 bg-gray-600 rounded-full flex items-center justify-center text-gray-400 text-sm font-semibold">3</div>
+                      <span className="ml-2 text-sm text-gray-400">Get EODSA ID</span>
+                    </div>
+                  </div>
+                  
+                  <div className="bg-blue-900/20 border border-blue-500/30 rounded-xl p-4 max-w-md mx-auto">
                     <div className="flex items-center justify-center">
                       <svg className="w-5 h-5 text-blue-400 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-4m-5 0H3m2 0h-2m2.5-9l2.5 2.5L15 8" />
                       </svg>
-                      <span className="text-blue-300 font-medium text-sm">Studios register through the Studio Portal</span>
+                      <span className="text-blue-300 font-medium text-sm">Studios register separately via Studio Portal</span>
                     </div>
                   </div>
                 </div>
 
-                {/* Individual Dancer Registration Details */}
-                <div className="bg-emerald-900/20 rounded-2xl p-6 border border-emerald-500/30">
-                  <h3 className="text-lg font-semibold text-white mb-6 flex items-center">
-                    <svg className="w-5 h-5 mr-2 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                {/* Personal Information */}
+                <div className="space-y-8">
+                  <div>
+                    <h3 className="text-2xl font-bold text-white mb-8 flex items-center">
+                      <div className="w-8 h-8 bg-gradient-to-r from-purple-500 to-pink-500 rounded-lg flex items-center justify-center mr-3">
+                        <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                     </svg>
-                    Dancer Details
+                      </div>
+                      Personal Information
                   </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                     <div>
-                      <label htmlFor="name" className="block text-sm font-medium text-gray-300 mb-2">
+                        <label htmlFor="name" className="block text-sm font-semibold text-white mb-3">
                         Full Name *
                       </label>
                       <input
@@ -394,12 +417,13 @@ export default function RegisterPage() {
                         name="name"
                         value={formData.name}
                         onChange={handleInputChange}
-                        className="w-full px-4 py-3 border border-gray-600 bg-gray-700 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all text-white placeholder-gray-400"
+                          className="w-full px-6 py-4 bg-white/10 border border-white/20 rounded-2xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all text-white placeholder-gray-300 text-lg"
+                          placeholder="Enter your full name"
                         required={formData.type === 'individual_dancer'}
                       />
                     </div>
                     <div>
-                      <label htmlFor="nationalId" className="block text-sm font-medium text-gray-300 mb-2">
+                        <label htmlFor="nationalId" className="block text-sm font-semibold text-white mb-3">
                         National ID Number *
                       </label>
                       <input
@@ -408,38 +432,30 @@ export default function RegisterPage() {
                         name="nationalId"
                         value={formData.nationalId}
                         onChange={handleInputChange}
-                        className="w-full px-4 py-3 border border-gray-600 bg-gray-700 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all text-white placeholder-gray-400"
-                        placeholder="e.g., 0012345678901"
+                          className="w-full px-6 py-4 bg-white/10 border border-white/20 rounded-2xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all text-white placeholder-gray-300 text-lg"
+                          placeholder="13 digit ID number"
                         required={formData.type === 'individual_dancer'}
                       />
-                    </div>
-                  </div>
-                  <div className="mt-6">
-                    <div className="bg-blue-900/20 border border-blue-500/30 rounded-xl p-4">
-                      <div className="flex items-center">
-                        <svg className="w-5 h-5 text-blue-400 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        <span className="text-blue-300 font-medium">How it works</span>
                       </div>
-                      <p className="text-blue-200 text-sm mt-1">
-                        After registration, you'll need admin approval. Once approved, you can apply to dance studios who will review and accept/reject your application.
-                      </p>
                     </div>
                   </div>
                 </div>
 
-                {/* Contact Information */}
-                <div className="bg-gray-700/50 rounded-2xl p-6">
-                  <h3 className="text-lg font-semibold text-white mb-6 flex items-center">
-                    <svg className="w-5 h-5 mr-2 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                {/* Contact & Personal Details */}
+                <div className="space-y-8">
+                  <div>
+                    <h3 className="text-2xl font-bold text-white mb-8 flex items-center">
+                      <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-cyan-500 rounded-lg flex items-center justify-center mr-3">
+                        <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                     </svg>
-                    Contact Information
+                      </div>
+                      Contact & Personal Details
                   </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="relative">
-                <label htmlFor="email" className="block text-sm font-medium text-gray-300 mb-2">
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                      <div>
+                        <label htmlFor="email" className="block text-sm font-semibold text-white mb-3">
                   Email Address *
                 </label>
                 <input
@@ -448,12 +464,14 @@ export default function RegisterPage() {
                   name="email"
                   value={formData.email}
                   onChange={handleInputChange}
-                        className="w-full px-4 py-3 border border-gray-600 bg-gray-700 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all text-white placeholder-gray-400"
+                          className="w-full px-6 py-4 bg-white/10 border border-white/20 rounded-2xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-white placeholder-gray-300 text-lg"
+                          placeholder="your@email.com"
                   required
                 />
               </div>
-                    <div className="relative">
-                <label htmlFor="phone" className="block text-sm font-medium text-gray-300 mb-2">
+                      
+                      <div>
+                        <label htmlFor="phone" className="block text-sm font-semibold text-white mb-3">
                   Phone Number *
                 </label>
                 <input
@@ -462,14 +480,14 @@ export default function RegisterPage() {
                   name="phone"
                   value={formData.phone}
                   onChange={handleInputChange}
-                        className="w-full px-4 py-3 border border-gray-600 bg-gray-700 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all text-white placeholder-gray-400"
+                          className="w-full px-6 py-4 bg-white/10 border border-white/20 rounded-2xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-white placeholder-gray-300 text-lg"
+                          placeholder="081 234 5678"
                   required
                 />
                     </div>
                     
-                    {/* Date of Birth Field */}
-                    <div className="relative">
-                      <label htmlFor="dateOfBirth" className="block text-sm font-medium text-gray-300 mb-2">
+                      <div>
+                        <label htmlFor="dateOfBirth" className="block text-sm font-semibold text-white mb-3">
                         Date of Birth *
                       </label>
                       <input
@@ -478,19 +496,21 @@ export default function RegisterPage() {
                         name="dateOfBirth"
                         value={formData.dateOfBirth}
                         onChange={handleInputChange}
-                        className="w-full px-4 py-3 border border-gray-600 bg-gray-700 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all text-white"
+                          className="w-full px-6 py-4 bg-white/10 border border-white/20 rounded-2xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-white text-lg"
                         required
                       />
                       {formData.dateOfBirth && (
-                        <p className="text-xs text-gray-400 mt-1">
+                          <p className="text-sm text-blue-300 mt-2 font-medium">
                           Age: {calculateAge(formData.dateOfBirth)} years old
                         </p>
                       )}
+                      </div>
+                    </div>
                     </div>
                     
                     {/* Show message if minor */}
                     {isMinor(formData.dateOfBirth) && (
-                      <div className="md:col-span-2">
+                    <div className="mt-8">
                         <div className="bg-yellow-900/30 border border-yellow-500/50 rounded-xl p-4">
                           <div className="flex items-center">
                             <svg className="w-5 h-5 text-yellow-400 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -504,7 +524,6 @@ export default function RegisterPage() {
                         </div>
                       </div>
                     )}
-                  </div>
                   
                   {/* Guardian Information for Minors */}
                   {isMinor(formData.dateOfBirth) && (
@@ -557,47 +576,43 @@ export default function RegisterPage() {
                   )}
               </div>
 
+                {/* Privacy Policy & Security */}
+                <div className="space-y-8">
                 {/* Privacy Policy Checkbox */}
-                <div className="bg-gray-700/50 rounded-2xl p-6 border border-gray-600">
-                  <div className="flex items-start space-x-3">
+                  <div className="flex items-start space-x-4 p-6 bg-white/5 border border-white/10 rounded-2xl">
                     <input
                       type="checkbox"
                       id="privacyPolicyAccepted"
                       name="privacyPolicyAccepted"
                       checked={formData.privacyPolicyAccepted}
                       onChange={handleInputChange}
-                      className="mt-1 w-5 h-5 text-purple-500 bg-gray-700 border-gray-600 rounded focus:ring-purple-500 focus:ring-2"
+                      className="mt-1 w-6 h-6 text-purple-500 bg-white/10 border-white/20 rounded-lg focus:ring-purple-500 focus:ring-2"
                       required
                     />
-                    <label htmlFor="privacyPolicyAccepted" className="text-sm text-gray-300">
+                    <label htmlFor="privacyPolicyAccepted" className="text-white">
                       I have read and agree to the{' '}
                       <button
                         type="button"
                         onClick={() => setShowPrivacyModal(true)}
-                        className="text-purple-400 hover:text-purple-300 underline transition-colors"
+                        className="text-purple-400 hover:text-purple-300 underline transition-colors font-semibold"
                       >
                         EODSA Privacy Policy (POPIA)
                       </button>
                       {' '}*
                     </label>
-                  </div>
-                  {!formData.privacyPolicyAccepted && (
-                    <p className="text-red-400 text-xs mt-2">
-                      You must accept the Privacy Policy to continue.
-                    </p>
-                  )}
                 </div>
 
               {/* reCAPTCHA */}
-              <div className="bg-gray-700/50 rounded-2xl p-6 border border-gray-600">
-                <div className="text-center">
-                  <h3 className="text-lg font-semibold text-white mb-4 flex items-center justify-center">
-                    <svg className="w-5 h-5 mr-2 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <div className="text-center p-8 bg-white/5 border border-white/10 rounded-2xl">
+                    <div className="flex items-center justify-center mb-6">
+                      <div className="w-8 h-8 bg-gradient-to-r from-green-500 to-emerald-500 rounded-lg flex items-center justify-center mr-3">
+                        <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.031 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                     </svg>
-                    Security Verification
-                  </h3>
-                  <p className="text-gray-400 text-sm mb-4">Please verify you're human to complete registration</p>
+                      </div>
+                      <h3 className="text-2xl font-bold text-white">Security Verification</h3>
+                    </div>
+                    <p className="text-gray-300 text-lg mb-6">Please verify you're human to complete registration</p>
                   <RecaptchaV2
                     onVerify={(token) => setRecaptchaToken(token)}
                     onExpire={() => setRecaptchaToken('')}
@@ -606,7 +621,7 @@ export default function RegisterPage() {
                     size="normal"
                   />
                   {!recaptchaToken && (
-                    <p className="text-red-400 text-xs mt-2">
+                      <p className="text-red-400 text-sm mt-4">
                       Please complete the security verification above.
                     </p>
                   )}
@@ -614,11 +629,11 @@ export default function RegisterPage() {
               </div>
 
               {/* Submit Button */}
-                <div className="pt-6">
+                <div className="pt-4">
                 <button
                   type="submit"
                   disabled={isSubmitting || !formData.privacyPolicyAccepted || !recaptchaToken}
-                    className="w-full px-8 py-4 bg-gradient-to-r from-purple-500 via-pink-500 to-purple-600 text-white rounded-2xl hover:from-purple-600 hover:via-pink-600 hover:to-purple-700 focus:ring-4 focus:ring-purple-500/50 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 font-bold text-lg shadow-xl hover:shadow-2xl transform hover:scale-105"
+                    className="w-full px-8 py-6 bg-gradient-to-r from-purple-500 via-pink-500 to-purple-600 text-white rounded-2xl hover:from-purple-600 hover:via-pink-600 hover:to-purple-700 focus:ring-4 focus:ring-purple-500/50 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 font-bold text-xl shadow-xl hover:shadow-2xl transform hover:scale-105"
                 >
                   {isSubmitting ? (
                     <div className="flex items-center justify-center space-x-3">
@@ -629,10 +644,10 @@ export default function RegisterPage() {
                     </div>
                   ) : (
                       <span className="flex items-center justify-center">
-                        <svg className="w-6 h-6 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        <svg className="w-6 h-6 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                         </svg>
-                        Complete Registration & Get EODSA ID
+                        Create My EODSA Profile
                       </span>
                   )}
                 </button>
