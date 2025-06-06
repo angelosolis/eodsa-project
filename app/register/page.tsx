@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { useRecaptcha } from '@/hooks/useRecaptcha';
+import { RecaptchaV2 } from '@/components/RecaptchaV2';
 import { generateEODSAId } from '@/lib/database';
 import { useToast } from '@/components/ui/simple-toast';
 
@@ -92,8 +92,8 @@ export default function RegisterPage() {
   const [submitted, setSubmitted] = useState(false);
   const [eodsaId, setEodsaId] = useState('');
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
+  const [recaptchaToken, setRecaptchaToken] = useState<string>('');
   const { success, error, warning, info } = useToast();
-  const { isLoaded: recaptchaLoaded, executeRecaptcha } = useRecaptcha();
 
   // Calculate age from date of birth
   const calculateAge = (dateOfBirth: string): number => {
@@ -175,15 +175,14 @@ export default function RegisterPage() {
         }
       }
 
-      info('Creating your dancer profile...', 3000);
-
-      // Execute reCAPTCHA
-      const recaptchaToken = await executeRecaptcha('dancer_registration');
+      // Validate reCAPTCHA
       if (!recaptchaToken) {
-        error('Security verification failed. Please try again.', 5000);
+        warning('Please complete the security verification (reCAPTCHA).', 5000);
         setIsSubmitting(false);
         return;
       }
+
+      info('Creating your dancer profile...', 3000);
 
       // Register individual dancer
       const response = await fetch('/api/dancers/register', {
@@ -589,11 +588,36 @@ export default function RegisterPage() {
                   )}
                 </div>
 
+              {/* reCAPTCHA */}
+              <div className="bg-gray-700/50 rounded-2xl p-6 border border-gray-600">
+                <div className="text-center">
+                  <h3 className="text-lg font-semibold text-white mb-4 flex items-center justify-center">
+                    <svg className="w-5 h-5 mr-2 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.031 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                    </svg>
+                    Security Verification
+                  </h3>
+                  <p className="text-gray-400 text-sm mb-4">Please verify you're human to complete registration</p>
+                  <RecaptchaV2
+                    onVerify={(token) => setRecaptchaToken(token)}
+                    onExpire={() => setRecaptchaToken('')}
+                    onError={() => setRecaptchaToken('')}
+                    theme="dark"
+                    size="normal"
+                  />
+                  {!recaptchaToken && (
+                    <p className="text-red-400 text-xs mt-2">
+                      Please complete the security verification above.
+                    </p>
+                  )}
+                </div>
+              </div>
+
               {/* Submit Button */}
                 <div className="pt-6">
                 <button
                   type="submit"
-                  disabled={isSubmitting || !formData.privacyPolicyAccepted || !recaptchaLoaded}
+                  disabled={isSubmitting || !formData.privacyPolicyAccepted || !recaptchaToken}
                     className="w-full px-8 py-4 bg-gradient-to-r from-purple-500 via-pink-500 to-purple-600 text-white rounded-2xl hover:from-purple-600 hover:via-pink-600 hover:to-purple-700 focus:ring-4 focus:ring-purple-500/50 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 font-bold text-lg shadow-xl hover:shadow-2xl transform hover:scale-105"
                 >
                   {isSubmitting ? (

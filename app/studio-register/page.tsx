@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { useRecaptcha } from '@/hooks/useRecaptcha';
+import { RecaptchaV2 } from '@/components/RecaptchaV2';
 import { useRouter } from 'next/navigation';
 
 interface StudioRegistrationForm {
@@ -29,7 +29,7 @@ export default function StudioRegisterPage() {
   const [submitted, setSubmitted] = useState(false);
   const [registrationNumber, setRegistrationNumber] = useState('');
   const [error, setError] = useState('');
-  const { isLoaded: recaptchaLoaded, executeRecaptcha } = useRecaptcha();
+  const [recaptchaToken, setRecaptchaToken] = useState<string>('');
   const router = useRouter();
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -60,10 +60,9 @@ export default function StudioRegisterPage() {
     }
 
     try {
-      // Execute reCAPTCHA
-      const recaptchaToken = await executeRecaptcha('studio_registration');
+      // Validate reCAPTCHA
       if (!recaptchaToken) {
-        setError('Security verification failed. Please try again.');
+        setError('Please complete the security verification (reCAPTCHA).');
         setIsSubmitting(false);
         return;
       }
@@ -326,10 +325,35 @@ export default function StudioRegisterPage() {
                 </div>
               )}
 
+              {/* reCAPTCHA */}
+              <div className="bg-gray-700/50 rounded-2xl p-6 border border-gray-600">
+                <div className="text-center">
+                  <h3 className="text-lg font-semibold text-white mb-4 flex items-center justify-center">
+                    <svg className="w-5 h-5 mr-2 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.031 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                    </svg>
+                    Security Verification
+                  </h3>
+                  <p className="text-gray-400 text-sm mb-4">Please verify you're human to complete registration</p>
+                  <RecaptchaV2
+                    onVerify={(token) => setRecaptchaToken(token)}
+                    onExpire={() => setRecaptchaToken('')}
+                    onError={() => setRecaptchaToken('')}
+                    theme="dark"
+                    size="normal"
+                  />
+                  {!recaptchaToken && (
+                    <p className="text-red-400 text-xs mt-2">
+                      Please complete the security verification above.
+                    </p>
+                  )}
+                </div>
+              </div>
+
               {/* Submit Button */}
               <button
                 type="submit"
-                disabled={isSubmitting || !recaptchaLoaded}
+                disabled={isSubmitting || !recaptchaToken}
                 className="w-full px-6 py-4 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-2xl hover:from-purple-600 hover:to-pink-600 transition-all duration-300 font-semibold shadow-lg hover:shadow-xl transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
               >
                 {isSubmitting ? (
