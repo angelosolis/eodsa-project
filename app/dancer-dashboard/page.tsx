@@ -25,25 +25,14 @@ interface StudioApplication {
   rejectionReason?: string;
 }
 
-interface AvailableStudio {
-  id: string;
-  name: string;
-  contactPerson: string;
-  address: string;
-  email: string;
-  phone: string;
-}
+
 
 export default function DancerDashboardPage() {
   const [dancerSession, setDancerSession] = useState<DancerSession | null>(null);
   const [applications, setApplications] = useState<StudioApplication[]>([]);
-  const [availableStudios, setAvailableStudios] = useState<AvailableStudio[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
-  const [showStudioBrowser, setShowStudioBrowser] = useState(false);
-  const [applyingToStudio, setApplyingToStudio] = useState<string | null>(null);
   const router = useRouter();
-  const { showConfirm } = useAlert();
 
   useEffect(() => {
     // Check for dancer session
@@ -64,20 +53,12 @@ export default function DancerDashboardPage() {
 
   const loadDancerData = async (dancerId: string) => {
     try {
-      // Load applications
+      // Load applications (showing existing studio relationships)
       const appsResponse = await fetch(`/api/dancers/applications?dancerId=${dancerId}`);
       const appsData = await appsResponse.json();
       
       if (appsData.success) {
         setApplications(appsData.applications);
-      }
-
-      // Load available studios
-      const studiosResponse = await fetch(`/api/dancers/available-studios?dancerId=${dancerId}`);
-      const studiosData = await studiosResponse.json();
-      
-      if (studiosData.success) {
-        setAvailableStudios(studiosData.studios);
       }
     } catch (error) {
       console.error('Error loading dancer data:', error);
@@ -87,62 +68,7 @@ export default function DancerDashboardPage() {
     }
   };
 
-  const handleApplyToStudio = async (studioId: string) => {
-    if (!dancerSession) return;
-    
-    setApplyingToStudio(studioId);
-    try {
-      const response = await fetch('/api/dancers/apply-to-studio', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          dancerId: dancerSession.id,
-          studioId: studioId
-        })
-      });
 
-      const data = await response.json();
-      
-      if (data.success) {
-        await loadDancerData(dancerSession.id);
-        setShowStudioBrowser(false);
-      } else {
-        setError(data.error || 'Failed to apply to studio');
-      }
-    } catch (error) {
-      setError('Failed to apply to studio');
-    } finally {
-      setApplyingToStudio(null);
-    }
-  };
-
-  const handleWithdrawApplication = async (applicationId: string) => {
-    showConfirm(
-      'Are you sure you want to withdraw this application?',
-      () => {
-        performWithdrawApplication(applicationId);
-      }
-    );
-  };
-
-  const performWithdrawApplication = async (applicationId: string) => {
-
-    try {
-      const response = await fetch(`/api/dancers/applications/${applicationId}`, {
-        method: 'DELETE'
-      });
-
-      const data = await response.json();
-      
-      if (data.success && dancerSession) {
-        await loadDancerData(dancerSession.id);
-      } else {
-        setError(data.error || 'Failed to withdraw application');
-      }
-    } catch (error) {
-      setError('Failed to withdraw application');
-    }
-  };
 
   const handleLogout = () => {
     localStorage.removeItem('dancerSession');
@@ -231,20 +157,13 @@ export default function DancerDashboardPage() {
               </div>
             </div>
             
-            {dancerSession.approved && (
-              <button
-                onClick={() => setShowStudioBrowser(true)}
-                className="px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
-              >
-                🏢 Apply to Studios
-              </button>
-            )}
+
           </div>
           
           {!dancerSession.approved && (
             <div className="mt-4 p-4 bg-blue-900/20 border border-blue-500/30 rounded-lg">
               <p className="text-blue-200 text-sm">
-                📋 Your registration is pending admin approval. Once approved, you'll be able to apply to dance studios and participate in competitions.
+                📋 Your registration is pending admin approval. Once approved, you'll be able to participate in competitions when added to a dance studio by the studio head.
               </p>
             </div>
           )}
@@ -253,8 +172,8 @@ export default function DancerDashboardPage() {
         {/* Applications Section */}
         <div className="bg-gray-800/80 rounded-2xl border border-gray-700/20 overflow-hidden mb-8">
           <div className="p-6 border-b border-gray-700">
-            <h3 className="text-xl font-bold text-white">My Studio Applications</h3>
-            <p className="text-gray-400 text-sm mt-1">Track your applications to dance studios</p>
+            <h3 className="text-xl font-bold text-white">My Studio Memberships</h3>
+            <p className="text-gray-400 text-sm mt-1">Studios you belong to</p>
           </div>
 
           {applications.length === 0 ? (
@@ -262,15 +181,10 @@ export default function DancerDashboardPage() {
               <div className="w-16 h-16 bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4">
                 <span className="text-2xl">🏢</span>
               </div>
-              <p className="text-gray-400 mb-4">No studio applications yet</p>
-              {dancerSession.approved && (
-                <button
-                  onClick={() => setShowStudioBrowser(true)}
-                  className="px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
-                >
-                  Apply to Your First Studio
-                </button>
-              )}
+              <p className="text-gray-400 mb-4">No studio memberships yet</p>
+              <p className="text-gray-500 text-sm">
+                Contact a dance studio head to be added to their studio.
+              </p>
             </div>
           ) : (
             <div className="p-6">
@@ -281,20 +195,12 @@ export default function DancerDashboardPage() {
                       <div>
                         <h4 className="text-lg font-semibold text-white">{application.studioName}</h4>
                         <p className="text-gray-300 text-sm">Contact: {application.contactPerson}</p>
-                        <p className="text-gray-400 text-xs">Applied: {new Date(application.appliedAt).toLocaleDateString()}</p>
+                        <p className="text-gray-400 text-xs">Added: {new Date(application.appliedAt).toLocaleDateString()}</p>
                       </div>
                       <div className="flex items-center space-x-3">
                         <span className={`px-3 py-1 rounded-full text-sm font-medium text-white ${getStatusBadge(application.status)}`}>
                           {application.status.charAt(0).toUpperCase() + application.status.slice(1)}
                         </span>
-                        {application.status === 'pending' && (
-                          <button
-                            onClick={() => handleWithdrawApplication(application.id)}
-                            className="px-3 py-1 bg-red-600 text-white rounded text-sm hover:bg-red-700 transition-colors"
-                          >
-                            Withdraw
-                          </button>
-                        )}
                       </div>
                     </div>
                     {application.status === 'rejected' && application.rejectionReason && (
@@ -318,54 +224,7 @@ export default function DancerDashboardPage() {
           )}
         </div>
 
-        {/* Studio Browser Modal */}
-        {showStudioBrowser && (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div className="bg-gray-800 rounded-2xl max-w-4xl w-full max-h-[80vh] overflow-hidden">
-              <div className="p-6 border-b border-gray-700">
-                <div className="flex justify-between items-center">
-                  <h3 className="text-xl font-bold text-white">Available Studios</h3>
-                  <button
-                    onClick={() => setShowStudioBrowser(false)}
-                    className="text-gray-400 hover:text-white"
-                  >
-                    ✕
-                  </button>
-                </div>
-              </div>
-              
-              <div className="p-6 overflow-y-auto max-h-[60vh]">
-                {availableStudios.length === 0 ? (
-                  <div className="text-center py-8">
-                    <p className="text-gray-400">No available studios to apply to</p>
-                  </div>
-                ) : (
-                  <div className="grid gap-4">
-                    {availableStudios.map((studio) => (
-                      <div key={studio.id} className="bg-gray-700/50 rounded-lg p-4 border border-gray-600">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <h4 className="text-lg font-semibold text-white">{studio.name}</h4>
-                            <p className="text-gray-300 text-sm">Contact: {studio.contactPerson}</p>
-                            <p className="text-gray-400 text-sm">{studio.address}</p>
-                            <p className="text-gray-400 text-xs">📧 {studio.email} • 📞 {studio.phone}</p>
-                          </div>
-                          <button
-                            onClick={() => handleApplyToStudio(studio.id)}
-                            disabled={applyingToStudio === studio.id}
-                            className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 transition-colors"
-                          >
-                            {applyingToStudio === studio.id ? 'Applying...' : 'Apply'}
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
+
       </div>
     </div>
   );

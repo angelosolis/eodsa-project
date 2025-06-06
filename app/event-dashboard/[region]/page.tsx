@@ -58,10 +58,37 @@ export default function RegionalEventsPage() {
 
   const loadContestant = async (id: string) => {
     try {
-      const response = await fetch(`/api/contestants/by-eodsa-id/${id}`);
-      if (response.ok) {
-        const data = await response.json();
-        setContestant(data);
+      // Try unified system first (new dancers)
+      const unifiedResponse = await fetch(`/api/dancers/by-eodsa-id/${id}`);
+      if (unifiedResponse.ok) {
+        const unifiedData = await unifiedResponse.json();
+        if (unifiedData.success && unifiedData.dancer) {
+          const dancer = unifiedData.dancer;
+          // Transform single dancer to contestant format
+          setContestant({
+            id: dancer.id,
+            eodsaId: dancer.eodsaId,
+            name: dancer.name,
+            email: dancer.email || '',
+            phone: dancer.phone || '',
+            type: 'private' as const,
+            dancers: [{
+              id: dancer.id,
+              name: dancer.name,
+              age: dancer.age,
+              style: '',
+              nationalId: dancer.nationalId
+            }]
+          });
+          return;
+        }
+      }
+      
+      // Fallback to legacy system (contestants)
+      const legacyResponse = await fetch(`/api/contestants/by-eodsa-id/${id}`);
+      if (legacyResponse.ok) {
+        const legacyData = await legacyResponse.json();
+        setContestant(legacyData);
       }
     } catch (error) {
       console.error('Failed to load contestant:', error);

@@ -258,10 +258,10 @@ export default function RegisterPage() {
                 </p>
               </div>
               <Link 
-                href="/dancer-dashboard" 
+                href={`/event-dashboard?eodsaId=${eodsaId}`}
                 className="block w-full px-6 py-4 bg-gradient-to-r from-emerald-500 to-green-500 text-white rounded-2xl hover:from-emerald-600 hover:to-green-600 transition-all duration-300 font-semibold shadow-lg hover:shadow-xl transform hover:scale-105"
               >
-                🎭 Go to Dancer Dashboard
+                🎪 Enter Your First Competition
               </Link>
               
               <button
@@ -480,7 +480,7 @@ export default function RegisterPage() {
                             <span className="text-yellow-300 font-medium">Guardian Required</span>
                           </div>
                           <p className="text-yellow-200 text-sm mt-1">
-                            As you are under 18, a parent or guardian must complete this registration.
+                            Parent/Guardian Consent Required ⚠️ Under 18, a parent or guardian must complete this registration.
                           </p>
                         </div>
                       </div>

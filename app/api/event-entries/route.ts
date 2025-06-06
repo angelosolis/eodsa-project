@@ -158,25 +158,25 @@ export async function POST(request: NextRequest) {
       estimatedDuration: body.estimatedDuration
     });
 
-    // Send competition entry confirmation email
-    try {
-      // Get contestant details for email
-      const contestant = await db.getContestantById(body.contestantId);
-      if (contestant && contestant.email) {
-        await emailService.sendCompetitionEntryEmail(
-          contestant.name,
-          contestant.email,
-          event.name,
-          body.itemName,
-          event.performanceType,
-          body.calculatedFee
-        );
-        console.log('Competition entry email sent successfully to:', contestant.email);
-      }
-    } catch (emailError) {
-      console.error('Failed to send competition entry email:', emailError);
-      // Don't fail the entry if email fails
-    }
+    // Email system disabled for Phase 1
+    // try {
+    //   // Get contestant details for email
+    //   const contestant = await db.getContestantById(body.contestantId);
+    //   if (contestant && contestant.email) {
+    //     await emailService.sendCompetitionEntryEmail(
+    //       contestant.name,
+    //       contestant.email,
+    //       event.name,
+    //       body.itemName,
+    //       event.performanceType,
+    //       body.calculatedFee
+    //     );
+    //     console.log('Competition entry email sent successfully to:', contestant.email);
+    //   }
+    // } catch (emailError) {
+    //   console.error('Failed to send competition entry email:', emailError);
+    //   // Don't fail the entry if email fails
+    // }
 
     return NextResponse.json(eventEntry, { status: 201 });
   } catch (error: any) {

@@ -6,22 +6,38 @@ import { REGIONS, AGE_CATEGORIES, PERFORMANCE_TYPES, ITEM_STYLES } from '@/lib/t
 
 interface RankingData {
   performanceId: string;
+  eventId: string;
+  eventName: string;
   region: string;
   ageCategory: string;
   performanceType: string;
   title: string;
+  itemStyle: string;
   contestantName: string;
   totalScore: number;
   averageScore: number;
   rank: number;
   judgeCount: number;
-  itemStyle: string;
+}
+
+interface EventWithScores {
+  id: string;
+  name: string;
+  region: string;
+  ageCategory: string;
+  performanceType: string;
+  eventDate: string;
+  venue: string;
+  performanceCount: number;
+  scoreCount: number;
 }
 
 export default function AdminRankingsPage() {
   const [rankings, setRankings] = useState<RankingData[]>([]);
   const [filteredRankings, setFilteredRankings] = useState<RankingData[]>([]);
+  const [eventsWithScores, setEventsWithScores] = useState<EventWithScores[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState('');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   
@@ -30,6 +46,7 @@ export default function AdminRankingsPage() {
   const [selectedAgeCategory, setSelectedAgeCategory] = useState('');
   const [selectedPerformanceType, setSelectedPerformanceType] = useState('');
   const [selectedStyle, setSelectedStyle] = useState('');
+  const [selectedEvents, setSelectedEvents] = useState<string[]>([]);
   const [viewMode, setViewMode] = useState<'all' | 'top5_age' | 'top5_style'>('all');
 
   useEffect(() => {
@@ -40,7 +57,7 @@ export default function AdminRankingsPage() {
         const session = JSON.parse(judgeSession);
         if (session.isAdmin) {
           setIsAuthenticated(true);
-          loadRankings();
+          loadInitialData();
         } else {
           setError('Admin access required to view rankings');
           setIsLoading(false);
@@ -57,44 +74,89 @@ export default function AdminRankingsPage() {
 
   useEffect(() => {
     applyFilters();
-  }, [rankings, selectedRegion, selectedAgeCategory, selectedPerformanceType, selectedStyle, viewMode]);
+  }, [rankings, selectedStyle, viewMode]);
 
-  const loadRankings = async () => {
-    if (!isAuthenticated) return;
-    
+  // Trigger rankings reload when server-side filters change
+  useEffect(() => {
+    if (isAuthenticated && !isLoading) {
+      loadRankings();
+    }
+  }, [selectedRegion, selectedAgeCategory, selectedPerformanceType, selectedEvents]);
+
+  const loadInitialData = async () => {
     setIsLoading(true);
     setError('');
     
     try {
-      const response = await fetch('/api/rankings');
+      // Load events with scores first
+      await loadEventsWithScores();
+      
+      // Load all rankings
+      await loadRankings();
+    } catch (error) {
+      setError('Failed to load data');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const loadEventsWithScores = async () => {
+    try {
+      const response = await fetch('/api/rankings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'getEventsWithScores' })
+      });
+      
       if (response.ok) {
         const data = await response.json();
+        setEventsWithScores(data.events || []);
+      }
+    } catch (error) {
+      console.error('Error loading events with scores:', error);
+    }
+  };
+
+  const loadRankings = async () => {
+    if (!isAuthenticated) return;
+    
+    setIsRefreshing(true);
+    setError('');
+    
+    try {
+      // Build query parameters
+      const params = new URLSearchParams();
+      if (selectedRegion) params.append('region', selectedRegion);
+      if (selectedAgeCategory) params.append('ageCategory', selectedAgeCategory);
+      if (selectedPerformanceType) params.append('performanceType', selectedPerformanceType);
+      if (selectedEvents.length > 0) params.append('eventIds', selectedEvents.join(','));
+      
+      const url = `/api/rankings?${params.toString()}`;
+      console.log('Loading rankings from:', url);
+      console.log('Selected events:', selectedEvents);
+      
+      const response = await fetch(url);
+      if (response.ok) {
+        const data = await response.json();
+        console.log('Rankings data received:', data);
         setRankings(data);
       } else {
+        console.error('Failed to load rankings, status:', response.status);
         setError('Failed to load rankings');
       }
     } catch (error) {
       setError('Failed to load rankings');
     } finally {
-      setIsLoading(false);
+      setIsRefreshing(false);
     }
   };
 
   const applyFilters = () => {
     let filtered = rankings;
     
-    if (selectedRegion) {
-      filtered = filtered.filter(r => r.region === selectedRegion);
-    }
+    // Only apply client-side filters that weren't applied server-side
+    // Region, age category, performance type, and event selection are handled server-side
     
-    if (selectedAgeCategory) {
-      filtered = filtered.filter(r => r.ageCategory === selectedAgeCategory);
-    }
-    
-    if (selectedPerformanceType) {
-      filtered = filtered.filter(r => r.performanceType === selectedPerformanceType);
-    }
-
     if (selectedStyle) {
       filtered = filtered.filter(r => r.itemStyle === selectedStyle);
     }
@@ -136,7 +198,24 @@ export default function AdminRankingsPage() {
     setSelectedAgeCategory('');
     setSelectedPerformanceType('');
     setSelectedStyle('');
+    setSelectedEvents([]);
     setViewMode('all');
+  };
+
+  const handleEventSelection = (eventId: string) => {
+    setSelectedEvents(prev => 
+      prev.includes(eventId) 
+        ? prev.filter(id => id !== eventId)
+        : [...prev, eventId]
+    );
+  };
+
+  const selectAllEvents = () => {
+    setSelectedEvents(eventsWithScores.map(e => e.id));
+  };
+
+  const deselectAllEvents = () => {
+    setSelectedEvents([]);
   };
 
   const getRankBadgeColor = (rank: number) => {
@@ -186,28 +265,6 @@ export default function AdminRankingsPage() {
     itemStyle: string;
     rankings: RankingData[];
   }>);
-
-  // Authentication check
-  if (!isAuthenticated && !isLoading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-red-50 via-orange-50 to-pink-50 flex items-center justify-center">
-        <div className="text-center bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl p-8 border border-red-200">
-          <div className="w-20 h-20 mx-auto mb-6 bg-gradient-to-br from-red-100 to-orange-100 rounded-full flex items-center justify-center">
-            <span className="text-3xl">🔒</span>
-          </div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-3">Access Restricted</h2>
-          <p className="text-gray-700 mb-6 max-w-md mx-auto">{error}</p>
-          <Link 
-            href="/admin"
-            className="inline-flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-xl hover:from-blue-600 hover:to-indigo-700 transition-all duration-200 transform hover:scale-105 shadow-lg font-medium"
-          >
-            <span>←</span>
-            <span>Go to Admin Login</span>
-          </Link>
-        </div>
-      </div>
-    );
-  }
 
   if (isLoading) {
     return (
@@ -261,13 +318,15 @@ export default function AdminRankingsPage() {
                 <p className="text-gray-700 font-medium">Live scoring and leaderboards</p>
               </div>
             </div>
-            <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-4">
+            
+            <div className="flex flex-col sm:flex-row gap-3">
               <button
                 onClick={loadRankings}
-                className="inline-flex items-center space-x-2 px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-xl hover:from-emerald-600 hover:to-teal-700 transition-all duration-200 transform hover:scale-105 shadow-lg font-medium"
+                disabled={isRefreshing}
+                className="inline-flex items-center space-x-2 px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-xl hover:from-emerald-600 hover:to-teal-700 transition-all duration-200 transform hover:scale-105 shadow-lg font-medium disabled:opacity-50 disabled:transform-none"
               >
-                <span>🔄</span>
-                <span>Refresh Rankings</span>
+                <span className={isRefreshing ? 'animate-spin' : ''}>🔄</span>
+                <span>{isRefreshing ? 'Refreshing...' : 'Refresh Rankings'}</span>
               </button>
               <Link
                 href="/admin"
@@ -329,6 +388,74 @@ export default function AdminRankingsPage() {
           </div>
         )}
 
+        {/* Event Selection Section */}
+        <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl p-6 mb-8 border border-indigo-100">
+          <div className="flex items-center space-x-3 mb-6">
+            <div className="w-8 h-8 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-lg flex items-center justify-center">
+              <span className="text-white text-sm">🏆</span>
+            </div>
+            <h2 className="text-xl font-bold text-gray-900">Select Events with Scores</h2>
+            <div className="flex gap-2 ml-auto">
+              <button
+                onClick={selectAllEvents}
+                className="px-3 py-1 text-sm bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 transition-colors"
+              >
+                Select All
+              </button>
+              <button
+                onClick={deselectAllEvents}
+                className="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+              >
+                Clear All
+              </button>
+            </div>
+          </div>
+
+          {eventsWithScores.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">
+              <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
+                <span className="text-2xl">📊</span>
+              </div>
+              <h3 className="text-lg font-medium mb-2">No Events with Scores</h3>
+              <p className="text-sm">Events will appear here once performances have been scored by judges.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {eventsWithScores.map((event) => (
+                <div
+                  key={event.id}
+                  onClick={() => handleEventSelection(event.id)}
+                  className={`border-2 rounded-xl p-4 cursor-pointer transition-all duration-200 hover:shadow-lg ${
+                    selectedEvents.includes(event.id)
+                      ? 'border-indigo-500 bg-indigo-50 shadow-md'
+                      : 'border-gray-200 bg-white hover:border-indigo-300'
+                  }`}
+                >
+                  <div className="flex items-start justify-between mb-3">
+                    <h3 className="font-bold text-gray-900 text-sm leading-tight">{event.name}</h3>
+                    <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
+                      selectedEvents.includes(event.id)
+                        ? 'border-indigo-500 bg-indigo-500'
+                        : 'border-gray-300'
+                    }`}>
+                      {selectedEvents.includes(event.id) && (
+                        <span className="text-white text-xs">✓</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="space-y-1 text-xs text-gray-600">
+                    <div>{event.region} • {event.ageCategory} • {event.performanceType}</div>
+                    <div>{new Date(event.eventDate).toLocaleDateString()} • {event.venue}</div>
+                    <div className="text-indigo-600 font-medium">
+                      {event.scoreCount} scores • {event.performanceCount} performances
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
         {/* Enhanced Filters with View Mode Tabs */}
         <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl p-6 mb-8 border border-indigo-100">
           {/* View Mode Tabs */}
@@ -371,6 +498,7 @@ export default function AdminRankingsPage() {
             </div>
             <h2 className="text-xl font-bold text-gray-900">Filter Rankings</h2>
           </div>
+          
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-3">Region</label>
@@ -453,7 +581,7 @@ export default function AdminRankingsPage() {
           </div>
         ) : (
           <div className="space-y-8 animate-fadeIn">
-            {Object.values(groupedRankings).map((group, index) => (
+            {Object.entries(groupedRankings).map(([key, group], index) => (
               <div key={index} className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl overflow-hidden border border-indigo-100">
                 {/* Enhanced Category Header */}
                 <div className="bg-gradient-to-r from-indigo-500/10 to-purple-500/10 px-6 py-4 border-b border-indigo-100">
@@ -482,6 +610,12 @@ export default function AdminRankingsPage() {
                         </th>
                         <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider hidden sm:table-cell">
                           Performance
+                        </th>
+                        <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider hidden md:table-cell">
+                          Event
+                        </th>
+                        <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider hidden lg:table-cell">
+                          Style
                         </th>
                         <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
                           Score
@@ -514,6 +648,12 @@ export default function AdminRankingsPage() {
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap hidden sm:table-cell">
                             <div className="text-sm font-medium text-gray-900">{ranking.title}</div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap hidden md:table-cell">
+                            <div className="text-sm text-gray-700">{ranking.eventName}</div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap hidden lg:table-cell">
+                            <div className="text-sm text-gray-700">{ranking.itemStyle}</div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="text-sm font-bold text-gray-900">

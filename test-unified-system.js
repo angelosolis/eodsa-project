@@ -230,48 +230,139 @@ const runTests = async () => {
     }
     
     // ========================================
-    // PHASE 5: DANCER-STUDIO APPLICATION SYSTEM
+    // PHASE 5: DANCER-STUDIO DIRECT ADDITION (STUDIO HEAD ONLY)
     // ========================================
-    console.log('\n📋 PHASE 5: DANCER-STUDIO APPLICATION SYSTEM');
+    console.log('\n📋 PHASE 5: DANCER-STUDIO DIRECT ADDITION (STUDIO HEAD ONLY)');
     console.log('-'.repeat(40));
     
-    // Get available studios for dancer
-    console.log('\n🔍 Step 1: Get Available Studios for Dancer');
-    const availableStudios = await apiCall(`/api/dancers/available-studios?dancerId=${createdDancer.id}`);
+    console.log('\n📌 Note: Dancers can no longer apply to studios themselves.');
+    console.log('   Only studio heads can add dancers directly using EODSA IDs.');
     
-    // Apply to studio
-    console.log('\n📝 Step 2: Dancer Applies to Studio');
-    const applicationResult = await apiCall('/api/dancers/apply-to-studio', 'POST', {
+    // Test that dancer application endpoints are disabled
+    console.log('\n🚫 Step 1: Verify Dancer Application Endpoints Are Disabled');
+    const disabledApplication = await apiCall('/api/dancers/apply-to-studio', 'POST', {
       dancerId: createdDancer.id,
       studioId: createdStudio.id
     });
     
-    let applicationId = null;
-    if (applicationResult.ok) {
-      applicationId = applicationResult.data.id;
-      console.log('✅ Application submitted successfully');
+    if (!disabledApplication.ok && disabledApplication.status === 403) {
+      console.log('✅ Dancer application endpoint properly disabled');
+    } else {
+      console.log('❌ Dancer application endpoint should be disabled');
     }
     
-    // Check studio applications
-    console.log('\n📋 Step 3: Studio Views Pending Applications');
-    const studioApplications = await apiCall(`/api/studios/applications?studioId=${createdStudio.id}`);
+    const disabledStudios = await apiCall(`/api/dancers/available-studios?dancerId=${createdDancer.id}`);
+    if (!disabledStudios.ok && disabledStudios.status === 403) {
+      console.log('✅ Available studios endpoint properly disabled');
+    } else {
+      console.log('❌ Available studios endpoint should be disabled');
+    }
     
-    // Studio accepts application
-    console.log('\n✅ Step 4: Studio Accepts Application');
-    if (applicationId) {
-      const acceptResult = await apiCall(`/api/studios/applications/${applicationId}`, 'POST', {
-        action: 'accept',
-        respondedBy: createdStudio.id
-      });
+    // ========================================
+    // PHASE 5.5: DIRECT DANCER ADDITION (STUDIO HEAD FEATURE)
+    // ========================================
+    console.log('\n📋 PHASE 5.5: DIRECT DANCER ADDITION BY STUDIO HEAD');
+    console.log('-'.repeat(40));
+    
+    // Create another approved dancer for testing direct addition
+    console.log('\n👤 Step 1: Create Another Approved Dancer for Direct Addition');
+    const secondDancer = {
+      name: 'Alex Johnson',
+      dateOfBirth: '2011-08-22',
+      nationalId: `1108225555${timestamp.toString().slice(-3)}`,
+      email: `alex+${timestamp}@example.com`,
+      phone: '0123456790',
+      guardianName: 'Mike Johnson',
+      guardianEmail: `mike+${timestamp}@example.com`,
+      guardianPhone: '0987654322'
+    };
+    
+    const secondDancerResult = await apiCall('/api/dancers/register', 'POST', secondDancer);
+    let secondDancerData = null;
+    
+    if (secondDancerResult.ok) {
+      secondDancerData = secondDancerResult.data.dancer;
+      console.log(`✅ Second dancer registered: ${secondDancerData.eodsaId}`);
       
-      if (acceptResult.ok) {
-        console.log('✅ Application accepted by studio');
+      // Admin approves the second dancer
+      if (adminSession) {
+        const approveSecondDancer = await apiCall('/api/admin/dancers/approve', 'POST', {
+          dancerId: secondDancerData.id,
+          adminId: adminSession.id
+        });
+        
+        if (approveSecondDancer.ok) {
+          console.log('✅ Second dancer approved by admin');
+        }
       }
     }
     
-    // Check dancer's applications
-    console.log('\n📋 Step 5: Dancer Views Application Status');
-    const dancerApplications = await apiCall(`/api/dancers/applications?dancerId=${createdDancer.id}`);
+    // Test direct dancer addition by studio head
+    console.log('\n🎯 Step 2: Studio Head Directly Adds Dancer by EODSA ID');
+    if (secondDancerData && studioSession) {
+      const directAddResult = await apiCall('/api/studios/add-dancer', 'POST', {
+        studioId: createdStudio.id,
+        eodsaId: secondDancerData.eodsaId,
+        addedBy: createdStudio.id
+      });
+      
+      if (directAddResult.ok) {
+        console.log('✅ Dancer successfully added directly to studio');
+        console.log(`   Added dancer: ${secondDancerData.eodsaId} to studio: ${createdStudio.registrationNumber}`);
+      } else {
+        console.log('❌ Direct dancer addition failed:', directAddResult.data.error);
+      }
+    }
+    
+    // Test edge cases for direct addition
+    console.log('\n❌ Step 3: Test Direct Addition Edge Cases');
+    
+    // Try to add non-existent dancer
+    const nonExistentResult = await apiCall('/api/studios/add-dancer', 'POST', {
+      studioId: createdStudio.id,
+      eodsaId: 'E999999',
+      addedBy: createdStudio.id
+    });
+    
+    if (!nonExistentResult.ok) {
+      console.log('✅ Correctly rejected non-existent EODSA ID');
+    }
+    
+    // Try to add unapproved dancer (create one for this test)
+    const testUnapprovedDancer = await apiCall('/api/dancers/register', 'POST', {
+      name: 'Test Unapproved Direct',
+      dateOfBirth: '2012-03-20',
+      nationalId: `1203205556${timestamp.toString().slice(-3)}`,
+      email: `unapproved.direct+${timestamp}@example.com`,
+      guardianName: 'Test Guardian Direct',
+      guardianEmail: `guardian.direct+${timestamp}@example.com`,
+      guardianPhone: '0123456791'
+    });
+    
+    if (testUnapprovedDancer.ok) {
+      const unapprovedAddResult = await apiCall('/api/studios/add-dancer', 'POST', {
+        studioId: createdStudio.id,
+        eodsaId: testUnapprovedDancer.data.dancer.eodsaId,
+        addedBy: createdStudio.id
+      });
+      
+      if (!unapprovedAddResult.ok) {
+        console.log('✅ Correctly rejected unapproved dancer');
+      }
+    }
+    
+    // Try to add same dancer twice
+    if (secondDancerData) {
+      const duplicateAddResult = await apiCall('/api/studios/add-dancer', 'POST', {
+        studioId: createdStudio.id,
+        eodsaId: secondDancerData.eodsaId,
+        addedBy: createdStudio.id
+      });
+      
+      if (!duplicateAddResult.ok) {
+        console.log('✅ Correctly prevented duplicate dancer addition');
+      }
+    }
     
     // ========================================
     // PHASE 6: COMPETITION SYSTEM INTEGRATION
@@ -412,6 +503,7 @@ const runTests = async () => {
     console.log('   ✅ Individual dancer registration with admin approval');
     console.log('   ✅ Studio registration with admin approval');
     console.log('   ✅ Dancer-studio application workflow');
+    console.log('   ✅ Direct dancer addition by studio heads (NEW)');
     console.log('   ✅ Competition entry validation');
     console.log('   ✅ Admin oversight and management');
     console.log('   ✅ Email notifications (see server logs)');

@@ -128,7 +128,7 @@ export default function StudioRegisterPage() {
                   href="/studio-login"
                   className="block w-full px-6 py-4 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-2xl hover:from-purple-600 hover:to-pink-600 transition-all duration-300 font-semibold shadow-lg hover:shadow-xl transform hover:scale-105"
                 >
-                  🎪 Sign In to Studio Dashboard
+                  🏢 Access Studio Dashboard
                 </Link>
                 
                 <Link 

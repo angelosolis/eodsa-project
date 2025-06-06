@@ -12,29 +12,6 @@ interface StudioSession {
   registrationNumber: string;
 }
 
-// Application interface for the new unified system
-interface DancerApplication {
-  id: string;
-  dancerId: string;
-  studioId: string;
-  status: 'pending' | 'accepted' | 'rejected' | 'withdrawn';
-  appliedAt: string;
-  respondedAt?: string;
-  respondedBy?: string;
-  rejectionReason?: string;
-  dancer: {
-    id: string;
-    eodsaId: string;
-    name: string;
-    age: number;
-    dateOfBirth: string;
-    nationalId: string;
-    email?: string;
-    phone?: string;
-    approved: boolean;
-  };
-}
-
 // Accepted dancer interface  
 interface AcceptedDancer {
   id: string;
@@ -48,16 +25,26 @@ interface AcceptedDancer {
   joinedAt: string;
 }
 
+// Competition entry interface
+interface CompetitionEntry {
+  id: string;
+  eventName: string;
+  participantName: string;
+  status: string;
+  submittedAt: string;
+}
+
 export default function StudioDashboardPage() {
   const [studioSession, setStudioSession] = useState<StudioSession | null>(null);
-  const [applications, setApplications] = useState<DancerApplication[]>([]);
   const [acceptedDancers, setAcceptedDancers] = useState<AcceptedDancer[]>([]);
-  const [activeTab, setActiveTab] = useState<'applications' | 'dancers'>('applications');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'accepted' | 'rejected'>('all');
+  const [competitionEntries, setCompetitionEntries] = useState<CompetitionEntry[]>([]);
+  const [activeTab, setActiveTab] = useState<'dancers' | 'entries'>('dancers');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
-  const [rejectingApplication, setRejectingApplication] = useState<string | null>(null);
-  const [rejectionReason, setRejectionReason] = useState('');
+  const [showAddDancerModal, setShowAddDancerModal] = useState(false);
+  const [addDancerEodsaId, setAddDancerEodsaId] = useState('');
+  const [addingDancer, setAddingDancer] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
   const router = useRouter();
 
   useEffect(() => {
@@ -77,26 +64,23 @@ export default function StudioDashboardPage() {
     try {
       setIsLoading(true);
       
-      // Load applications and accepted dancers in parallel
-      const [applicationsResponse, dancersResponse] = await Promise.all([
-        fetch(`/api/studios/applications?studioId=${studioId}`),
+      // Load accepted dancers and competition entries
+      const [dancersResponse] = await Promise.all([
         fetch(`/api/studios/dancers-new?studioId=${studioId}`)
+        // TODO: Add competition entries API call when ready
+        // fetch(`/api/studios/entries?studioId=${studioId}`)
       ]);
 
-      const applicationsData = await applicationsResponse.json();
       const dancersData = await dancersResponse.json();
-
-      if (applicationsData.success) {
-        setApplications(applicationsData.applications);
-      } else {
-        setError(applicationsData.error || 'Failed to load applications');
-      }
 
       if (dancersData.success) {
         setAcceptedDancers(dancersData.dancers);
       } else {
         setError(dancersData.error || 'Failed to load dancers');
       }
+
+      // TODO: Load competition entries when API is ready
+      setCompetitionEntries([]);
     } catch (error) {
       console.error('Load data error:', error);
       setError('Failed to load data');
@@ -105,66 +89,44 @@ export default function StudioDashboardPage() {
     }
   };
 
-  const handleAcceptApplication = async (applicationId: string) => {
-    if (!studioSession) return;
+  const handleAddDancer = async () => {
+    if (!studioSession || !addDancerEodsaId.trim()) return;
 
     try {
-      const response = await fetch('/api/studios/applications', {
+      setAddingDancer(true);
+      setError('');
+
+      const response = await fetch('/api/studios/add-dancer', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          applicationId,
-          action: 'accept',
-          respondedBy: studioSession.id
+          studioId: studioSession.id,
+          eodsaId: addDancerEodsaId.trim().toUpperCase(),
+          addedBy: studioSession.id
         }),
       });
 
       const data = await response.json();
 
       if (data.success) {
+        setShowAddDancerModal(false);
+        setAddDancerEodsaId('');
+        setSuccessMessage(`Dancer ${addDancerEodsaId.trim().toUpperCase()} has been successfully added to your studio!`);
         // Reload data to reflect changes
         loadData(studioSession.id);
+        
+        // Clear success message after 5 seconds
+        setTimeout(() => setSuccessMessage(''), 5000);
       } else {
-        setError(data.error || 'Failed to accept application');
+        setError(data.error || 'Failed to add dancer');
       }
     } catch (error) {
-      console.error('Accept application error:', error);
-      setError('Failed to accept application');
-    }
-  };
-
-  const handleRejectApplication = async (applicationId: string) => {
-    if (!studioSession || !rejectionReason.trim()) return;
-
-    try {
-      const response = await fetch('/api/studios/applications', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          applicationId,
-          action: 'reject',
-          respondedBy: studioSession.id,
-          rejectionReason: rejectionReason.trim()
-        }),
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
-        setRejectingApplication(null);
-        setRejectionReason('');
-        // Reload data to reflect changes
-        loadData(studioSession.id);
-      } else {
-        setError(data.error || 'Failed to reject application');
-      }
-    } catch (error) {
-      console.error('Reject application error:', error);
-      setError('Failed to reject application');
+      console.error('Add dancer error:', error);
+      setError('Failed to add dancer');
+    } finally {
+      setAddingDancer(false);
     }
   };
 
@@ -173,32 +135,24 @@ export default function StudioDashboardPage() {
     router.push('/studio-login');
   };
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'pending':
-        return <span className="px-2 py-1 bg-yellow-900 text-yellow-200 text-xs rounded-full">Pending</span>;
-      case 'accepted':
-        return <span className="px-2 py-1 bg-green-900 text-green-200 text-xs rounded-full">Accepted</span>;
-      case 'rejected':
-        return <span className="px-2 py-1 bg-red-900 text-red-200 text-xs rounded-full">Rejected</span>;
-      case 'withdrawn':
-        return <span className="px-2 py-1 bg-gray-600 text-gray-300 text-xs rounded-full">Withdrawn</span>;
-      default:
-        return null;
-    }
+  // Calculate studio metrics
+  const getStudioStats = () => {
+    const totalDancers = acceptedDancers.length;
+    const totalEntries = competitionEntries.length;
+    const avgAge = totalDancers > 0 
+      ? Math.round(acceptedDancers.reduce((sum, dancer) => sum + dancer.age, 0) / totalDancers)
+      : 0;
+    const recentJoins = acceptedDancers.filter(dancer => {
+      const joinDate = new Date(dancer.joinedAt);
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      return joinDate > thirtyDaysAgo;
+    }).length;
+
+    return { totalDancers, totalEntries, avgAge, recentJoins };
   };
 
-  const getApprovalBadge = (approved: boolean) => {
-    return approved ? (
-      <span className="px-2 py-1 bg-blue-900 text-blue-200 text-xs rounded-full">Admin Approved</span>
-    ) : (
-      <span className="px-2 py-1 bg-orange-900 text-orange-200 text-xs rounded-full">Pending Admin</span>
-    );
-  };
-
-  const filteredApplications = statusFilter === 'all' 
-    ? applications 
-    : applications.filter(app => app.status === statusFilter);
+  const stats = getStudioStats();
 
   if (isLoading) {
     return (
@@ -251,7 +205,7 @@ export default function StudioDashboardPage() {
         {/* Dashboard Header */}
         <div className="mb-8">
           <h2 className="text-3xl font-bold text-white mb-2">Studio Dashboard</h2>
-          <p className="text-gray-300">Manage dancer applications and your accepted dancers</p>
+          <p className="text-gray-300">Manage your dancers and competition entries</p>
         </div>
 
         {error && (
@@ -266,24 +220,20 @@ export default function StudioDashboardPage() {
           </div>
         )}
 
-        {/* Quick Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-          <div className="bg-gray-800/80 rounded-2xl p-6 border border-gray-700/20">
-            <div className="flex items-center">
-              <div className="w-12 h-12 bg-yellow-500 rounded-lg flex items-center justify-center mr-4">
-                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold text-white">Pending</h3>
-                <p className="text-3xl font-bold text-yellow-400">
-                  {applications.filter(a => a.status === 'pending').length}
-                </p>
-              </div>
-            </div>
+        {successMessage && (
+          <div className="mb-6 bg-green-900/20 border border-green-500/30 rounded-xl p-4">
+            <p className="text-green-300">{successMessage}</p>
+            <button 
+              onClick={() => setSuccessMessage('')}
+              className="text-green-400 hover:text-green-300 text-sm mt-2"
+            >
+              Dismiss
+            </button>
           </div>
+        )}
 
+        {/* Studio Metrics */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
           <div className="bg-gray-800/80 rounded-2xl p-6 border border-gray-700/20">
             <div className="flex items-center">
               <div className="w-12 h-12 bg-purple-500 rounded-lg flex items-center justify-center mr-4">
@@ -292,8 +242,8 @@ export default function StudioDashboardPage() {
                 </svg>
               </div>
               <div>
-                <h3 className="text-lg font-semibold text-white">Accepted Dancers</h3>
-                <p className="text-3xl font-bold text-purple-400">{acceptedDancers.length}</p>
+                <h3 className="text-lg font-semibold text-white">Total Dancers</h3>
+                <p className="text-3xl font-bold text-purple-400">{stats.totalDancers}</p>
               </div>
             </div>
           </div>
@@ -306,8 +256,8 @@ export default function StudioDashboardPage() {
                 </svg>
               </div>
               <div>
-                <h3 className="text-lg font-semibold text-white">Total Applications</h3>
-                <p className="text-3xl font-bold text-green-400">{applications.length}</p>
+                <h3 className="text-lg font-semibold text-white">Competition Entries</h3>
+                <p className="text-3xl font-bold text-green-400">{stats.totalEntries}</p>
               </div>
             </div>
           </div>
@@ -320,13 +270,23 @@ export default function StudioDashboardPage() {
                 </svg>
               </div>
               <div>
-                <h3 className="text-lg font-semibold text-white">Acceptance Rate</h3>
-                <p className="text-3xl font-bold text-blue-400">
-                  {applications.length > 0 
-                    ? Math.round((applications.filter(a => a.status === 'accepted').length / applications.length) * 100)
-                    : 0
-                  }%
-                </p>
+                <h3 className="text-lg font-semibold text-white">Average Age</h3>
+                <p className="text-3xl font-bold text-blue-400">{stats.avgAge || '-'}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-gray-800/80 rounded-2xl p-6 border border-gray-700/20">
+            <div className="flex items-center">
+              <div className="w-12 h-12 bg-orange-500 rounded-lg flex items-center justify-center mr-4">
+                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-white">Recent Joins</h3>
+                <p className="text-3xl font-bold text-orange-400">{stats.recentJoins}</p>
+                <p className="text-xs text-gray-400">Last 30 days</p>
               </div>
             </div>
           </div>
@@ -335,16 +295,6 @@ export default function StudioDashboardPage() {
         {/* Tab Navigation */}
         <div className="mb-6">
           <div className="flex space-x-1 bg-gray-800/80 rounded-lg p-1">
-            <button
-              onClick={() => setActiveTab('applications')}
-              className={`flex-1 px-4 py-2 text-sm font-medium rounded-md transition-colors ${
-                activeTab === 'applications'
-                  ? 'bg-purple-600 text-white'
-                  : 'text-gray-300 hover:text-white hover:bg-gray-700'
-              }`}
-            >
-              Applications ({applications.length})
-            </button>
             <button
               onClick={() => setActiveTab('dancers')}
               className={`flex-1 px-4 py-2 text-sm font-medium rounded-md transition-colors ${
@@ -355,136 +305,38 @@ export default function StudioDashboardPage() {
             >
               My Dancers ({acceptedDancers.length})
             </button>
+            <button
+              onClick={() => setActiveTab('entries')}
+              className={`flex-1 px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+                activeTab === 'entries'
+                  ? 'bg-purple-600 text-white'
+                  : 'text-gray-300 hover:text-white hover:bg-gray-700'
+              }`}
+            >
+              My Entries ({stats.totalEntries})
+            </button>
           </div>
         </div>
-
-        {/* Applications Tab */}
-        {activeTab === 'applications' && (
-          <div className="bg-gray-800/80 rounded-2xl border border-gray-700/20 overflow-hidden">
-            <div className="p-6 border-b border-gray-700">
-              <div className="flex justify-between items-center">
-                <div>
-                  <h3 className="text-xl font-bold text-white">Dancer Applications</h3>
-                  <p className="text-gray-400 text-sm mt-1">Review and respond to dancer applications</p>
-                </div>
-                <div className="flex space-x-2">
-                  <select
-                    value={statusFilter}
-                    onChange={(e) => setStatusFilter(e.target.value as any)}
-                    className="px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm"
-                  >
-                    <option value="all">All Applications</option>
-                    <option value="pending">Pending</option>
-                    <option value="accepted">Accepted</option>
-                    <option value="rejected">Rejected</option>
-                  </select>
-                </div>
-              </div>
-            </div>
-
-            {filteredApplications.length === 0 ? (
-              <div className="p-8 text-center">
-                <div className="w-16 h-16 bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                </div>
-                <p className="text-gray-400 mb-2">No applications found</p>
-                <p className="text-gray-500 text-sm">Dancers will appear here when they apply to join your studio</p>
-              </div>
-            ) : (
-              <div className="divide-y divide-gray-700">
-                {filteredApplications.map((application) => (
-                  <div key={application.id} className="p-6 hover:bg-gray-700/30 transition-colors">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center mb-3">
-                          <h4 className="text-lg font-semibold text-white mr-3">{application.dancer.name}</h4>
-                          <span className="px-3 py-1 bg-gray-700 text-gray-300 rounded-full text-sm font-medium mr-2">
-                            Age {application.dancer.age}
-                          </span>
-                          {getStatusBadge(application.status)}
-                          {getApprovalBadge(application.dancer.approved)}
-                        </div>
-                        
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-sm mb-4">
-                          <div>
-                            <span className="text-gray-400">EODSA ID:</span>
-                            <span className="text-white ml-2 font-mono">{application.dancer.eodsaId}</span>
-                          </div>
-                          <div>
-                            <span className="text-gray-400">National ID:</span>
-                            <span className="text-white ml-2 font-mono">{application.dancer.nationalId}</span>
-                          </div>
-                          <div>
-                            <span className="text-gray-400">Applied:</span>
-                            <span className="text-white ml-2">{new Date(application.appliedAt).toLocaleDateString()}</span>
-                          </div>
-                          {application.dancer.email && (
-                            <div>
-                              <span className="text-gray-400">Email:</span>
-                              <span className="text-white ml-2">{application.dancer.email}</span>
-                            </div>
-                          )}
-                          {application.dancer.phone && (
-                            <div>
-                              <span className="text-gray-400">Phone:</span>
-                              <span className="text-white ml-2">{application.dancer.phone}</span>
-                            </div>
-                          )}
-                          <div>
-                            <span className="text-gray-400">Date of Birth:</span>
-                            <span className="text-white ml-2">{new Date(application.dancer.dateOfBirth).toLocaleDateString()}</span>
-                          </div>
-                        </div>
-
-                        {application.status === 'rejected' && application.rejectionReason && (
-                          <div className="mt-3 p-3 bg-red-900/20 border border-red-500/30 rounded-lg">
-                            <p className="text-red-300 text-sm">
-                              <strong>Rejection Reason:</strong> {application.rejectionReason}
-                            </p>
-                          </div>
-                        )}
-
-                        {!application.dancer.approved && (
-                          <div className="mt-3 p-3 bg-orange-900/20 border border-orange-500/30 rounded-lg">
-                            <p className="text-orange-300 text-sm">
-                              ⚠️ This dancer is awaiting admin approval before they can compete
-                            </p>
-                          </div>
-                        )}
-                      </div>
-
-                      {application.status === 'pending' && (
-                        <div className="flex items-center space-x-2 ml-4">
-                          <button
-                            onClick={() => handleAcceptApplication(application.id)}
-                            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm"
-                          >
-                            Accept
-                          </button>
-                          <button
-                            onClick={() => setRejectingApplication(application.id)}
-                            className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm"
-                          >
-                            Reject
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
 
         {/* Dancers Tab */}
         {activeTab === 'dancers' && (
           <div className="bg-gray-800/80 rounded-2xl border border-gray-700/20 overflow-hidden">
             <div className="p-6 border-b border-gray-700">
-              <h3 className="text-xl font-bold text-white">My Dancers</h3>
-              <p className="text-gray-400 text-sm mt-1">Dancers who are part of your studio</p>
+              <div className="flex justify-between items-center">
+                <div>
+                  <h3 className="text-xl font-bold text-white">My Dancers</h3>
+                  <p className="text-gray-400 text-sm mt-1">Dancers who are part of your studio</p>
+                </div>
+                <button
+                  onClick={() => setShowAddDancerModal(true)}
+                  className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors flex items-center space-x-2"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                  </svg>
+                  <span>Add Dancer by EODSA ID</span>
+                </button>
+              </div>
             </div>
 
             {acceptedDancers.length === 0 ? (
@@ -556,34 +408,108 @@ export default function StudioDashboardPage() {
           </div>
         )}
 
-        {/* Rejection Modal */}
-        {rejectingApplication && (
+        {/* My Entries Tab */}
+        {activeTab === 'entries' && (
+          <div className="bg-gray-800/80 rounded-2xl border border-gray-700/20 overflow-hidden">
+            <div className="p-6 border-b border-gray-700">
+              <div className="flex justify-between items-center">
+                <div>
+                  <h3 className="text-xl font-bold text-white">Competition Entries</h3>
+                  <p className="text-gray-400 text-sm mt-1">View and manage competition entries for your dancers</p>
+                </div>
+                <Link
+                  href="/event-dashboard"
+                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center space-x-2"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                  </svg>
+                  <span>Add New Entry</span>
+                </Link>
+              </div>
+            </div>
+
+            <div className="p-8 text-center">
+              <div className="w-16 h-16 bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+              </div>
+              <p className="text-gray-400 mb-2">Entry management coming soon</p>
+              <p className="text-gray-500 text-sm mb-6">
+                Competition entries will appear here once your dancers register for events.
+                For now, use each dancer's EODSA ID to enter competitions directly.
+              </p>
+              
+              <div className="max-w-md mx-auto space-y-3">
+                <h4 className="text-white font-medium">Quick Entry Access:</h4>
+                {acceptedDancers.slice(0, 3).map((dancer) => (
+                  <Link
+                    key={dancer.id}
+                    href={`/event-dashboard?eodsaId=${dancer.eodsaId}`}
+                    className="block p-3 bg-gray-700/50 border border-gray-600 rounded-lg hover:bg-gray-600/50 transition-colors"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-white font-medium">{dancer.name}</span>
+                      <span className="text-gray-400 text-sm font-mono">{dancer.eodsaId}</span>
+                    </div>
+                  </Link>
+                ))}
+                {acceptedDancers.length > 3 && (
+                  <p className="text-gray-500 text-sm">+ {acceptedDancers.length - 3} more dancers</p>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Add Dancer Modal */}
+        {showAddDancerModal && (
           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
             <div className="bg-gray-800 rounded-2xl p-6 w-full max-w-md border border-gray-700">
-              <h3 className="text-xl font-bold text-white mb-4">Reject Application</h3>
-              <p className="text-gray-300 mb-4">Please provide a reason for rejecting this application:</p>
-              <textarea
-                value={rejectionReason}
-                onChange={(e) => setRejectionReason(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-600 bg-gray-700 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all text-white placeholder-gray-400 resize-none"
-                placeholder="Enter rejection reason..."
-                rows={4}
-                required
-              />
-              <div className="flex space-x-3 pt-4">
+              <h3 className="text-xl font-bold text-white mb-4">Add Dancer by EODSA ID</h3>
+              <p className="text-gray-300 mb-4">Enter the EODSA ID of a registered dancer to add them directly to your studio:</p>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  EODSA ID (e.g., E123456)
+                </label>
+                <input
+                  type="text"
+                  value={addDancerEodsaId}
+                  onChange={(e) => setAddDancerEodsaId(e.target.value.toUpperCase())}
+                  className="w-full px-4 py-3 border border-gray-600 bg-gray-700 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all text-white placeholder-gray-400 font-mono"
+                  placeholder="E123456"
+                  maxLength={7}
+                  pattern="E\d{6}"
+                  required
+                />
+                <p className="text-xs text-gray-400 mt-1">
+                  Format: E followed by 6 digits
+                </p>
+              </div>
+              <div className="flex space-x-3">
                 <button
-                  onClick={() => handleRejectApplication(rejectingApplication)}
-                  disabled={!rejectionReason.trim()}
-                  className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  onClick={handleAddDancer}
+                  disabled={!addDancerEodsaId.trim() || addingDancer}
+                  className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
                 >
-                  Reject Application
+                  {addingDancer ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                      Adding...
+                    </>
+                  ) : (
+                    'Add Dancer'
+                  )}
                 </button>
                 <button
                   onClick={() => {
-                    setRejectingApplication(null);
-                    setRejectionReason('');
+                    setShowAddDancerModal(false);
+                    setAddDancerEodsaId('');
+                    setError('');
                   }}
-                  className="flex-1 px-4 py-2 border border-gray-600 text-gray-300 rounded-lg hover:bg-gray-700 transition-colors"
+                  disabled={addingDancer}
+                  className="flex-1 px-4 py-2 border border-gray-600 text-gray-300 rounded-lg hover:bg-gray-700 transition-colors disabled:opacity-50"
                 >
                   Cancel
                 </button>

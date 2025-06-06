@@ -813,44 +813,177 @@ export const db = {
   },
 
   // Rankings and Tabulation
-  async calculateRankings(region?: string, ageCategory?: string, performanceType?: string) {
+  async calculateRankings(region?: string, ageCategory?: string, performanceType?: string, eventIds?: string[]) {
     const sqlClient = getSql();
     
-    // Build dynamic query based on filters - UPDATED for new event schema
-    let query = `
-      SELECT 
-        p.id as performance_id,
-        e.region,
-        e.age_category,
-        e.performance_type,
-        p.title,
-        c.name as contestant_name,
-        AVG(s.technical_score + s.artistic_score + s.overall_score) as total_score,
-        AVG((s.technical_score + s.artistic_score + s.overall_score) / 3) as average_score,
-        COUNT(s.id) as judge_count
-      FROM performances p
-      JOIN events e ON p.event_id = e.id
-      JOIN contestants c ON p.contestant_id = c.id
-      LEFT JOIN scores s ON p.id = s.performance_id
-    `;
-
-    const conditions = [];
-    if (region) conditions.push(`e.region = '${region}'`);
-    if (ageCategory) conditions.push(`e.age_category = '${ageCategory}'`);
-    if (performanceType) conditions.push(`e.performance_type = '${performanceType}'`);
-    
-    if (conditions.length > 0) {
-      query += ` WHERE ${conditions.join(' AND ')}`;
-    }
-    
-    query += `
-      GROUP BY p.id, e.region, e.age_category, e.performance_type, p.title, c.name
-      HAVING COUNT(s.id) > 0
-      ORDER BY e.region, e.age_category, e.performance_type, total_score DESC
-    `;
-
     try {
-    const result = (await sqlClient.unsafe(query)) as unknown as any[];
+      console.log('Calculating rankings with filters:', { region, ageCategory, performanceType, eventIds });
+      
+      let result: any[] = [];
+
+      // Handle event filtering first (since this is the main issue)
+      if (eventIds && eventIds.length > 0) {
+        console.log('Filtering by specific events:', eventIds);
+        
+        // For single event (most common case)
+        if (eventIds.length === 1) {
+          const eventId = eventIds[0];
+          result = await sqlClient`
+            SELECT 
+              p.id as performance_id,
+              e.id as event_id,
+              e.name as event_name,
+              e.region,
+              e.age_category,
+              e.performance_type,
+              p.title,
+              p.item_style,
+              c.name as contestant_name,
+              AVG(s.technical_score + s.artistic_score + s.overall_score) as total_score,
+              AVG((s.technical_score + s.artistic_score + s.overall_score) / 3) as average_score,
+              COUNT(s.id) as judge_count
+            FROM performances p
+            JOIN events e ON p.event_id = e.id
+            JOIN contestants c ON p.contestant_id = c.id
+            LEFT JOIN scores s ON p.id = s.performance_id
+            WHERE e.id = ${eventId}
+            GROUP BY p.id, e.id, e.name, e.region, e.age_category, e.performance_type, p.title, p.item_style, c.name
+            HAVING COUNT(s.id) > 0
+            ORDER BY e.region, e.age_category, e.performance_type, total_score DESC
+          ` as any[];
+        } else {
+          // For multiple events, we'll query each separately and combine
+          const allResults = [];
+          for (const eventId of eventIds) {
+            const eventResult = await sqlClient`
+              SELECT 
+                p.id as performance_id,
+                e.id as event_id,
+                e.name as event_name,
+                e.region,
+                e.age_category,
+                e.performance_type,
+                p.title,
+                p.item_style,
+                c.name as contestant_name,
+                AVG(s.technical_score + s.artistic_score + s.overall_score) as total_score,
+                AVG((s.technical_score + s.artistic_score + s.overall_score) / 3) as average_score,
+                COUNT(s.id) as judge_count
+              FROM performances p
+              JOIN events e ON p.event_id = e.id
+              JOIN contestants c ON p.contestant_id = c.id
+              LEFT JOIN scores s ON p.id = s.performance_id
+              WHERE e.id = ${eventId}
+              GROUP BY p.id, e.id, e.name, e.region, e.age_category, e.performance_type, p.title, p.item_style, c.name
+              HAVING COUNT(s.id) > 0
+              ORDER BY e.region, e.age_category, e.performance_type, total_score DESC
+            ` as any[];
+            allResults.push(...eventResult);
+          }
+          result = allResults;
+        }
+      } else {
+        // No event filtering - use the standard filtering approach
+        if (region && ageCategory && performanceType) {
+          result = await sqlClient`
+            SELECT 
+              p.id as performance_id,
+              e.id as event_id,
+              e.name as event_name,
+              e.region,
+              e.age_category,
+              e.performance_type,
+              p.title,
+              p.item_style,
+              c.name as contestant_name,
+              AVG(s.technical_score + s.artistic_score + s.overall_score) as total_score,
+              AVG((s.technical_score + s.artistic_score + s.overall_score) / 3) as average_score,
+              COUNT(s.id) as judge_count
+            FROM performances p
+            JOIN events e ON p.event_id = e.id
+            JOIN contestants c ON p.contestant_id = c.id
+            LEFT JOIN scores s ON p.id = s.performance_id
+            WHERE e.region = ${region} AND e.age_category = ${ageCategory} AND e.performance_type = ${performanceType}
+            GROUP BY p.id, e.id, e.name, e.region, e.age_category, e.performance_type, p.title, p.item_style, c.name
+            HAVING COUNT(s.id) > 0
+            ORDER BY e.region, e.age_category, e.performance_type, total_score DESC
+          ` as any[];
+        } else if (region && ageCategory) {
+          result = await sqlClient`
+            SELECT 
+              p.id as performance_id,
+              e.id as event_id,
+              e.name as event_name,
+              e.region,
+              e.age_category,
+              e.performance_type,
+              p.title,
+              p.item_style,
+              c.name as contestant_name,
+              AVG(s.technical_score + s.artistic_score + s.overall_score) as total_score,
+              AVG((s.technical_score + s.artistic_score + s.overall_score) / 3) as average_score,
+              COUNT(s.id) as judge_count
+            FROM performances p
+            JOIN events e ON p.event_id = e.id
+            JOIN contestants c ON p.contestant_id = c.id
+            LEFT JOIN scores s ON p.id = s.performance_id
+            WHERE e.region = ${region} AND e.age_category = ${ageCategory}
+            GROUP BY p.id, e.id, e.name, e.region, e.age_category, e.performance_type, p.title, p.item_style, c.name
+            HAVING COUNT(s.id) > 0
+            ORDER BY e.region, e.age_category, e.performance_type, total_score DESC
+          ` as any[];
+        } else if (region) {
+          result = await sqlClient`
+            SELECT 
+              p.id as performance_id,
+              e.id as event_id,
+              e.name as event_name,
+              e.region,
+              e.age_category,
+              e.performance_type,
+              p.title,
+              p.item_style,
+              c.name as contestant_name,
+              AVG(s.technical_score + s.artistic_score + s.overall_score) as total_score,
+              AVG((s.technical_score + s.artistic_score + s.overall_score) / 3) as average_score,
+              COUNT(s.id) as judge_count
+            FROM performances p
+            JOIN events e ON p.event_id = e.id
+            JOIN contestants c ON p.contestant_id = c.id
+            LEFT JOIN scores s ON p.id = s.performance_id
+            WHERE e.region = ${region}
+            GROUP BY p.id, e.id, e.name, e.region, e.age_category, e.performance_type, p.title, p.item_style, c.name
+            HAVING COUNT(s.id) > 0
+            ORDER BY e.region, e.age_category, e.performance_type, total_score DESC
+          ` as any[];
+        } else {
+          result = await sqlClient`
+            SELECT 
+              p.id as performance_id,
+              e.id as event_id,
+              e.name as event_name,
+              e.region,
+              e.age_category,
+              e.performance_type,
+              p.title,
+              p.item_style,
+              c.name as contestant_name,
+              AVG(s.technical_score + s.artistic_score + s.overall_score) as total_score,
+              AVG((s.technical_score + s.artistic_score + s.overall_score) / 3) as average_score,
+              COUNT(s.id) as judge_count
+            FROM performances p
+            JOIN events e ON p.event_id = e.id
+            JOIN contestants c ON p.contestant_id = c.id
+            LEFT JOIN scores s ON p.id = s.performance_id
+            GROUP BY p.id, e.id, e.name, e.region, e.age_category, e.performance_type, p.title, p.item_style, c.name
+            HAVING COUNT(s.id) > 0
+            ORDER BY e.region, e.age_category, e.performance_type, total_score DESC
+          ` as any[];
+        }
+      }
+      
+      console.log('Rankings SQL Result:', result);
+      console.log('Result length:', result.length);
       
       // Ensure result is an array
       if (!Array.isArray(result)) {
@@ -860,37 +993,82 @@ export const db = {
 
       // If no results, return empty array
       if (result.length === 0) {
+        console.log('No rankings found for the given criteria');
         return [];
       }
     
-    // Add rankings within each category
-    let currentRank = 1;
-    let currentCategory = '';
-    
-    return result.map((row: any, index: number) => {
-      const categoryKey = `${row.region}-${row.age_category}-${row.performance_type}`;
-      if (categoryKey !== currentCategory) {
-        currentRank = 1;
-        currentCategory = categoryKey;
-      } else if (index > 0 && result[index - 1].total_score !== row.total_score) {
-        currentRank = index + 1;
-      }
+      // Add rankings within each category
+      let currentRank = 1;
+      let currentCategory = '';
       
-      return {
-        performanceId: row.performance_id,
+      return result.map((row: any, index: number) => {
+        const categoryKey = `${row.region}-${row.age_category}-${row.performance_type}`;
+        if (categoryKey !== currentCategory) {
+          currentRank = 1;
+          currentCategory = categoryKey;
+        } else if (index > 0 && result[index - 1].total_score !== row.total_score) {
+          currentRank = index + 1;
+        }
+        
+        return {
+          performanceId: row.performance_id,
+          eventId: row.event_id,
+          eventName: row.event_name,
+          region: row.region,
+          ageCategory: row.age_category,
+          performanceType: row.performance_type,
+          title: row.title,
+          itemStyle: row.item_style,
+          contestantName: row.contestant_name,
+          totalScore: parseFloat(row.total_score) || 0,
+          averageScore: parseFloat(row.average_score) || 0,
+          rank: currentRank,
+          judgeCount: parseInt(row.judge_count) || 0
+        };
+      });
+    } catch (error) {
+      console.error('Error in calculateRankings:', error);
+      return [];
+    }
+  },
+
+  // Get events that have at least one scored performance
+  async getEventsWithScores() {
+    const sqlClient = getSql();
+    
+    try {
+      const result = await sqlClient`
+        SELECT DISTINCT 
+          e.id,
+          e.name,
+          e.region,
+          e.age_category,
+          e.performance_type,
+          e.event_date,
+          e.venue,
+          COUNT(DISTINCT p.id) as performance_count,
+          COUNT(DISTINCT s.id) as score_count
+        FROM events e
+        JOIN performances p ON e.id = p.event_id
+        LEFT JOIN scores s ON p.id = s.performance_id
+        GROUP BY e.id, e.name, e.region, e.age_category, e.performance_type, e.event_date, e.venue
+        HAVING COUNT(DISTINCT s.id) > 0
+        ORDER BY e.event_date DESC, e.name
+      ` as any[];
+      
+      return result.map((row: any) => ({
+        id: row.id,
+        name: row.name,
         region: row.region,
         ageCategory: row.age_category,
         performanceType: row.performance_type,
-        title: row.title,
-        contestantName: row.contestant_name,
-          totalScore: parseFloat(row.total_score) || 0,
-          averageScore: parseFloat(row.average_score) || 0,
-        rank: currentRank,
-          judgeCount: parseInt(row.judge_count) || 0
-      };
-    });
+        eventDate: row.event_date,
+        venue: row.venue,
+        performanceCount: parseInt(row.performance_count) || 0,
+        scoreCount: parseInt(row.score_count) || 0
+      }));
     } catch (error) {
-      console.error('Error in calculateRankings:', error);
+      console.error('Error in getEventsWithScores:', error);
       return [];
     }
   },
@@ -972,6 +1150,19 @@ export const db = {
       specialization: row.specialization ? JSON.parse(row.specialization) : [],
       createdAt: row.created_at
     })) as Judge[];
+  },
+
+  async deleteJudge(judgeId: string) {
+    const sqlClient = getSql();
+    
+    // First delete any judge assignments
+    await sqlClient`DELETE FROM judge_event_assignments WHERE judge_id = ${judgeId}`;
+    
+    // Then delete any scores by this judge
+    await sqlClient`DELETE FROM scores WHERE judge_id = ${judgeId}`;
+    
+    // Finally delete the judge
+    await sqlClient`DELETE FROM judges WHERE id = ${judgeId}`;
   },
 
   // Scores (keep existing implementation)
@@ -2201,6 +2392,61 @@ export const unifiedDb = {
       approvedAt: row.approved_at,
       rejectionReason: row.rejection_reason,
       createdAt: row.created_at
+    };
+  },
+
+  // Directly add a registered dancer to a studio by EODSA ID (Studio Head feature)
+  async addDancerToStudioByEodsaId(studioId: string, eodsaId: string, addedBy: string) {
+    const sqlClient = getSql();
+    
+    // First, check if dancer exists and is approved
+    const dancer = await this.getDancerByEodsaId(eodsaId);
+    if (!dancer) {
+      throw new Error('Dancer not found with this EODSA ID');
+    }
+    
+    if (!dancer.approved) {
+      throw new Error('Dancer must be admin-approved before being added to a studio');
+    }
+    
+    // Check if dancer is already associated with this studio
+    const existingApplication = await sqlClient`
+      SELECT * FROM studio_applications 
+      WHERE dancer_id = ${dancer.id} AND studio_id = ${studioId}
+    ` as any[];
+    
+    if (existingApplication.length > 0) {
+      const app = existingApplication[0];
+      if (app.status === 'accepted') {
+        throw new Error('Dancer is already a member of this studio');
+      } else if (app.status === 'pending') {
+        throw new Error('Dancer already has a pending application to this studio');
+      }
+    }
+    
+    // Generate unique application ID
+    const applicationId = `app-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const appliedAt = new Date().toISOString();
+    const respondedAt = new Date().toISOString();
+    
+    // Create an accepted application record (bypassing the approval process)
+    await sqlClient`
+      INSERT INTO studio_applications (
+        id, dancer_id, studio_id, status, applied_at, responded_at, responded_by
+      ) VALUES (
+        ${applicationId}, ${dancer.id}, ${studioId}, 'accepted', ${appliedAt}, ${respondedAt}, ${addedBy}
+      )
+    `;
+    
+    return {
+      id: applicationId,
+      dancerId: dancer.id,
+      studioId: studioId,
+      status: 'accepted',
+      appliedAt: appliedAt,
+      respondedAt: respondedAt,
+      respondedBy: addedBy,
+      dancer: dancer
     };
   },
 

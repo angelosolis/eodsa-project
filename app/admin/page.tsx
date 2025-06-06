@@ -102,7 +102,7 @@ export default function AdminDashboard() {
   const [dancers, setDancers] = useState<Dancer[]>([]);
   const [studios, setStudios] = useState<Studio[]>([]);
   const [studioApplications, setStudioApplications] = useState<StudioApplication[]>([]);
-  const [activeTab, setActiveTab] = useState<'events' | 'judges' | 'assignments' | 'dancers' | 'studios' | 'relationships'>('events');
+  const [activeTab, setActiveTab] = useState<'events' | 'judges' | 'assignments' | 'dancers' | 'studios'>('events');
   const [isLoading, setIsLoading] = useState(true);
   const { success, error, warning, info } = useToast();
   const { showAlert, showConfirm, showPrompt } = useAlert();
@@ -152,14 +152,13 @@ export default function AdminDashboard() {
 
   // Dancer search and filter state
   const [dancerSearchTerm, setDancerSearchTerm] = useState('');
-  const [dancerStatusFilter, setDancerStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all');
+  const [dancerStatusFilter, setDancerStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('pending');
 
   // Studio search and filter state
   const [studioSearchTerm, setStudioSearchTerm] = useState('');
-  const [studioStatusFilter, setStudioStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all');
+  const [studioStatusFilter, setStudioStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('pending');
 
-  // Relationship filter state
-  const [relationshipStatusFilter, setRelationshipStatusFilter] = useState<'all' | 'pending' | 'accepted' | 'rejected'>('all');
+
 
   // Modal states
   const [showCreateEventModal, setShowCreateEventModal] = useState(false);
@@ -622,6 +621,39 @@ export default function AdminDashboard() {
     }
   };
 
+  const handleDeleteJudge = async (judgeId: string, judgeName: string) => {
+    if (!confirm(`Are you sure you want to delete judge "${judgeName}"? This action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      const session = localStorage.getItem('judgeSession');
+      if (!session) {
+        setCreateJudgeMessage('Please log in again to continue');
+        return;
+      }
+
+      const response = await fetch(`/api/judges/${judgeId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${JSON.parse(session).id}`
+        }
+      });
+
+      if (response.ok) {
+        setCreateJudgeMessage(`Judge "${judgeName}" deleted successfully`);
+        fetchData();
+        setTimeout(() => setCreateJudgeMessage(''), 5000);
+      } else {
+        const error = await response.json();
+        setCreateJudgeMessage(`Error: ${error.error || 'Failed to delete judge'}`);
+      }
+    } catch (error) {
+      console.error('Delete judge error:', error);
+      setCreateJudgeMessage('Error: Failed to delete judge');
+    }
+  };
+
   const handleLogout = () => {
     localStorage.removeItem('judgeSession');
     router.push('/portal/admin');
@@ -757,13 +789,14 @@ export default function AdminDashboard() {
                 <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
                 <span className="text-xs sm:text-sm font-medium text-gray-700">System Online</span>
               </div>
-              <button
+              {/* Email testing disabled for Phase 1 */}
+              {/* <button
                 onClick={() => setShowEmailTestModal(true)}
                 className="inline-flex items-center space-x-1 sm:space-x-2 px-3 sm:px-5 py-2 sm:py-2.5 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg sm:rounded-xl hover:from-green-600 hover:to-emerald-700 transition-all duration-200 transform hover:scale-105 shadow-lg text-sm sm:text-base"
               >
                 <span className="text-sm sm:text-base">📧</span>
                 <span className="font-medium">Email Test</span>
-              </button>
+              </button> */}
               <button
                 onClick={handleCleanDatabase}
                 disabled={isCleaningDatabase}
@@ -827,8 +860,7 @@ export default function AdminDashboard() {
               { id: 'judges', label: 'Judges', icon: '👨‍⚖️', color: 'purple' },
               { id: 'assignments', label: 'Assignments', icon: '🔗', color: 'pink' },
               { id: 'dancers', label: 'Dancers', icon: '💃', color: 'rose' },
-              { id: 'studios', label: 'Studios', icon: '🏢', color: 'orange' },
-              { id: 'relationships', label: 'Relationships', icon: '🤝', color: 'teal' }
+              { id: 'studios', label: 'Studios', icon: '🏢', color: 'orange' }
             ].map((tab) => (
                 <button
                   key={tab.id}
@@ -1016,6 +1048,7 @@ export default function AdminDashboard() {
                         <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider hidden sm:table-cell">Email</th>
                         <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Role</th>
                         <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider hidden md:table-cell">Created</th>
+                        <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Actions</th>
                     </tr>
                   </thead>
                     <tbody className="bg-white/50 divide-y divide-gray-200">
@@ -1038,6 +1071,16 @@ export default function AdminDashboard() {
                           <td className="px-6 py-4 text-sm font-medium text-gray-600 hidden md:table-cell">
                             {new Date(judge.createdAt).toLocaleDateString()}
                         </td>
+                          <td className="px-6 py-4">
+                            {!judge.isAdmin && (
+                              <button
+                                onClick={() => handleDeleteJudge(judge.id, judge.name)}
+                                className="inline-flex items-center px-3 py-1 bg-red-500 text-white text-xs rounded-lg hover:bg-red-600 transition-colors"
+                              >
+                                🗑️ Delete
+                              </button>
+                            )}
+                          </td>
                       </tr>
                     ))}
                   </tbody>
@@ -1157,7 +1200,7 @@ export default function AdminDashboard() {
                         placeholder="Search dancers..."
                         value={dancerSearchTerm}
                         onChange={(e) => setDancerSearchTerm(e.target.value)}
-                        className="w-full sm:w-64 px-4 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-500 focus:border-rose-500 text-sm"
+                        className="w-full sm:w-64 px-4 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-500 focus:border-rose-500 text-sm text-gray-900 placeholder-gray-500"
                       />
                       <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
                         <span className="text-gray-400">🔍</span>
@@ -1167,7 +1210,7 @@ export default function AdminDashboard() {
                     <select
                       value={dancerStatusFilter}
                       onChange={(e) => setDancerStatusFilter(e.target.value as any)}
-                      className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-500 focus:border-rose-500 text-sm"
+                      className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-500 focus:border-rose-500 text-sm text-gray-900"
                     >
                       <option value="all">All Status</option>
                       <option value="pending">⏳ Pending</option>
@@ -1307,7 +1350,7 @@ export default function AdminDashboard() {
                                     onClick={() => handleRejectDancer(dancer.id)}
                                     className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors"
                                   >
-                                    ❌ Reject
+                                    <span className="text-white">✖️</span> Reject
                                   </button>
                                 </div>
                               ) : (
@@ -1360,7 +1403,7 @@ export default function AdminDashboard() {
                         placeholder="Search studios..."
                         value={studioSearchTerm}
                         onChange={(e) => setStudioSearchTerm(e.target.value)}
-                        className="w-full sm:w-64 px-4 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-sm"
+                        className="w-full sm:w-64 px-4 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-sm text-gray-900 placeholder-gray-500"
                       />
                       <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
                         <span className="text-gray-400">🔍</span>
@@ -1370,7 +1413,7 @@ export default function AdminDashboard() {
                     <select
                       value={studioStatusFilter}
                       onChange={(e) => setStudioStatusFilter(e.target.value as any)}
-                      className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-sm"
+                      className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-sm text-gray-900"
                     >
                       <option value="all">All Status</option>
                       <option value="pending">⏳ Pending</option>
@@ -1495,7 +1538,7 @@ export default function AdminDashboard() {
                                     onClick={() => handleRejectStudio(studio.id)}
                                     className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors"
                                   >
-                                    ❌ Reject
+                                    <span className="text-white">✖️</span> Reject
                                   </button>
                                 </div>
                               ) : (
@@ -1513,177 +1556,7 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        {/* Relationships Tab - New */}
-        {activeTab === 'relationships' && (
-          <div className="space-y-8 animate-fadeIn">
-            {/* Enhanced Studio Applications List */}
-            <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl overflow-hidden border border-teal-100">
-              <div className="px-6 py-4 bg-gradient-to-r from-teal-500/10 to-cyan-500/10 border-b border-teal-100">
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                  <div className="flex items-center space-x-3">
-                    <div className="w-8 h-8 bg-gradient-to-br from-teal-500 to-cyan-600 rounded-lg flex items-center justify-center">
-                      <span className="text-white text-sm">🤝</span>
-                    </div>
-                    <h2 className="text-xl font-bold text-gray-900">Dancer-Studio Relationships</h2>
-                    <div className="px-3 py-1 bg-teal-100 text-teal-800 rounded-full text-sm font-medium">
-                      {studioApplications.filter(a => {
-                        const matchesFilter = relationshipStatusFilter === 'all' || a.status === relationshipStatusFilter;
-                        return matchesFilter;
-                      }).length} of {studioApplications.length} applications
-                    </div>
-                  </div>
-                  
-                  {/* Filter Controls */}
-                  <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
-                    <select
-                      value={relationshipStatusFilter}
-                      onChange={(e) => setRelationshipStatusFilter(e.target.value as any)}
-                      className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 text-sm"
-                    >
-                      <option value="all">All Applications</option>
-                      <option value="pending">⏳ Pending</option>
-                      <option value="accepted">✅ Accepted</option>
-                      <option value="rejected">❌ Rejected</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
 
-              {(() => {
-                // Filter and sort applications
-                const filteredApplications = studioApplications
-                  .filter(a => {
-                    const matchesFilter = relationshipStatusFilter === 'all' || a.status === relationshipStatusFilter;
-                    return matchesFilter;
-                  })
-                  .sort((a, b) => new Date(b.appliedAt).getTime() - new Date(a.appliedAt).getTime()); // Sort by newest first
-
-                return filteredApplications.length === 0 ? (
-                  <div className="text-center py-12 text-gray-500">
-                    <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
-                      <span className="text-2xl">🤝</span>
-                    </div>
-                    <h3 className="text-lg font-medium mb-2">
-                      {studioApplications.length === 0 ? 'No applications yet' : 'No applications match your filter'}
-                    </h3>
-                    <p className="text-sm mb-4">
-                      {studioApplications.length === 0 
-                        ? 'Dancer-studio applications will appear here when dancers apply to studios'
-                        : 'Try adjusting your filter criteria'
-                      }
-                    </p>
-                    {studioApplications.length > 0 && (
-                      <button
-                        onClick={() => setRelationshipStatusFilter('all')}
-                        className="inline-flex items-center space-x-2 px-4 py-2 bg-teal-500 text-white rounded-lg hover:bg-teal-600 transition-colors"
-                      >
-                        <span>🔄</span>
-                        <span>Clear Filters</span>
-                      </button>
-                    )}
-                  </div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-gray-200">
-                      <thead className="bg-gray-50/80">
-                        <tr>
-                          <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Dancer</th>
-                          <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Studio</th>
-                          <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Applied</th>
-                          <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Status</th>
-                          <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Response</th>
-                        </tr>
-                      </thead>
-                      <tbody className="bg-white/50 divide-y divide-gray-200">
-                        {filteredApplications.map((application) => (
-                          <tr key={application.id} className="hover:bg-teal-50/50 transition-colors duration-200">
-                            <td className="px-6 py-4">
-                              <div>
-                                <div className="text-sm font-bold text-gray-900">{application.dancer.name}</div>
-                                <div className="text-xs text-gray-500">EODSA: {application.dancer.eodsaId}</div>
-                                <div className="text-xs text-gray-500">Age: {application.dancer.age}</div>
-                                <div className="flex items-center mt-1">
-                                  {application.dancer.approved ? (
-                                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
-                                      ✅ Admin Approved
-                                    </span>
-                                  ) : (
-                                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-800">
-                                      ⏳ Pending Admin
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                            </td>
-                            <td className="px-6 py-4">
-                              <div>
-                                <div className="text-sm font-bold text-gray-900">{application.studio.name}</div>
-                                <div className="text-xs text-gray-500">Reg: {application.studio.registrationNumber}</div>
-                              </div>
-                            </td>
-                            <td className="px-6 py-4">
-                              <div className="text-sm font-medium text-gray-900">
-                                {new Date(application.appliedAt).toLocaleDateString()}
-                              </div>
-                              <div className="text-xs text-gray-500">
-                                {new Date(application.appliedAt).toLocaleTimeString()}
-                              </div>
-                            </td>
-                            <td className="px-6 py-4">
-                              {application.status === 'pending' && (
-                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-                                  ⏳ Pending
-                                </span>
-                              )}
-                              {application.status === 'accepted' && (
-                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                                  ✅ Accepted
-                                </span>
-                              )}
-                              {application.status === 'rejected' && (
-                                <div>
-                                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                                    ❌ Rejected
-                                  </span>
-                                  {application.rejectionReason && (
-                                    <div className="text-xs text-gray-500 mt-1" title={application.rejectionReason}>
-                                      {application.rejectionReason.length > 30 
-                                        ? application.rejectionReason.substring(0, 30) + '...' 
-                                        : application.rejectionReason}
-                                    </div>
-                                  )}
-                                </div>
-                              )}
-                              {application.status === 'withdrawn' && (
-                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                                  🔄 Withdrawn
-                                </span>
-                              )}
-                            </td>
-                            <td className="px-6 py-4">
-                              {application.respondedAt ? (
-                                <div>
-                                  <div className="text-sm font-medium text-gray-900">
-                                    {new Date(application.respondedAt).toLocaleDateString()}
-                                  </div>
-                                  <div className="text-xs text-gray-500">
-                                    {new Date(application.respondedAt).toLocaleTimeString()}
-                                  </div>
-                                </div>
-                              ) : (
-                                <span className="text-xs text-gray-400">No response yet</span>
-                              )}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                );
-              })()}
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Modal Components */}
@@ -2107,8 +1980,8 @@ export default function AdminDashboard() {
         </div>
       )}
 
-      {/* Email Test Modal */}
-      {showEmailTestModal && (
+              {/* Email Test Modal - Disabled for Phase 1 */}
+        {false && showEmailTestModal && (
         <div className="fixed inset-0 bg-white/20 backdrop-blur-md flex items-center justify-center p-4 z-50">
           <div className="bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-white/30">
             <div className="p-6 border-b border-gray-200/50">

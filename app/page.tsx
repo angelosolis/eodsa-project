@@ -1,10 +1,8 @@
 'use client';
 
-import { useState } from 'react';
 import Link from 'next/link';
 
 export default function HomePage() {
-  const [eodsaId, setEodsaId] = useState('');
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900">
@@ -28,80 +26,76 @@ export default function HomePage() {
             <p className="text-gray-400">Choose your path to get started</p>
           </div>
 
-          <div className="grid md:grid-cols-3 gap-8 lg:gap-8 mb-16">
+          <div className="grid md:grid-cols-3 gap-6 lg:gap-8 mb-16 max-w-6xl mx-auto">
             {/* New User Card */}
-            <div className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-2xl border-2 border-indigo-500/30 p-8 text-center hover:scale-105 transition-all duration-300 shadow-2xl hover:shadow-indigo-500/20">
-              <div className="w-16 h-16 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-6 shadow-xl">
+            <div className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-2xl border-2 border-indigo-500/30 p-6 text-center hover:scale-105 transition-all duration-300 shadow-2xl hover:shadow-indigo-500/20">
+              <div className="w-16 h-16 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-4 shadow-xl">
                 <span className="text-white text-2xl">👋</span>
               </div>
-              <h3 className="text-2xl font-bold text-white mb-4">New User</h3>
-              <p className="text-gray-300 mb-6">
-                Register as a new contestant or studio to participate in EODSA competitions.
+              <h3 className="text-xl font-bold text-white mb-3">New User</h3>
+              <p className="text-gray-300 mb-4 text-sm">
+                Register as a new dancer to participate in EODSA competitions.
               </p>
               <Link 
                 href="/register"
-                className="block w-full px-6 py-4 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-xl font-semibold hover:from-indigo-600 hover:to-purple-700 transition-all duration-300 shadow-lg hover:shadow-xl"
+                className="block w-full px-4 py-3 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-xl font-semibold hover:from-indigo-600 hover:to-purple-700 transition-all duration-300 shadow-lg hover:shadow-xl text-sm"
               >
                 Start Registration
               </Link>
             </div>
 
             {/* Existing User Card */}
-            <div className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-2xl border-2 border-purple-500/30 p-8 text-center hover:scale-105 transition-all duration-300 shadow-2xl hover:shadow-purple-500/20">
-              <div className="w-16 h-16 bg-gradient-to-br from-purple-500 to-pink-600 rounded-full flex items-center justify-center mx-auto mb-6 shadow-xl">
+            <div className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-2xl border-2 border-purple-500/30 p-6 text-center hover:scale-105 transition-all duration-300 shadow-2xl hover:shadow-purple-500/20">
+              <div className="w-16 h-16 bg-gradient-to-br from-purple-500 to-pink-600 rounded-full flex items-center justify-center mx-auto mb-4 shadow-xl">
                 <span className="text-white text-2xl">🎪</span>
               </div>
-              <h3 className="text-2xl font-bold text-white mb-4">Existing User</h3>
-              <p className="text-gray-300 mb-6">
-                Already have an EODSA ID? Enter the event dashboard to register for competitions.
+              <h3 className="text-xl font-bold text-white mb-3">Existing User</h3>
+              <p className="text-gray-300 mb-4 text-sm">
+                Already have an EODSA ID? Enter it below to access the Event Dashboard.
               </p>
               
-              <div className="space-y-4">
-                <div className="flex gap-3">
-                  <input
-                    type="text"
-                    value={eodsaId}
-                    onChange={(e) => setEodsaId(e.target.value)}
-                    placeholder="Enter your EODSA ID"
-                    className="flex-1 px-4 py-3 bg-gray-700 border-2 border-purple-500/30 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200 font-medium text-white placeholder-gray-400"
-                  />
-                </div>
-                <Link 
-                  href={eodsaId ? `/event-dashboard?eodsaId=${eodsaId}` : '#'}
-                  className={`block w-full px-6 py-4 rounded-xl font-semibold transition-all duration-300 ${
-                    eodsaId 
-                      ? 'bg-gradient-to-r from-purple-500 to-pink-600 text-white hover:from-purple-600 hover:to-pink-700 shadow-lg hover:shadow-xl' 
-                      : 'bg-gray-600 text-gray-400 cursor-not-allowed'
-                  }`}
-                  onClick={eodsaId ? undefined : (e) => e.preventDefault()}
+              <div className="space-y-3">
+                <input
+                  type="text"
+                  placeholder="Enter EODSA ID (e.g. E123456)"
+                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                  id="eodsa-id-input"
+                />
+                <button
+                  onClick={() => {
+                    const input = document.getElementById('eodsa-id-input') as HTMLInputElement;
+                    if (input?.value.trim()) {
+                      window.location.href = `/event-dashboard?eodsaId=${input.value.trim()}`;
+                    }
+                  }}
+                  className="w-full px-4 py-3 bg-gradient-to-r from-purple-500 to-pink-600 text-white rounded-xl font-semibold hover:from-purple-600 hover:to-pink-700 transition-all duration-300 shadow-lg hover:shadow-xl text-sm"
                 >
                   Enter Event Dashboard
-                </Link>
+                </button>
               </div>
             </div>
 
             {/* Studio Portal Card */}
-            <div className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-2xl border-2 border-orange-500/30 p-8 text-center hover:scale-105 transition-all duration-300 shadow-2xl hover:shadow-orange-500/20">
-              <div className="w-16 h-16 bg-gradient-to-br from-orange-500 to-pink-600 rounded-full flex items-center justify-center mx-auto mb-6 shadow-xl">
+            <div className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-2xl border-2 border-green-500/30 p-6 text-center hover:scale-105 transition-all duration-300 shadow-2xl hover:shadow-green-500/20">
+              <div className="w-16 h-16 bg-gradient-to-br from-green-500 to-teal-600 rounded-full flex items-center justify-center mx-auto mb-4 shadow-xl">
                 <span className="text-white text-2xl">🏢</span>
               </div>
-              <h3 className="text-2xl font-bold text-white mb-4">Studio Portal</h3>
-              <p className="text-gray-300 mb-6">
-                Dance studio owners and teachers can manage their dancers and registrations.
+              <h3 className="text-xl font-bold text-white mb-3">Studio Portal</h3>
+              <p className="text-gray-300 mb-4 text-sm">
+                Register your studio or access your studio dashboard to manage dancers.
               </p>
-              
-              <div className="space-y-3">
-                <Link 
-                  href="/studio-login"
-                  className="block w-full px-6 py-3 bg-gradient-to-r from-orange-500 to-pink-600 text-white rounded-xl font-semibold hover:from-orange-600 hover:to-pink-700 transition-all duration-300 shadow-lg hover:shadow-xl"
-                >
-                  Studio Login
-                </Link>
+              <div className="space-y-2">
                 <Link 
                   href="/studio-register"
-                  className="block w-full px-6 py-3 border-2 border-orange-500/30 text-orange-300 rounded-xl font-semibold hover:bg-orange-500/10 transition-all duration-300"
+                  className="block w-full px-4 py-2 bg-gradient-to-r from-green-500 to-teal-600 text-white rounded-lg font-semibold hover:from-green-600 hover:to-teal-700 transition-all duration-300 shadow-lg hover:shadow-xl text-sm"
                 >
                   Register Studio
+                </Link>
+                <Link 
+                  href="/studio-login"
+                  className="block w-full px-4 py-2 border-2 border-green-500 text-green-400 rounded-lg font-semibold hover:bg-green-500 hover:text-white transition-all duration-300 text-sm"
+                >
+                  Studio Login
                 </Link>
               </div>
             </div>
@@ -116,14 +110,6 @@ export default function HomePage() {
               <span className="text-gray-600">•</span>
               <Link href="/judge" className="text-green-400 hover:text-green-300 transition-colors">
                 Judge Portal
-              </Link>
-              <span className="text-gray-600">•</span>
-              <Link href="/dancer-login" className="text-purple-400 hover:text-purple-300 transition-colors">
-                Dancer Portal
-              </Link>
-              <span className="text-gray-600">•</span>
-              <Link href="/competition-entry" className="text-indigo-400 hover:text-indigo-300 transition-colors">
-                Competition Entry
               </Link>
             </div>
           </div>

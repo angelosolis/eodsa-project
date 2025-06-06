@@ -49,20 +49,20 @@ export async function POST(request: NextRequest) {
       
       await unifiedDb.approveDancer(dancerId, adminId);
       
-      // Send approval email if dancer has email
-      if (dancer && dancer.email) {
-        try {
-          await emailService.sendDancerApprovalEmail(
-            dancer.name,
-            dancer.email,
-            dancer.eodsaId
-          );
-          console.log('Approval email sent successfully to:', dancer.email);
-        } catch (emailError) {
-          console.error('Failed to send approval email:', emailError);
-          // Don't fail the approval if email fails
-        }
-      }
+      // Email system disabled for Phase 1
+      // if (dancer && dancer.email) {
+      //   try {
+      //     await emailService.sendDancerApprovalEmail(
+      //       dancer.name,
+      //       dancer.email,
+      //       dancer.eodsaId
+      //     );
+      //     console.log('Approval email sent successfully to:', dancer.email);
+      //   } catch (emailError) {
+      //     console.error('Failed to send approval email:', emailError);
+      //     // Don't fail the approval if email fails
+      //   }
+      // }
       
       return NextResponse.json({
         success: true,
@@ -82,21 +82,21 @@ export async function POST(request: NextRequest) {
       
       await unifiedDb.rejectDancer(dancerId, rejectionReason, adminId);
       
-      // Send rejection email if dancer has email
-      if (dancer && dancer.email) {
-        try {
-          await emailService.sendDancerRejectionEmail(
-            dancer.name,
-            dancer.email,
-            dancer.eodsaId,
-            rejectionReason
-          );
-          console.log('Rejection email sent successfully to:', dancer.email);
-        } catch (emailError) {
-          console.error('Failed to send rejection email:', emailError);
-          // Don't fail the rejection if email fails
-        }
-      }
+      // Email system disabled for Phase 1
+      // if (dancer && dancer.email) {
+      //   try {
+      //     await emailService.sendDancerRejectionEmail(
+      //       dancer.name,
+      //       dancer.email,
+      //       dancer.eodsaId,
+      //       rejectionReason
+      //     );
+      //     console.log('Rejection email sent successfully to:', dancer.email);
+      //   } catch (emailError) {
+      //     console.error('Failed to send rejection email:', emailError);
+      //     // Don't fail the rejection if email fails
+      //   }
+      // }
       
       return NextResponse.json({
         success: true,

@@ -135,7 +135,7 @@ export const AlertProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           {alertState.type === 'prompt' && (
             <input
               type="text"
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 mb-6"
+              className="w-full px-3 py-2 border border-gray-300 bg-white rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 mb-6 text-gray-900 placeholder-gray-500"
               placeholder={alertState.placeholder || 'Enter value...'}
               value={alertState.inputValue}
               onChange={(e) => setAlertState(prev => ({ ...prev, inputValue: e.target.value }))}

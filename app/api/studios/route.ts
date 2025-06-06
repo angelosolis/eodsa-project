@@ -41,19 +41,19 @@ export async function POST(request: NextRequest) {
       phone: body.phone
     });
 
-    // Send studio registration confirmation email
-    try {
-      await emailService.sendStudioRegistrationEmail(
-        body.name,
-        body.contactPerson,
-        body.email,
-        result.registrationNumber
-      );
-      console.log('Studio registration email sent successfully to:', body.email);
-    } catch (emailError) {
-      console.error('Failed to send studio registration email:', emailError);
-      // Don't fail the registration if email fails
-    }
+    // Email system disabled for Phase 1
+    // try {
+    //   await emailService.sendStudioRegistrationEmail(
+    //     body.name,
+    //     body.contactPerson,
+    //     body.email,
+    //     result.registrationNumber
+    //   );
+    //   console.log('Studio registration email sent successfully to:', body.email);
+    // } catch (emailError) {
+    //   console.error('Failed to send studio registration email:', emailError);
+    //   // Don't fail the registration if email fails
+    // }
 
     return NextResponse.json({
       success: true,

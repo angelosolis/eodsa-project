@@ -61,11 +61,47 @@ function EventDashboardContent() {
     setError('');
     
     try {
-      const response = await fetch(`/api/contestants/by-eodsa-id/${id}`);
-      if (response.ok) {
-        const data = await response.json();
-        setContestant(data);
-        setDancers(data.dancers || []);
+      // Try unified system first (new dancers)
+      const unifiedResponse = await fetch(`/api/dancers/by-eodsa-id/${id}`);
+      if (unifiedResponse.ok) {
+        const unifiedData = await unifiedResponse.json();
+        if (unifiedData.success && unifiedData.dancer) {
+          const dancer = unifiedData.dancer;
+          // Transform single dancer to contestant format
+          setContestant({
+            id: dancer.id,
+            eodsaId: dancer.eodsaId,
+            contactName: dancer.name,
+            email: dancer.email || '',
+            phone: dancer.phone || '',
+            type: 'private' as const,
+            dancers: [{
+              id: dancer.id,
+              firstName: dancer.name.split(' ')[0] || dancer.name,
+              lastName: dancer.name.split(' ').slice(1).join(' ') || '',
+              age: dancer.age,
+              style: '',
+              nationalId: dancer.nationalId
+            }]
+          });
+          setDancers([{
+            id: dancer.id,
+            firstName: dancer.name.split(' ')[0] || dancer.name,
+            lastName: dancer.name.split(' ').slice(1).join(' ') || '',
+            age: dancer.age,
+            style: '',
+            nationalId: dancer.nationalId
+          }]);
+          return;
+        }
+      }
+      
+      // Fallback to legacy system (contestants)
+      const legacyResponse = await fetch(`/api/contestants/by-eodsa-id/${id}`);
+      if (legacyResponse.ok) {
+        const legacyData = await legacyResponse.json();
+        setContestant(legacyData);
+        setDancers(legacyData.dancers || []);
       } else {
         setError('EODSA ID not found. Please check your ID or register first.');
       }
