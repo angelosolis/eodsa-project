@@ -137,9 +137,11 @@ export interface Score {
   id: string;
   judgeId: string;
   performanceId: string;
-  technicalScore: number; // 1-10
-  artisticScore: number; // 1-10
-  overallScore: number; // 1-10
+  technicalScore: number; // 0-20
+  musicalScore: number; // 0-20
+  performanceScore: number; // 0-20
+  stylingScore: number; // 0-20
+  overallImpressionScore: number; // 0-20
   comments: string;
   submittedAt: string;
 }

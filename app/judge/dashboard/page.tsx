@@ -38,9 +38,10 @@ interface Performance {
 
 interface Score {
   technique: number;
-  artistry: number;
-  presentation: number;
-  overall: number;
+  musicality: number;
+  performance: number;
+  styling: number;
+  overallImpression: number;
   comments: string;
 }
 
@@ -61,9 +62,10 @@ export default function JudgeDashboard() {
   const [viewMode, setViewMode] = useState<'list' | 'scoring'>('list');
   const [currentScore, setCurrentScore] = useState<Score>({
     technique: 0,
-    artistry: 0,
-    presentation: 0,
-    overall: 0,
+    musicality: 0,
+    performance: 0,
+    styling: 0,
+    overallImpression: 0,
     comments: ''
   });
   const [isSubmittingScore, setIsSubmittingScore] = useState(false);
@@ -215,35 +217,26 @@ export default function JudgeDashboard() {
     if (performance.judgeScore) {
       setCurrentScore({
         technique: performance.judgeScore.technicalScore || 0,
-        artistry: performance.judgeScore.artisticScore || 0,
-        presentation: performance.judgeScore.overallScore ? 
-          Math.round((performance.judgeScore.overallScore * 3 - performance.judgeScore.technicalScore - performance.judgeScore.artisticScore)) : 0,
-        overall: performance.judgeScore.overallScore || 0,
+        musicality: performance.judgeScore.musicalScore || 0,
+        performance: performance.judgeScore.performanceScore || 0,
+        styling: performance.judgeScore.stylingScore || 0,
+        overallImpression: performance.judgeScore.overallImpressionScore || 0,
         comments: performance.judgeScore.comments || ''
       });
     } else {
       setCurrentScore({
         technique: 0,
-        artistry: 0,
-        presentation: 0,
-        overall: 0,
+        musicality: 0,
+        performance: 0,
+        styling: 0,
+        overallImpression: 0,
         comments: ''
       });
     }
   };
 
   const handleScoreChange = (category: keyof Score, value: number | string) => {
-    setCurrentScore(prev => {
-      const newScore = { ...prev, [category]: value };
-      
-      // Auto-calculate overall score when individual scores change
-      if (category !== 'overall' && category !== 'comments') {
-        const avg = (newScore.technique + newScore.artistry + newScore.presentation) / 3;
-        newScore.overall = Math.round(avg * 10) / 10;
-      }
-      
-      return newScore;
-    });
+    setCurrentScore(prev => ({ ...prev, [category]: value }));
   };
 
   const handleSubmitScore = async () => {
@@ -262,9 +255,10 @@ export default function JudgeDashboard() {
           performanceId: selectedPerformance.id,
           judgeId: judgeId,
           technique: currentScore.technique,
-          artistry: currentScore.artistry,
-          presentation: currentScore.presentation,
-          overall: currentScore.overall,
+          musicality: currentScore.musicality,
+          performance: currentScore.performance,
+          styling: currentScore.styling,
+          overallImpression: currentScore.overallImpression,
           comments: currentScore.comments
         }),
       });
@@ -405,8 +399,10 @@ export default function JudgeDashboard() {
                   {/* Scoring Categories */}
                   {[
                     { key: 'technique', label: 'Technique', description: 'Execution, precision, skill level' },
-                    { key: 'artistry', label: 'Artistry', description: 'Creativity, interpretation, expression' },
-                    { key: 'presentation', label: 'Presentation', description: 'Stage presence, costume, confidence' }
+                    { key: 'musicality', label: 'Musicality', description: 'Rhythm, harmony, expression' },
+                    { key: 'performance', label: 'Performance', description: 'Stage presence, costume, confidence' },
+                    { key: 'styling', label: 'Styling', description: 'Costume, makeup, overall appearance' },
+                    { key: 'overallImpression', label: 'Overall Impression', description: 'First impression, lasting impact' }
                   ].map(({ key, label, description }) => (
                     <div key={key} className="space-y-3">
                       <div>
@@ -416,37 +412,86 @@ export default function JudgeDashboard() {
                         <p className="text-xs text-gray-600">{description}</p>
                       </div>
                       
-                      {/* Score Buttons */}
-                      <div className="flex flex-wrap gap-2">
-                        {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(score => (
-                          <button
-                            key={score}
-                            onClick={() => handleScoreChange(key as keyof Score, score)}
-                            className={`px-3 py-2 rounded-lg font-medium transition-all ${
-                              currentScore[key as keyof Score] === score
-                                ? 'bg-gradient-to-br from-purple-500 to-pink-600 text-white shadow-lg transform scale-110'
-                                : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
-                            }`}
-                          >
-                            {score}
-                          </button>
-                        ))}
-                      </div>
-                      <div className="text-right">
-                        <span className="text-sm text-gray-600">
-                          Selected: <span className="font-bold text-purple-600">{currentScore[key as keyof Score] || 'None'}</span>
-                        </span>
-                      </div>
+                                             {/* Score Input */}
+                       <div className="flex items-center space-x-4">
+                         <input
+                           type="number"
+                           min="0"
+                           max="20"
+                           value={currentScore[key as keyof Score] || ''}
+                           onChange={(e) => {
+                             const value = Math.min(20, Math.max(0, parseInt(e.target.value) || 0));
+                             handleScoreChange(key as keyof Score, value);
+                           }}
+                           className="w-20 px-3 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-center font-bold text-lg"
+                           placeholder="0"
+                         />
+                         <span className="text-sm text-gray-600">/ 20 points</span>
+                         <div className="flex-1 bg-gray-200 rounded-full h-2">
+                           <div 
+                             className="bg-gradient-to-r from-purple-500 to-pink-600 h-2 rounded-full transition-all duration-300"
+                             style={{ width: `${((currentScore[key as keyof Score] as number || 0) / 20) * 100}%` }}
+                           ></div>
+                         </div>
+                       </div>
+                       <div className="text-right">
+                         <span className="text-sm text-gray-600">
+                           Score: <span className="font-bold text-purple-600">{currentScore[key as keyof Score] as number || 0} / 20</span>
+                         </span>
+                       </div>
                     </div>
                   ))}
 
                   {/* Overall Score Display */}
-                  <div className="bg-gradient-to-r from-purple-50 to-pink-50 rounded-xl p-4 border border-purple-200">
-                    <label className="block text-sm font-bold text-gray-900 mb-2">Overall Score</label>
-                    <div className="text-3xl font-bold text-purple-600">
-                      {currentScore.overall.toFixed(1)} / 10
+                  <div className="bg-gradient-to-r from-purple-50 to-pink-50 rounded-xl p-6 border border-purple-200">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-bold text-gray-900 mb-2">Judge Score</label>
+                        <div className="text-3xl font-bold text-purple-600">
+                          {(currentScore.technique + currentScore.musicality + currentScore.performance + currentScore.styling + currentScore.overallImpression).toFixed(0)} / 100
+                        </div>
+                        <p className="text-xs text-gray-600 mt-1">Sum of all criteria (5 × 20 = 100 max)</p>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-bold text-gray-900 mb-2">Percentage & Ranking</label>
+                        <div className="text-2xl font-bold text-indigo-600">
+                          {((currentScore.technique + currentScore.musicality + currentScore.performance + currentScore.styling + currentScore.overallImpression)).toFixed(0)}%
+                        </div>
+                        <div className="mt-2">
+                          {(() => {
+                            const percentage = currentScore.technique + currentScore.musicality + currentScore.performance + currentScore.styling + currentScore.overallImpression;
+                            let rank = '';
+                            let color = '';
+                            if (percentage >= 90) {
+                              rank = 'Pro Gold';
+                              color = 'bg-gradient-to-r from-yellow-400 to-yellow-600 text-white';
+                            } else if (percentage >= 80) {
+                              rank = 'Gold';
+                              color = 'bg-gradient-to-r from-yellow-500 to-yellow-700 text-white';
+                            } else if (percentage >= 75) {
+                              rank = 'Silver Plus';
+                              color = 'bg-gradient-to-r from-gray-300 to-gray-500 text-white';
+                            } else if (percentage >= 70) {
+                              rank = 'Silver';
+                              color = 'bg-gradient-to-r from-gray-400 to-gray-600 text-white';
+                            } else if (percentage > 0) {
+                              rank = 'Bronze';
+                              color = 'bg-gradient-to-r from-orange-400 to-orange-600 text-white';
+                            }
+                            
+                            return rank ? (
+                              <span className={`inline-block px-3 py-1 rounded-full text-sm font-bold ${color}`}>
+                                {rank}
+                              </span>
+                            ) : null;
+                          })()}
+                        </div>
+                      </div>
                     </div>
-                    <p className="text-xs text-gray-600 mt-1">Automatically calculated from above scores</p>
+                    <div className="mt-4 text-xs text-gray-500">
+                      <p><strong>Ranking System:</strong> Bronze (≤69) • Silver (70-74) • Silver Plus (75-79) • Gold (80-89) • Pro Gold (90+)</p>
+                      <p><strong>Final Score:</strong> 3 judges × 100 points = 300 max → converted to percentage</p>
+                    </div>
                   </div>
 
                   {/* Comments */}
@@ -472,7 +517,7 @@ export default function JudgeDashboard() {
                   {/* Submit Button */}
                   <button
                     onClick={handleSubmitScore}
-                    disabled={isSubmittingScore || currentScore.technique === 0 || currentScore.artistry === 0 || currentScore.presentation === 0}
+                    disabled={isSubmittingScore || currentScore.technique === 0 || currentScore.musicality === 0 || currentScore.performance === 0 || currentScore.styling === 0 || currentScore.overallImpression === 0}
                     className="w-full py-4 bg-gradient-to-r from-green-500 to-emerald-600 text-white font-bold rounded-xl hover:from-green-600 hover:to-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all transform hover:scale-105 shadow-lg"
                   >
                     {isSubmittingScore ? (

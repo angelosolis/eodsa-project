@@ -518,9 +518,11 @@ export const initializeDatabase = async () => {
         id TEXT PRIMARY KEY,
         judge_id TEXT NOT NULL,
         performance_id TEXT NOT NULL,
-        technical_score DECIMAL(3,1) CHECK(technical_score >= 1 AND technical_score <= 10) NOT NULL,
-        artistic_score DECIMAL(3,1) CHECK(artistic_score >= 1 AND artistic_score <= 10) NOT NULL,
-        overall_score DECIMAL(3,1) CHECK(overall_score >= 1 AND overall_score <= 10) NOT NULL,
+        technical_score DECIMAL(3,1) CHECK(technical_score >= 0 AND technical_score <= 20) NOT NULL,
+        musical_score DECIMAL(3,1) CHECK(musical_score >= 0 AND musical_score <= 20) NOT NULL,
+        performance_score DECIMAL(3,1) CHECK(performance_score >= 0 AND performance_score <= 20) NOT NULL,
+        styling_score DECIMAL(3,1) CHECK(styling_score >= 0 AND styling_score <= 20) NOT NULL,
+        overall_impression_score DECIMAL(3,1) CHECK(overall_impression_score >= 0 AND overall_impression_score <= 20) NOT NULL,
         comments TEXT,
         submitted_at TEXT NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -1024,8 +1026,8 @@ export const db = {
               p.title,
               p.item_style,
               c.name as contestant_name,
-              AVG(s.technical_score + s.artistic_score + s.overall_score) as total_score,
-              AVG((s.technical_score + s.artistic_score + s.overall_score) / 3) as average_score,
+              AVG(s.technical_score + s.musical_score + s.performance_score + s.styling_score + s.overall_impression_score) as total_score,
+              AVG((s.technical_score + s.musical_score + s.performance_score + s.styling_score + s.overall_impression_score) / 5) as average_score,
               COUNT(s.id) as judge_count
             FROM performances p
             JOIN events e ON p.event_id = e.id
@@ -1051,8 +1053,8 @@ export const db = {
                 p.title,
                 p.item_style,
                 c.name as contestant_name,
-                AVG(s.technical_score + s.artistic_score + s.overall_score) as total_score,
-                AVG((s.technical_score + s.artistic_score + s.overall_score) / 3) as average_score,
+                AVG(s.technical_score + s.musical_score + s.performance_score + s.styling_score + s.overall_impression_score) as total_score,
+                AVG((s.technical_score + s.musical_score + s.performance_score + s.styling_score + s.overall_impression_score) / 5) as average_score,
                 COUNT(s.id) as judge_count
               FROM performances p
               JOIN events e ON p.event_id = e.id
@@ -1081,8 +1083,8 @@ export const db = {
               p.title,
               p.item_style,
               c.name as contestant_name,
-              AVG(s.technical_score + s.artistic_score + s.overall_score) as total_score,
-              AVG((s.technical_score + s.artistic_score + s.overall_score) / 3) as average_score,
+              AVG(s.technical_score + s.musical_score + s.performance_score + s.styling_score + s.overall_impression_score) as total_score,
+              AVG((s.technical_score + s.musical_score + s.performance_score + s.styling_score + s.overall_impression_score) / 5) as average_score,
               COUNT(s.id) as judge_count
             FROM performances p
             JOIN events e ON p.event_id = e.id
@@ -1105,8 +1107,8 @@ export const db = {
               p.title,
               p.item_style,
               c.name as contestant_name,
-              AVG(s.technical_score + s.artistic_score + s.overall_score) as total_score,
-              AVG((s.technical_score + s.artistic_score + s.overall_score) / 3) as average_score,
+              AVG(s.technical_score + s.musical_score + s.performance_score + s.styling_score + s.overall_impression_score) as total_score,
+              AVG((s.technical_score + s.musical_score + s.performance_score + s.styling_score + s.overall_impression_score) / 5) as average_score,
               COUNT(s.id) as judge_count
             FROM performances p
             JOIN events e ON p.event_id = e.id
@@ -1129,8 +1131,8 @@ export const db = {
               p.title,
               p.item_style,
               c.name as contestant_name,
-              AVG(s.technical_score + s.artistic_score + s.overall_score) as total_score,
-              AVG((s.technical_score + s.artistic_score + s.overall_score) / 3) as average_score,
+              AVG(s.technical_score + s.musical_score + s.performance_score + s.styling_score + s.overall_impression_score) as total_score,
+              AVG((s.technical_score + s.musical_score + s.performance_score + s.styling_score + s.overall_impression_score) / 5) as average_score,
               COUNT(s.id) as judge_count
             FROM performances p
             JOIN events e ON p.event_id = e.id
@@ -1153,8 +1155,8 @@ export const db = {
               p.title,
               p.item_style,
               c.name as contestant_name,
-              AVG(s.technical_score + s.artistic_score + s.overall_score) as total_score,
-              AVG((s.technical_score + s.artistic_score + s.overall_score) / 3) as average_score,
+              AVG(s.technical_score + s.musical_score + s.performance_score + s.styling_score + s.overall_impression_score) as total_score,
+              AVG((s.technical_score + s.musical_score + s.performance_score + s.styling_score + s.overall_impression_score) / 5) as average_score,
               COUNT(s.id) as judge_count
             FROM performances p
             JOIN events e ON p.event_id = e.id
@@ -1350,16 +1352,16 @@ export const db = {
     await sqlClient`DELETE FROM judges WHERE id = ${judgeId}`;
   },
 
-  // Scores (keep existing implementation)
+  // Scores (updated for new 5-criteria system)
   async createScore(score: Omit<Score, 'id' | 'submittedAt'>) {
     const sqlClient = getSql();
     const id = Date.now().toString();
     const submittedAt = new Date().toISOString();
     
     await sqlClient`
-      INSERT INTO scores (id, judge_id, performance_id, technical_score, artistic_score, overall_score, comments, submitted_at)
+      INSERT INTO scores (id, judge_id, performance_id, technical_score, musical_score, performance_score, styling_score, overall_impression_score, comments, submitted_at)
       VALUES (${id}, ${score.judgeId}, ${score.performanceId}, ${score.technicalScore}, 
-              ${score.artisticScore}, ${score.overallScore}, ${score.comments}, ${submittedAt})
+              ${score.musicalScore}, ${score.performanceScore}, ${score.stylingScore}, ${score.overallImpressionScore}, ${score.comments}, ${submittedAt})
     `;
     
     return { ...score, id, submittedAt };
@@ -1369,8 +1371,9 @@ export const db = {
     const sqlClient = getSql();
     await sqlClient`
       UPDATE scores 
-      SET technical_score = ${updates.technicalScore}, artistic_score = ${updates.artisticScore}, 
-          overall_score = ${updates.overallScore}, comments = ${updates.comments}
+      SET technical_score = ${updates.technicalScore}, musical_score = ${updates.musicalScore}, 
+          performance_score = ${updates.performanceScore}, styling_score = ${updates.stylingScore},
+          overall_impression_score = ${updates.overallImpressionScore}, comments = ${updates.comments}
       WHERE id = ${id}
     `;
   },
@@ -1389,8 +1392,10 @@ export const db = {
       judgeId: score.judge_id,
       performanceId: score.performance_id,
       technicalScore: parseFloat(score.technical_score),
-      artisticScore: parseFloat(score.artistic_score),
-      overallScore: parseFloat(score.overall_score),
+      musicalScore: parseFloat(score.musical_score || 0),
+      performanceScore: parseFloat(score.performance_score || 0),
+      stylingScore: parseFloat(score.styling_score || 0),
+      overallImpressionScore: parseFloat(score.overall_impression_score || 0),
       comments: score.comments,
       submittedAt: score.submitted_at
     } as Score;
@@ -1411,8 +1416,10 @@ export const db = {
       judgeId: row.judge_id,
       performanceId: row.performance_id,
       technicalScore: parseFloat(row.technical_score),
-      artisticScore: parseFloat(row.artistic_score),
-      overallScore: parseFloat(row.overall_score),
+      musicalScore: parseFloat(row.musical_score || 0),
+      performanceScore: parseFloat(row.performance_score || 0),
+      stylingScore: parseFloat(row.styling_score || 0),
+      overallImpressionScore: parseFloat(row.overall_impression_score || 0),
       comments: row.comments,
       submittedAt: row.submitted_at,
       judgeName: row.judge_name

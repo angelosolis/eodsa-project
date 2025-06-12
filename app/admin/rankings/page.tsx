@@ -18,6 +18,8 @@ interface RankingData {
   averageScore: number;
   rank: number;
   judgeCount: number;
+  percentage: number;
+  rankingLevel: string;
 }
 
 interface EventWithScores {
@@ -236,6 +238,34 @@ export default function AdminRankingsPage() {
     }
   };
 
+  const calculatePercentageAndRanking = (totalScore: number, judgeCount: number) => {
+    // Calculate percentage: (totalScore / (judgeCount * 100)) * 100
+    const maxPossibleScore = judgeCount * 100; // Each judge can give max 100 points (5 criteria × 20 each)
+    const percentage = maxPossibleScore > 0 ? (totalScore / maxPossibleScore) * 100 : 0;
+    
+    let rankingLevel = '';
+    let rankingColor = '';
+    
+    if (percentage >= 90) {
+      rankingLevel = 'Pro Gold';
+      rankingColor = 'bg-gradient-to-r from-yellow-400 to-yellow-600 text-white';
+    } else if (percentage >= 80) {
+      rankingLevel = 'Gold';
+      rankingColor = 'bg-gradient-to-r from-yellow-500 to-yellow-700 text-white';
+    } else if (percentage >= 75) {
+      rankingLevel = 'Silver Plus';
+      rankingColor = 'bg-gradient-to-r from-gray-300 to-gray-500 text-white';
+    } else if (percentage >= 70) {
+      rankingLevel = 'Silver';
+      rankingColor = 'bg-gradient-to-r from-gray-400 to-gray-600 text-white';
+    } else {
+      rankingLevel = 'Bronze';
+      rankingColor = 'bg-gradient-to-r from-orange-400 to-orange-600 text-white';
+    }
+    
+    return { percentage: Math.round(percentage * 10) / 10, rankingLevel, rankingColor };
+  };
+
   // Enhanced grouping logic for better display
   const groupedRankings = filteredRankings.reduce((groups, ranking) => {
     let key;
@@ -316,6 +346,9 @@ export default function AdminRankingsPage() {
                   Competition Rankings
                 </h1>
                 <p className="text-gray-700 font-medium">Live scoring and leaderboards</p>
+                <p className="text-xs text-gray-600 mt-1">
+                  <strong>Ranking System:</strong> Bronze (≤69%) • Silver (70-74%) • Silver Plus (75-79%) • Gold (80-89%) • Pro Gold (90%+)
+                </p>
               </div>
             </div>
             
@@ -603,7 +636,7 @@ export default function AdminRankingsPage() {
                     <thead className="bg-gray-50/80">
                       <tr>
                         <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
-                          Rank
+                          Position
                         </th>
                         <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
                           Contestant
@@ -618,10 +651,10 @@ export default function AdminRankingsPage() {
                           Style
                         </th>
                         <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
-                          Score
+                          Score & %
                         </th>
-                        <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider hidden md:table-cell">
-                          Average
+                        <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                          Ranking
                         </th>
                         <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider hidden lg:table-cell">
                           Judges
@@ -629,52 +662,55 @@ export default function AdminRankingsPage() {
                       </tr>
                     </thead>
                     <tbody className="bg-white/50 divide-y divide-gray-200">
-                      {group.rankings.map((ranking) => (
-                        <tr key={ranking.performanceId} className="hover:bg-indigo-50/50 transition-colors duration-200">
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span className={`inline-flex items-center px-3 py-2 rounded-xl text-sm font-bold border-2 ${getRankBadgeColor(ranking.rank)}`}>
-                              {getRankIcon(ranking.rank)}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4">
-                            <div>
+                      {group.rankings.map((ranking) => {
+                        const { percentage, rankingLevel, rankingColor } = calculatePercentageAndRanking(ranking.totalScore, ranking.judgeCount);
+                        return (
+                          <tr key={ranking.performanceId} className="hover:bg-indigo-50/50 transition-colors duration-200">
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <span className={`inline-flex items-center px-3 py-2 rounded-xl text-sm font-bold border-2 ${getRankBadgeColor(ranking.rank)}`}>
+                                {getRankIcon(ranking.rank)}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4">
+                              <div>
+                                <div className="text-sm font-bold text-gray-900">
+                                  {ranking.contestantName}
+                                </div>
+                                <div className="text-xs text-gray-500 sm:hidden">
+                                  {ranking.title}
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap hidden sm:table-cell">
+                              <div className="text-sm font-medium text-gray-900">{ranking.title}</div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap hidden md:table-cell">
+                              <div className="text-sm text-gray-700">{ranking.eventName}</div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap hidden lg:table-cell">
+                              <div className="text-sm text-gray-700">{ranking.itemStyle}</div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
                               <div className="text-sm font-bold text-gray-900">
-                                {ranking.contestantName}
+                                {ranking.totalScore.toFixed(1)} / {ranking.judgeCount * 100}
                               </div>
-                              <div className="text-xs text-gray-500 sm:hidden">
-                                {ranking.title}
+                              <div className="text-xs text-purple-600 font-bold">
+                                {percentage.toFixed(1)}%
                               </div>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap hidden sm:table-cell">
-                            <div className="text-sm font-medium text-gray-900">{ranking.title}</div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap hidden md:table-cell">
-                            <div className="text-sm text-gray-700">{ranking.eventName}</div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap hidden lg:table-cell">
-                            <div className="text-sm text-gray-700">{ranking.itemStyle}</div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm font-bold text-gray-900">
-                              {ranking.totalScore.toFixed(1)}
-                            </div>
-                            <div className="text-xs text-gray-500 md:hidden">
-                              Avg: {ranking.averageScore.toFixed(1)}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap hidden md:table-cell">
-                            <div className="text-sm font-medium text-gray-900">
-                              {ranking.averageScore.toFixed(2)}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap hidden lg:table-cell">
-                            <div className="text-sm text-gray-700 font-medium">
-                              {ranking.judgeCount} judge{ranking.judgeCount !== 1 ? 's' : ''}
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <span className={`inline-block px-3 py-1 rounded-full text-sm font-bold ${rankingColor}`}>
+                                {rankingLevel}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap hidden lg:table-cell">
+                              <div className="text-sm text-gray-700 font-medium">
+                                {ranking.judgeCount} judge{ranking.judgeCount !== 1 ? 's' : ''}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>

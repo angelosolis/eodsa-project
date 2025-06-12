@@ -4,10 +4,10 @@ import { db } from '@/lib/data';
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { judgeId, performanceId, technique, artistry, presentation, overall, comments } = body;
+    const { judgeId, performanceId, technique, musicality, performance, styling, overallImpression, comments } = body;
 
     // Validate required fields
-    if (!judgeId || !performanceId || !technique || !artistry || !presentation || !overall) {
+    if (!judgeId || !performanceId || technique === undefined || musicality === undefined || performance === undefined || styling === undefined || overallImpression === undefined) {
       return NextResponse.json(
         { success: false, error: 'Missing required fields' },
         { status: 400 }
@@ -15,12 +15,13 @@ export async function POST(request: Request) {
     }
 
     // Validate score ranges
-    if (technique < 1 || technique > 10 || 
-        artistry < 1 || artistry > 10 || 
-        presentation < 1 || presentation > 10 ||
-        overall < 1 || overall > 10) {
+    if (technique < 0 || technique > 20 || 
+        musicality < 0 || musicality > 20 || 
+        performance < 0 || performance > 20 ||
+        styling < 0 || styling > 20 ||
+        overallImpression < 0 || overallImpression > 20) {
       return NextResponse.json(
-        { success: false, error: 'Scores must be between 1 and 10' },
+        { success: false, error: 'Scores must be between 0 and 20' },
         { status: 400 }
       );
     }
@@ -33,16 +34,20 @@ export async function POST(request: Request) {
       // Update existing score
       await db.updateScore(existingScore.id, {
         technicalScore: Number(technique),
-        artisticScore: Number(artistry),
-        overallScore: Number(overall),
+        musicalScore: Number(musicality),
+        performanceScore: Number(performance),
+        stylingScore: Number(styling),
+        overallImpressionScore: Number(overallImpression),
         comments: comments || ''
       });
       
       score = {
         ...existingScore,
         technicalScore: Number(technique),
-        artisticScore: Number(artistry),
-        overallScore: Number(overall),
+        musicalScore: Number(musicality),
+        performanceScore: Number(performance),
+        stylingScore: Number(styling),
+        overallImpressionScore: Number(overallImpression),
         comments: comments || ''
       };
       
@@ -57,8 +62,10 @@ export async function POST(request: Request) {
         judgeId,
         performanceId,
         technicalScore: Number(technique),
-        artisticScore: Number(artistry),
-        overallScore: Number(overall),
+        musicalScore: Number(musicality),
+        performanceScore: Number(performance),
+        stylingScore: Number(styling),
+        overallImpressionScore: Number(overallImpression),
         comments: comments || ''
       });
       
