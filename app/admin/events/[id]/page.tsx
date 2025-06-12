@@ -78,14 +78,14 @@ export default function EventParticipantsPage() {
   const { showAlert } = useAlert();
 
   useEffect(() => {
-    const session = localStorage.getItem('judgeSession');
+    const session = localStorage.getItem('adminSession');
     if (!session) {
       router.push('/portal/admin');
       return;
     }
     
-    const judgeData = JSON.parse(session);
-    if (!judgeData.isAdmin) {
+    const adminData = JSON.parse(session);
+    if (!adminData.isAdmin) {
       router.push('/judge/dashboard');
       return;
     }

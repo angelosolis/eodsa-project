@@ -114,13 +114,13 @@ export default function AdminDashboard() {
     name: '',
     description: '',
     region: '',
-    ageCategory: '',
-    performanceType: '',
+    ageCategory: 'All',
+    performanceType: 'All',
     eventDate: '',
     registrationDeadline: '',
     venue: '',
     maxParticipants: '',
-    entryFee: ''
+    entryFee: '0'
   });
   const [isCreatingEvent, setIsCreatingEvent] = useState(false);
   const [createEventMessage, setCreateEventMessage] = useState('');
@@ -147,6 +147,10 @@ export default function AdminDashboard() {
   const [isCleaningDatabase, setIsCleaningDatabase] = useState(false);
   const [cleanDatabaseMessage, setCleanDatabaseMessage] = useState('');
 
+  // Verification processing state
+  const [isProcessingVerification, setIsProcessingVerification] = useState(false);
+  const [verificationMessage, setVerificationMessage] = useState('');
+
   // Email testing state
   const [emailTestResults, setEmailTestResults] = useState('');
   const [testEmail, setTestEmail] = useState('');
@@ -171,17 +175,17 @@ export default function AdminDashboard() {
   const router = useRouter();
 
   useEffect(() => {
-    const session = localStorage.getItem('judgeSession');
+    const session = localStorage.getItem('adminSession');
     if (!session) {
       router.push('/portal/admin');
       return;
     }
     
-    const judgeData = JSON.parse(session);
-    if (!judgeData.isAdmin) {
-        router.push('/judge/dashboard');
+    const adminData = JSON.parse(session);
+    if (!adminData.isAdmin) {
+      router.push('/judge/dashboard');
       return;
-      }
+    }
     
     fetchData();
   }, [router]);
@@ -236,13 +240,13 @@ export default function AdminDashboard() {
     setCreateEventMessage('');
 
     try {
-      const session = localStorage.getItem('judgeSession');
+      const session = localStorage.getItem('adminSession');
       if (!session) {
         setCreateEventMessage('Error: Session expired. Please log in again.');
         return;
       }
 
-      const judgeData = JSON.parse(session);
+      const adminData = JSON.parse(session);
 
       const response = await fetch('/api/events', {
         method: 'POST',
@@ -253,7 +257,7 @@ export default function AdminDashboard() {
           ...newEvent,
           maxParticipants: newEvent.maxParticipants ? parseInt(newEvent.maxParticipants) : null,
           entryFee: parseFloat(newEvent.entryFee),
-          createdBy: judgeData.id,
+          createdBy: adminData.id,
           status: 'upcoming'
         }),
       });
@@ -266,13 +270,13 @@ export default function AdminDashboard() {
           name: '',
           description: '',
           region: '',
-          ageCategory: '',
-          performanceType: '',
+          ageCategory: 'All',
+          performanceType: 'All',
           eventDate: '',
           registrationDeadline: '',
           venue: '',
           maxParticipants: '',
-          entryFee: ''
+          entryFee: '0'
         });
         fetchData();
         setShowCreateEventModal(false);
@@ -344,13 +348,13 @@ export default function AdminDashboard() {
     setAssignmentMessage('');
 
     try {
-      const session = localStorage.getItem('judgeSession');
+      const session = localStorage.getItem('adminSession');
       if (!session) {
         setAssignmentMessage('Error: Session expired. Please log in again.');
         return;
       }
 
-      const judgeData = JSON.parse(session);
+      const adminData = JSON.parse(session);
 
       const response = await fetch('/api/judge-assignments', {
         method: 'POST',
@@ -359,7 +363,7 @@ export default function AdminDashboard() {
         },
         body: JSON.stringify({
           ...assignment,
-          assignedBy: judgeData.id
+          assignedBy: adminData.id
         }),
       });
 
@@ -415,13 +419,13 @@ export default function AdminDashboard() {
     setCleanDatabaseMessage('');
 
     try {
-      const session = localStorage.getItem('judgeSession');
+      const session = localStorage.getItem('adminSession');
       if (!session) {
         setCleanDatabaseMessage('Error: Session expired. Please log in again.');
         return;
       }
 
-      const judgeData = JSON.parse(session);
+      const adminData = JSON.parse(session);
 
       const response = await fetch('/api/admin/clean-database', {
         method: 'POST',
@@ -429,7 +433,7 @@ export default function AdminDashboard() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          adminId: judgeData.id
+          adminId: adminData.id
         }),
       });
 
@@ -451,15 +455,72 @@ export default function AdminDashboard() {
     }
   };
 
+  const handleProcessVerification = async () => {
+    if (isProcessingVerification) {
+      return;
+    }
+
+    showConfirm(
+      '🔍 Process 48-Hour Verification Window\n\n' +
+      'This will automatically approve all accounts that have passed the 48-hour verification period without being flagged as spam.\n\n' +
+      'Accounts older than 48 hours that are still pending will be approved and moved to the "All" section.\n\n' +
+      'Continue?',
+      () => {
+        performVerificationProcessing();
+      }
+    );
+  };
+
+  const performVerificationProcessing = async () => {
+    setIsProcessingVerification(true);
+    setVerificationMessage('');
+
+    try {
+      const session = localStorage.getItem('adminSession');
+      if (!session) {
+        setVerificationMessage('Error: Session expired. Please log in again.');
+        return;
+      }
+
+      const adminData = JSON.parse(session);
+
+      const response = await fetch('/api/admin/process-verification', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          adminId: adminData.id
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setVerificationMessage(`✅ ${data.message}`);
+        // Refresh the dashboard data
+        fetchData();
+        setTimeout(() => setVerificationMessage(''), 7000);
+      } else {
+        setVerificationMessage(`❌ Error: ${data.error || 'Unknown error occurred'}`);
+      }
+    } catch (error) {
+      console.error('Error processing verification:', error);
+      setVerificationMessage('❌ Error processing verification. Please check your connection and try again.');
+    } finally {
+      setIsProcessingVerification(false);
+    }
+  };
+
   const handleApproveDancer = async (dancerId: string) => {
     try {
-      const session = localStorage.getItem('judgeSession');
+      const session = localStorage.getItem('adminSession');
       if (!session) {
         showAlert('Session expired. Please log in again.', 'error');
         return;
       }
 
-      const judgeData = JSON.parse(session);
+      const adminData = JSON.parse(session);
 
       const response = await fetch('/api/admin/dancers', {
         method: 'POST',
@@ -469,7 +530,7 @@ export default function AdminDashboard() {
         body: JSON.stringify({
           dancerId,
           action: 'approve',
-          adminId: judgeData.id
+          adminId: adminData.id
         }),
       });
 
@@ -505,13 +566,13 @@ export default function AdminDashboard() {
   const performDancerRejection = async (dancerId: string, rejectionReason: string) => {
 
     try {
-      const session = localStorage.getItem('judgeSession');
+      const session = localStorage.getItem('adminSession');
       if (!session) {
         alert('Session expired. Please log in again.');
         return;
       }
 
-      const judgeData = JSON.parse(session);
+      const adminData = JSON.parse(session);
 
       const response = await fetch('/api/admin/dancers', {
         method: 'POST',
@@ -522,7 +583,7 @@ export default function AdminDashboard() {
           dancerId,
           action: 'reject',
           rejectionReason: rejectionReason,
-          adminId: judgeData.id
+          adminId: adminData.id
         }),
       });
 
@@ -542,13 +603,13 @@ export default function AdminDashboard() {
 
   const handleApproveStudio = async (studioId: string) => {
     try {
-      const session = localStorage.getItem('judgeSession');
+      const session = localStorage.getItem('adminSession');
       if (!session) {
         error('Session expired. Please log in again to continue.', 7000);
         return;
       }
 
-      const judgeData = JSON.parse(session);
+      const adminData = JSON.parse(session);
 
       const response = await fetch('/api/admin/studios', {
         method: 'POST',
@@ -558,7 +619,7 @@ export default function AdminDashboard() {
         body: JSON.stringify({
           studioId,
           action: 'approve',
-          adminId: judgeData.id
+          adminId: adminData.id
         }),
       });
 
@@ -594,13 +655,13 @@ export default function AdminDashboard() {
   const performStudioRejection = async (studioId: string, rejectionReason: string) => {
 
     try {
-      const session = localStorage.getItem('judgeSession');
+      const session = localStorage.getItem('adminSession');
       if (!session) {
         error('Session expired. Please log in again to continue.', 7000);
         return;
       }
 
-      const judgeData = JSON.parse(session);
+      const adminData = JSON.parse(session);
 
       const response = await fetch('/api/admin/studios', {
         method: 'POST',
@@ -611,7 +672,7 @@ export default function AdminDashboard() {
           studioId,
           action: 'reject',
           rejectionReason: rejectionReason.trim(),
-          adminId: judgeData.id
+          adminId: adminData.id
         }),
       });
 
@@ -635,16 +696,18 @@ export default function AdminDashboard() {
     }
 
     try {
-      const session = localStorage.getItem('judgeSession');
+      const session = localStorage.getItem('adminSession');
       if (!session) {
         setCreateJudgeMessage('Please log in again to continue');
         return;
       }
 
+      const adminData = JSON.parse(session);
+
       const response = await fetch(`/api/judges/${judgeId}`, {
         method: 'DELETE',
         headers: {
-          'Authorization': `Bearer ${JSON.parse(session).id}`
+          'Authorization': `Bearer ${adminData.id}`
         }
       });
 
@@ -664,13 +727,13 @@ export default function AdminDashboard() {
 
   const handleRejectAccount = async (accountId: string, accountType: 'dancer' | 'studio', accountName: string) => {
     try {
-      const session = localStorage.getItem('judgeSession');
+      const session = localStorage.getItem('adminSession');
       if (!session) {
         error('Session expired. Please log in again.', 7000);
         return;
       }
 
-      const judgeData = JSON.parse(session);
+      const adminData = JSON.parse(session);
 
       const response = await fetch('/api/admin/reject-account', {
         method: 'POST',
@@ -681,7 +744,7 @@ export default function AdminDashboard() {
           accountId,
           accountType,
           reason: 'Flagged as potential spam account during 48-hour verification period',
-          adminId: judgeData.id
+          adminId: adminData.id
         }),
       });
 
@@ -700,7 +763,7 @@ export default function AdminDashboard() {
   };
 
   const handleLogout = () => {
-    localStorage.removeItem('judgeSession');
+    localStorage.removeItem('adminSession');
     router.push('/portal/admin');
   };
 
@@ -709,6 +772,7 @@ export default function AdminDashboard() {
     setCreateJudgeMessage('');
     setAssignmentMessage('');
     setCleanDatabaseMessage('');
+    setVerificationMessage('');
     setEmailTestResults('');
     setShowCreateEventModal(false);
     setShowCreateJudgeModal(false);
@@ -1615,12 +1679,28 @@ export default function AdminDashboard() {
                     </div>
                     <h2 className="text-xl font-bold text-gray-900">48-Hour Verification Window</h2>
                   </div>
-                  <div className="px-3 py-1 bg-emerald-100 text-emerald-800 rounded-full text-sm font-medium">
-                    {verificationDancers.length + verificationStudios.length} accounts pending
+                  <div className="flex items-center space-x-3">
+                    <div className="px-3 py-1 bg-emerald-100 text-emerald-800 rounded-full text-sm font-medium">
+                      {verificationDancers.length + verificationStudios.length} accounts pending
+                    </div>
+                    <button
+                      onClick={handleProcessVerification}
+                      disabled={isProcessingVerification}
+                      className="px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-lg hover:from-blue-600 hover:to-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all font-medium text-sm"
+                    >
+                      {isProcessingVerification ? 'Processing...' : 'Process Expired'}
+                    </button>
                   </div>
                 </div>
               </div>
               
+              {/* Verification Processing Message */}
+              {verificationMessage && (
+                <div className="mx-6 mt-4 p-4 bg-blue-50 border border-blue-200 rounded-xl">
+                  <p className="text-blue-800 text-sm font-medium">{verificationMessage}</p>
+                </div>
+              )}
+
               <div className="p-6">
                 <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6">
                   <div className="flex items-start space-x-3">
@@ -1830,49 +1910,7 @@ export default function AdminDashboard() {
                   </select>
                 </div>
 
-                <div className="lg:col-span-1">
-                  <label className="block text-sm font-semibold text-gray-700 mb-3">Performance Type</label>
-                  <select
-                    value={newEvent.performanceType}
-                    onChange={(e) => setNewEvent(prev => ({ ...prev, performanceType: e.target.value }))}
-                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 text-base font-medium text-gray-900"
-                    required
-                  >
-                    <option value="">Select Type</option>
-                    {PERFORMANCE_TYPES.map(type => (
-                      <option key={type} value={type}>{type}</option>
-                    ))}
-                  </select>
-                </div>
 
-                <div className="lg:col-span-1">
-                  <label className="block text-sm font-semibold text-gray-700 mb-3">Age Category</label>
-                  <select
-                    value={newEvent.ageCategory}
-                    onChange={(e) => setNewEvent(prev => ({ ...prev, ageCategory: e.target.value }))}
-                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 text-base font-medium text-gray-900"
-                    required
-                  >
-                    <option value="">Select Age Category</option>
-                    {AGE_CATEGORIES.map(category => (
-                      <option key={category} value={category}>{category}</option>
-                    ))}
-                    <option value="All">All Categories</option>
-                  </select>
-                </div>
-
-                <div className="lg:col-span-1">
-                  <label className="block text-sm font-semibold text-gray-700 mb-3">Entry Fee (R)</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={newEvent.entryFee}
-                    onChange={(e) => setNewEvent(prev => ({ ...prev, entryFee: e.target.value }))}
-                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 text-base font-medium text-gray-900 placeholder-gray-400"
-                    required
-                    placeholder="300.00"
-                  />
-                </div>
 
                 <div className="lg:col-span-1">
                   <label className="block text-sm font-semibold text-gray-700 mb-3">Event Date</label>

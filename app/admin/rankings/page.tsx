@@ -51,10 +51,10 @@ export default function AdminRankingsPage() {
 
   useEffect(() => {
     // Check admin authentication
-    const judgeSession = localStorage.getItem('judgeSession');
-    if (judgeSession) {
+    const adminSession = localStorage.getItem('adminSession');
+    if (adminSession) {
       try {
-        const session = JSON.parse(judgeSession);
+        const session = JSON.parse(adminSession);
         if (session.isAdmin) {
           setIsAuthenticated(true);
           loadInitialData();

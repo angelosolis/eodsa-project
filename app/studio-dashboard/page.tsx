@@ -75,6 +75,20 @@ export default function StudioDashboardPage() {
   const [showAddDancerModal, setShowAddDancerModal] = useState(false);
   const [addDancerEodsaId, setAddDancerEodsaId] = useState('');
   const [addingDancer, setAddingDancer] = useState(false);
+  
+  // Register new dancer state
+  const [showRegisterDancerModal, setShowRegisterDancerModal] = useState(false);
+  const [registerDancerData, setRegisterDancerData] = useState({
+    name: '',
+    dateOfBirth: '',
+    nationalId: '',
+    email: '',
+    phone: '',
+    guardianName: '',
+    guardianEmail: '',
+    guardianPhone: ''
+  });
+  const [isRegisteringDancer, setIsRegisteringDancer] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
   
   // Edit dancer state
@@ -187,6 +201,97 @@ export default function StudioDashboardPage() {
       setError('Failed to add dancer');
     } finally {
       setAddingDancer(false);
+    }
+  };
+
+  const handleRegisterDancer = async () => {
+    if (!studioSession) return;
+
+    // Validate required fields
+    if (!registerDancerData.name || !registerDancerData.dateOfBirth || !registerDancerData.nationalId) {
+      setError('Name, date of birth, and national ID are required');
+      return;
+    }
+
+    // Calculate age to check if guardian info is needed
+    const age = new Date().getFullYear() - new Date(registerDancerData.dateOfBirth).getFullYear();
+    if (age < 18) {
+      if (!registerDancerData.guardianName || !registerDancerData.guardianEmail || !registerDancerData.guardianPhone) {
+        setError('Guardian information is required for dancers under 18');
+        return;
+      }
+    }
+
+    try {
+      setIsRegisteringDancer(true);
+      setError('');
+
+      // First register the dancer
+      const registerResponse = await fetch('/api/dancers/register', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: registerDancerData.name,
+          dateOfBirth: registerDancerData.dateOfBirth,
+          nationalId: registerDancerData.nationalId,
+          email: registerDancerData.email || null,
+          phone: registerDancerData.phone || null,
+          guardianName: registerDancerData.guardianName || null,
+          guardianEmail: registerDancerData.guardianEmail || null,
+          guardianPhone: registerDancerData.guardianPhone || null,
+          studioId: studioSession.id // Register directly to studio
+        }),
+      });
+
+      const registerData = await registerResponse.json();
+
+      if (registerData.success) {
+        // Add the newly registered dancer to the studio
+        const addResponse = await fetch('/api/studios/add-dancer', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            studioId: studioSession.id,
+            eodsaId: registerData.eodsaId,
+            addedBy: studioSession.id
+          }),
+        });
+
+        const addData = await addResponse.json();
+
+        if (addData.success) {
+          setShowRegisterDancerModal(false);
+          setRegisterDancerData({
+            name: '',
+            dateOfBirth: '',
+            nationalId: '',
+            email: '',
+            phone: '',
+            guardianName: '',
+            guardianEmail: '',
+            guardianPhone: ''
+          });
+          setSuccessMessage(`Dancer ${registerDancerData.name} has been successfully registered with EODSA ID ${registerData.eodsaId} and added to your studio!`);
+          // Reload data to reflect changes
+          loadData(studioSession.id);
+          
+          // Clear success message after 5 seconds
+          setTimeout(() => setSuccessMessage(''), 5000);
+        } else {
+          setError(`Dancer registered but failed to add to studio: ${addData.error}`);
+        }
+      } else {
+        setError(registerData.error || 'Failed to register dancer');
+      }
+    } catch (error) {
+      console.error('Register dancer error:', error);
+      setError('Failed to register dancer');
+    } finally {
+      setIsRegisteringDancer(false);
     }
   };
 
@@ -580,15 +685,26 @@ export default function StudioDashboardPage() {
                   <h3 className="text-xl font-bold text-white">My Dancers</h3>
                   <p className="text-gray-400 text-sm mt-1">Dancers who are part of your studio</p>
                 </div>
-                <button
-                  onClick={() => setShowAddDancerModal(true)}
-                  className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors flex items-center space-x-2"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                  </svg>
-                  <span>Add Dancer by EODSA ID</span>
-                </button>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <button
+                    onClick={() => setShowRegisterDancerModal(true)}
+                    className="px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-lg hover:from-emerald-600 hover:to-teal-700 transition-colors flex items-center space-x-2"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+                    </svg>
+                    <span>Register New Dancer</span>
+                  </button>
+                  <button
+                    onClick={() => setShowAddDancerModal(true)}
+                    className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors flex items-center space-x-2"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                    </svg>
+                    <span>Add by EODSA ID</span>
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -876,6 +992,193 @@ export default function StudioDashboardPage() {
                     setError('');
                   }}
                   disabled={addingDancer}
+                  className="flex-1 px-4 py-2 border border-gray-600 text-gray-300 rounded-lg hover:bg-gray-700 transition-colors disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Register New Dancer Modal */}
+        {showRegisterDancerModal && (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+            <div className="bg-gray-800 rounded-2xl p-6 w-full max-w-2xl border border-gray-700 max-h-screen overflow-y-auto">
+              <h3 className="text-xl font-bold text-white mb-4">Register New Dancer</h3>
+              <p className="text-gray-300 mb-6">Register a new dancer directly to your studio:</p>
+              
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Full Name *
+                  </label>
+                  <input
+                    type="text"
+                    value={registerDancerData.name}
+                    onChange={(e) => setRegisterDancerData(prev => ({ ...prev, name: e.target.value }))}
+                    className="w-full px-4 py-3 border border-gray-600 bg-gray-700 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all text-white placeholder-gray-400"
+                    placeholder="Enter dancer's full name"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Date of Birth *
+                  </label>
+                  <input
+                    type="date"
+                    value={registerDancerData.dateOfBirth}
+                    onChange={(e) => setRegisterDancerData(prev => ({ ...prev, dateOfBirth: e.target.value }))}
+                    className="w-full px-4 py-3 border border-gray-600 bg-gray-700 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all text-white"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    National ID *
+                  </label>
+                  <input
+                    type="text"
+                    value={registerDancerData.nationalId}
+                    onChange={(e) => {
+                      const numericValue = e.target.value.replace(/\D/g, '').slice(0, 13);
+                      setRegisterDancerData(prev => ({ ...prev, nationalId: numericValue }));
+                    }}
+                    className="w-full px-4 py-3 border border-gray-600 bg-gray-700 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all text-white placeholder-gray-400 font-mono"
+                    placeholder="13 digit ID number"
+                    pattern="[0-9]{13}"
+                    maxLength={13}
+                    inputMode="numeric"
+                    required
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Email (Optional)
+                    </label>
+                    <input
+                      type="email"
+                      value={registerDancerData.email}
+                      onChange={(e) => setRegisterDancerData(prev => ({ ...prev, email: e.target.value }))}
+                      className="w-full px-4 py-3 border border-gray-600 bg-gray-700 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all text-white placeholder-gray-400"
+                      placeholder="dancer@example.com"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Phone (Optional)
+                    </label>
+                    <input
+                      type="tel"
+                      value={registerDancerData.phone}
+                      onChange={(e) => setRegisterDancerData(prev => ({ ...prev, phone: e.target.value }))}
+                      className="w-full px-4 py-3 border border-gray-600 bg-gray-700 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all text-white placeholder-gray-400"
+                      placeholder="+27 123 456 7890"
+                    />
+                  </div>
+                </div>
+
+                {/* Guardian Information - Auto-show for minors */}
+                {(() => {
+                  const age = registerDancerData.dateOfBirth ? 
+                    new Date().getFullYear() - new Date(registerDancerData.dateOfBirth).getFullYear() : 
+                    null;
+                  
+                  if (age !== null && age < 18) {
+                    return (
+                      <>
+                        <div className="bg-yellow-900/20 border border-yellow-500/30 rounded-xl p-4 mt-4">
+                          <h4 className="text-yellow-300 font-semibold mb-2">Guardian Information Required</h4>
+                          <p className="text-yellow-200 text-sm">This dancer is under 18 years old. Guardian information is required.</p>
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-300 mb-2">
+                            Guardian Name *
+                          </label>
+                          <input
+                            type="text"
+                            value={registerDancerData.guardianName}
+                            onChange={(e) => setRegisterDancerData(prev => ({ ...prev, guardianName: e.target.value }))}
+                            className="w-full px-4 py-3 border border-gray-600 bg-gray-700 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all text-white placeholder-gray-400"
+                            placeholder="Guardian's full name"
+                            required={age < 18}
+                          />
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-300 mb-2">
+                              Guardian Email *
+                            </label>
+                            <input
+                              type="email"
+                              value={registerDancerData.guardianEmail}
+                              onChange={(e) => setRegisterDancerData(prev => ({ ...prev, guardianEmail: e.target.value }))}
+                              className="w-full px-4 py-3 border border-gray-600 bg-gray-700 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all text-white placeholder-gray-400"
+                              placeholder="guardian@example.com"
+                              required={age < 18}
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-sm font-medium text-gray-300 mb-2">
+                              Guardian Phone *
+                            </label>
+                            <input
+                              type="tel"
+                              value={registerDancerData.guardianPhone}
+                              onChange={(e) => setRegisterDancerData(prev => ({ ...prev, guardianPhone: e.target.value }))}
+                              className="w-full px-4 py-3 border border-gray-600 bg-gray-700 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all text-white placeholder-gray-400"
+                              placeholder="+27 123 456 7890"
+                              required={age < 18}
+                            />
+                          </div>
+                        </div>
+                      </>
+                    );
+                  }
+                  return null;
+                })()}
+              </div>
+
+              <div className="flex space-x-3 mt-6">
+                <button
+                  onClick={handleRegisterDancer}
+                  disabled={!registerDancerData.name.trim() || !registerDancerData.dateOfBirth || !registerDancerData.nationalId.trim() || isRegisteringDancer}
+                  className="flex-1 px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-lg hover:from-emerald-600 hover:to-teal-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+                >
+                  {isRegisteringDancer ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                      Registering...
+                    </>
+                  ) : (
+                    'Register Dancer'
+                  )}
+                </button>
+                <button
+                  onClick={() => {
+                    setShowRegisterDancerModal(false);
+                    setRegisterDancerData({
+                      name: '',
+                      dateOfBirth: '',
+                      nationalId: '',
+                      email: '',
+                      phone: '',
+                      guardianName: '',
+                      guardianEmail: '',
+                      guardianPhone: ''
+                    });
+                    setError('');
+                  }}
+                  disabled={isRegisteringDancer}
                   className="flex-1 px-4 py-2 border border-gray-600 text-gray-300 rounded-lg hover:bg-gray-700 transition-colors disabled:opacity-50"
                 >
                   Cancel

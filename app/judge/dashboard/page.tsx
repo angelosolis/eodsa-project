@@ -358,48 +358,38 @@ export default function JudgeDashboard() {
           </div>
         </header>
 
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="grid lg:grid-cols-2 gap-8">
-            {/* Video Section */}
-            <div className="space-y-6">
-              <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
-                <div className="bg-gradient-to-r from-purple-500 to-pink-600 px-6 py-4">
-                  <h3 className="text-white font-bold text-lg">Performance Video</h3>
-                </div>
-                <div className="p-6">
-                  {/* Video Placeholder */}
-                  <div className="aspect-video bg-gray-900 rounded-xl flex items-center justify-center mb-4">
-                    <div className="text-center text-white">
-                      <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <span className="text-2xl">▶️</span>
-                      </div>
-                      <p className="text-lg font-medium">Performance Video</p>
-                      <p className="text-sm opacity-75">Video will be available during live judging</p>
-                    </div>
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="space-y-8">
+            {/* Performance Details Section */}
+            <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
+              <div className="bg-gradient-to-r from-purple-500 to-pink-600 px-6 py-4">
+                <h3 className="text-white font-bold text-lg">Performance Information</h3>
+              </div>
+              <div className="p-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
+                  <div>
+                    <span className="text-gray-600">Contestant:</span>
+                    <p className="font-medium text-gray-900">{selectedPerformance.contestantName || 'Loading...'}</p>
                   </div>
-                  
-                  {/* Performance Details */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <span className="text-gray-600">Contestant:</span>
-                      <p className="font-medium text-gray-900">{selectedPerformance.contestantName || 'Loading...'}</p>
-                    </div>
-                    <div>
-                      <span className="text-gray-600">Participants:</span>
-                      <p className="font-medium text-gray-900">{selectedPerformance.participantNames?.join(', ') || 'Loading...'}</p>
-                    </div>
-                    <div>
-                      <span className="text-gray-600">Style:</span>
-                      <p className="font-medium text-gray-900">{selectedPerformance.itemStyle || 'Not specified'}</p>
-                    </div>
-                    <div>
-                      <span className="text-gray-600">Mastery:</span>
-                      <p className="font-medium text-gray-900">{selectedPerformance.mastery || 'Not specified'}</p>
-                    </div>
-                    <div className="col-span-2">
-                      <span className="text-gray-600">Choreographer:</span>
-                      <p className="font-medium text-gray-900">{selectedPerformance.choreographer || 'Not specified'}</p>
-                    </div>
+                  <div>
+                    <span className="text-gray-600">Participants:</span>
+                    <p className="font-medium text-gray-900">{selectedPerformance.participantNames?.join(', ') || 'Loading...'}</p>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Style:</span>
+                    <p className="font-medium text-gray-900">{selectedPerformance.itemStyle || 'Not specified'}</p>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Mastery:</span>
+                    <p className="font-medium text-gray-900">{selectedPerformance.mastery || 'Not specified'}</p>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Duration:</span>
+                    <p className="font-medium text-gray-900">{selectedPerformance.duration} minutes</p>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Choreographer:</span>
+                    <p className="font-medium text-gray-900">{selectedPerformance.choreographer || 'Not specified'}</p>
                   </div>
                 </div>
               </div>

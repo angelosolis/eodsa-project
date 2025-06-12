@@ -47,7 +47,7 @@ interface EventEntryForm {
   choreographer: string;
   mastery: string;
   itemStyle: string;
-  estimatedDuration: number;
+  estimatedDuration: string;
 }
 
 export default function PerformanceTypeEntryPage() {
@@ -70,7 +70,7 @@ export default function PerformanceTypeEntryPage() {
     choreographer: '',
     mastery: '',
     itemStyle: '',
-    estimatedDuration: 3
+    estimatedDuration: ''
   });
   const [calculatedFee, setCalculatedFee] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
@@ -247,15 +247,40 @@ export default function PerformanceTypeEntryPage() {
     }
   };
 
+  // Helper function to convert MM:SS to decimal minutes
+  const convertDurationToMinutes = (duration: string): number => {
+    if (!duration) return 0;
+    
+    // Handle MM:SS format
+    if (duration.includes(':')) {
+      const [minutes, seconds] = duration.split(':');
+      const min = parseInt(minutes) || 0;
+      const sec = parseInt(seconds) || 0;
+      return min + (sec / 60);
+    }
+    
+    // Handle decimal minutes (for backward compatibility)
+    return parseFloat(duration) || 0;
+  };
+
+  // Helper function to convert decimal minutes to MM:SS format
+  const convertMinutesToDuration = (minutes: number): string => {
+    const min = Math.floor(minutes);
+    const sec = Math.round((minutes - min) * 60);
+    return `${min}:${sec.toString().padStart(2, '0')}`;
+  };
+
   // Helper function to get time limit for current performance type
   const getTimeLimit = () => {
     const capitalizedType = performanceType?.charAt(0).toUpperCase() + performanceType?.slice(1).toLowerCase();
     return TIME_LIMITS[capitalizedType as keyof typeof TIME_LIMITS] || 0;
   };
 
-  const validateDuration = (duration: number): boolean => {
+  const validateDuration = (duration: string): boolean => {
+    if (!duration) return true; // Optional field
+    const durationMinutes = convertDurationToMinutes(duration);
     const maxDuration = getTimeLimit();
-    return maxDuration > 0 ? duration <= maxDuration : false;
+    return maxDuration > 0 ? durationMinutes <= maxDuration : true;
   };
 
   const handleSubmit = async () => {
@@ -298,7 +323,7 @@ export default function PerformanceTypeEntryPage() {
         choreographer: formData.choreographer,
         mastery: formData.mastery,
         itemStyle: formData.itemStyle,
-        estimatedDuration: formData.estimatedDuration
+        estimatedDuration: convertDurationToMinutes(formData.estimatedDuration)
       };
 
       const response = await fetch('/api/event-entries', {
@@ -336,10 +361,10 @@ export default function PerformanceTypeEntryPage() {
       showAlert('Please fill in all performance details', 'warning');
       return;
     }
-    if (step === 2 && !validateDuration(formData.estimatedDuration)) {
+    if (step === 2 && formData.estimatedDuration && !validateDuration(formData.estimatedDuration)) {
       const maxTime = getTimeLimit();
       const maxTimeDisplay = maxTime === 3.5 ? '3:30' : `${maxTime}:00`;
-      showAlert(`⏰ Duration too long! ${performanceType} performances must be ${maxTimeDisplay} minutes or less. Current: ${formData.estimatedDuration} minutes.`, 'warning');
+      showAlert(`⏰ Duration too long! ${performanceType} performances must be ${maxTimeDisplay} or less. Current: ${formData.estimatedDuration}.`, 'warning');
       return;
     }
     setStep(prev => Math.min(prev + 1, 4));
@@ -628,7 +653,7 @@ export default function PerformanceTypeEntryPage() {
 
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-2">
-                      Estimated Duration (minutes) *
+                      Estimated Duration (Optional) - MM:SS format
                     </label>
                     
                     {/* Time Limit Information */}
@@ -661,24 +686,22 @@ export default function PerformanceTypeEntryPage() {
                     </div>
 
                     <input
-                      type="number"
+                      type="text"
                       name="estimatedDuration"
                       value={formData.estimatedDuration}
                       onChange={handleInputChange}
-                      min="0.5"
-                      max={getTimeLimit() || 10}
-                      step="0.1"
-                      placeholder={`Maximum ${getTimeLimit() === 3.5 ? '3:30' : getTimeLimit()} minutes`}
+                      placeholder={`e.g., 2:30 (Max: ${getTimeLimit() === 3.5 ? '3:30' : `${getTimeLimit()}:00`})`}
                       className={`w-full px-4 py-3 border rounded-xl focus:ring-2 text-white placeholder-gray-400 transition-all ${
                         validateDuration(formData.estimatedDuration) 
                           ? 'border-gray-600 bg-gray-700 focus:ring-purple-500 focus:border-purple-500' 
                           : 'border-red-500 bg-red-900/30 focus:ring-red-500 focus:border-red-500'
                       }`}
-                      required
+                      pattern="[0-9]{1,2}:[0-5][0-9]"
+                      title="Enter duration in MM:SS format (e.g., 2:30)"
                     />
                     
                     {/* Validation Messages */}
-                    {!validateDuration(formData.estimatedDuration) && formData.estimatedDuration > 0 && (
+                    {!validateDuration(formData.estimatedDuration) && convertDurationToMinutes(formData.estimatedDuration) > 0 && (
                       <div className="mt-3 p-3 bg-red-900/30 border border-red-500/40 rounded-lg">
                         <p className="text-red-300 text-sm font-medium flex items-center">
                           <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -688,12 +711,12 @@ export default function PerformanceTypeEntryPage() {
                         </p>
                                                  <p className="text-red-200 text-sm mt-1">
                            <strong>{performanceType} performances</strong> cannot exceed <strong>{getTimeLimit() === 3.5 ? '3:30' : `${getTimeLimit()}:00`} minutes</strong>.
-                           <br />Your current duration: <strong>{formData.estimatedDuration} minutes</strong>
+                           <br />Your current duration: <strong>{formData.estimatedDuration}</strong>
                          </p>
                       </div>
                     )}
                     
-                    {validateDuration(formData.estimatedDuration) && formData.estimatedDuration > 0 && (
+                    {validateDuration(formData.estimatedDuration) && convertDurationToMinutes(formData.estimatedDuration) > 0 && (
                       <p className="text-green-400 text-sm mt-2 flex items-center">
                         <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />

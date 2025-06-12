@@ -268,25 +268,7 @@ export default function RegionalEventsPage() {
               </div>
             )}
 
-            {/* Region Stats */}
-            <div className="mt-8 grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div className="bg-gradient-to-r from-emerald-900/50 to-teal-900/50 border border-emerald-500/30 rounded-xl p-4 text-center">
-                <div className="text-xl font-bold text-emerald-400">{events.length}</div>
-                <div className="text-sm text-emerald-300">Total Events</div>
-              </div>
-              <div className="bg-gradient-to-r from-purple-900/50 to-pink-900/50 border border-purple-500/30 rounded-xl p-4 text-center">
-                <div className="text-xl font-bold text-purple-400">{events.filter(e => e.performanceType === 'Solo').length}</div>
-                <div className="text-sm text-purple-300">Solo Events</div>
-              </div>
-              <div className="bg-gradient-to-r from-blue-900/50 to-indigo-900/50 border border-blue-500/30 rounded-xl p-4 text-center">
-                <div className="text-xl font-bold text-blue-400">{events.filter(e => ['Duet', 'Trio'].includes(e.performanceType)).length}</div>
-                <div className="text-sm text-blue-300">Duet/Trio Events</div>
-              </div>
-              <div className="bg-gradient-to-r from-orange-900/50 to-red-900/50 border border-orange-500/30 rounded-xl p-4 text-center">
-                <div className="text-xl font-bold text-orange-400">{events.filter(e => e.performanceType === 'Group').length}</div>
-                <div className="text-sm text-orange-300">Group Events</div>
-              </div>
-            </div>
+
           </div>
         </div>
       </div>

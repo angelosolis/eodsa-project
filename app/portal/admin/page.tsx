@@ -28,7 +28,7 @@ export default function AdminPortalPage() {
       if (response.ok) {
         const result = await response.json();
         if (result.success && result.judge.isAdmin) {
-          localStorage.setItem('judgeSession', JSON.stringify(result.judge));
+          localStorage.setItem('adminSession', JSON.stringify(result.judge));
           router.push('/admin');
         } else if (result.success && !result.judge.isAdmin) {
           setError('Admin access required. Judges should use the Judge Portal.');

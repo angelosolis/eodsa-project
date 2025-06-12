@@ -273,7 +273,7 @@ function EventDashboardContent() {
                         </div>
                         <h4 className="text-xl font-bold text-white mb-2">{region}</h4>
                         <p className="text-gray-300 mb-4">
-                          {regionStats.events} events • {regionStats.types} types
+                          Regional Competition Events Available
                         </p>
                         <div className="text-sm text-purple-300 font-medium">
                           View Events →
