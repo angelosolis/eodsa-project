@@ -7,61 +7,84 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { computeIncrementalFee } from '@/lib/incremental-fee-calculator';
+import { getSql } from '@/lib/database';
+import { calculateEventPricing, getFixedEntryPrice } from '@/lib/event-pricing';
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const {
-      eventId,
-      dancerId,
-      eodsaId,
-      performanceType,
-      participantIds,
-      masteryLevel,
-      clientSentTotal
-    } = body;
+    const { eventId, eodsaId, performanceType, participantIds, clientSentTotal } = body;
 
     // Validate required fields
-    if (!eventId || !eodsaId || !performanceType || !participantIds || !masteryLevel) {
+    if (!eventId || !eodsaId || !performanceType || !participantIds) {
       return NextResponse.json({
         success: false,
-        error: 'Missing required fields: eventId, eodsaId, performanceType, participantIds, masteryLevel'
+        error: 'Missing required fields: eventId, eodsaId, performanceType, participantIds'
       }, { status: 400 });
     }
+    const sql = getSql();
+    const [event] = await sql`
+      SELECT solo_price, duet_price, group_price, discount_enabled, discount_min_entries, discount_amount, registration_fee
+      FROM events
+      WHERE id = ${eventId}
+    ` as any[];
+    if (!event) throw new Error(`Event ${eventId} not found`);
 
-    // Compute incremental fee from database truth
-    const feeResult = await computeIncrementalFee({
-      eventId,
-      dancerId: dancerId || eodsaId,
-      eodsaId,
-      performanceType: performanceType as 'Solo' | 'Duet' | 'Trio' | 'Group',
-      participantIds: Array.isArray(participantIds) ? participantIds : [participantIds],
-      masteryLevel
-    });
+    const normalizedParticipantIds = Array.isArray(participantIds) ? participantIds : [participantIds];
+    const alreadyRegistered: string[] = [];
+    for (const pid of normalizedParticipantIds) {
+      const existing = await sql`
+        SELECT id FROM event_entries
+        WHERE event_id = ${eventId}
+        AND (
+          eodsa_id = ${pid}
+          OR participant_ids::text LIKE ${`%${pid}%`}
+        )
+        LIMIT 1
+      ` as any[];
+      if (existing.length > 0) alreadyRegistered.push(pid);
+    }
+
+    const feeResult = calculateEventPricing([{
+      performanceType,
+      participantIds: normalizedParticipantIds,
+      eodsaId
+    }], {
+      soloPrice: event.solo_price,
+      duetPrice: event.duet_price,
+      groupPrice: event.group_price,
+      discountEnabled: event.discount_enabled,
+      discountMinEntries: event.discount_min_entries,
+      discountAmount: event.discount_amount,
+      registrationFee: event.registration_fee
+    }, alreadyRegistered);
 
     // Check for mismatch
     let mismatchDetected = false;
     let mismatchReason = '';
 
     if (clientSentTotal !== undefined) {
-      const difference = Math.abs(clientSentTotal - feeResult.totalFee);
+      const difference = Math.abs(clientSentTotal - feeResult.total);
       if (difference > 0.01) { // Allow for small floating point differences
         mismatchDetected = true;
-        mismatchReason = `Client sent ${clientSentTotal}, computed ${feeResult.totalFee}, difference: ${difference}`;
+        mismatchReason = `Client sent ${clientSentTotal}, computed ${feeResult.total}, difference: ${difference}`;
       }
     }
 
     return NextResponse.json({
       success: true,
-      computedFee: feeResult.totalFee,
-      registrationFee: feeResult.registrationFee,
-      entryFee: feeResult.entryFee,
-      registrationCharged: feeResult.registrationCharged,
-      registrationWasAlreadyCharged: feeResult.registrationWasAlreadyCharged,
-      entryCount: feeResult.entryCount,
-      breakdown: feeResult.breakdown,
-      warnings: feeResult.warnings,
+      computedFee: feeResult.total,
+      registrationFee: feeResult.registrationTotal,
+      entryFee: getFixedEntryPrice(performanceType, {
+        soloPrice: event.solo_price,
+        duetPrice: event.duet_price,
+        groupPrice: event.group_price
+      }),
+      registrationCharged: feeResult.registrationTotal > 0,
+      registrationWasAlreadyCharged: feeResult.registrationTotal === 0,
+      entryCount: 0,
+      breakdown: `Fixed ${performanceType} pricing`,
+      warnings: [],
       mismatchDetected,
       mismatchReason: mismatchDetected ? mismatchReason : undefined,
       isValid: !mismatchDetected

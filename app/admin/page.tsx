@@ -38,6 +38,13 @@ interface Event {
   duoTrioFeePerDancer?: number;
   groupFeePerDancer?: number;
   largeGroupFeePerDancer?: number;
+  soloPrice?: number;
+  duetPrice?: number;
+  groupPrice?: number;
+  discountEnabled?: boolean;
+  discountMinEntries?: number;
+  discountAmount?: number;
+  registrationFee?: number;
   currency?: string;
 }
 
@@ -199,6 +206,13 @@ function AdminDashboard() {
     duoTrioFeePerDancer: 0,
     groupFeePerDancer: 0,
     largeGroupFeePerDancer: 0,
+    soloPrice: 0,
+    duetPrice: 0,
+    groupPrice: 0,
+    discountEnabled: false,
+    discountMinEntries: 0,
+    discountAmount: 0,
+    registrationFee: 0,
     participationMode: 'hybrid' as 'live' | 'virtual' | 'hybrid',
     numberOfJudges: 4, // Default to 4 judges
     certificateTemplateUrl: '' as string | undefined,
@@ -316,6 +330,13 @@ function AdminDashboard() {
     duoTrioFeePerDancer: 0,
     groupFeePerDancer: 0,
     largeGroupFeePerDancer: 0,
+    soloPrice: 0,
+    duetPrice: 0,
+    groupPrice: 0,
+    discountEnabled: false,
+    discountMinEntries: 0,
+    discountAmount: 0,
+    registrationFee: 0,
     currency: 'ZAR',
     // Event configuration fields
     participationMode: 'hybrid' as 'live' | 'virtual' | 'hybrid',
@@ -670,6 +691,13 @@ function AdminDashboard() {
           duoTrioFeePerDancer: 0,
           groupFeePerDancer: 0,
           largeGroupFeePerDancer: 0,
+          soloPrice: 0,
+          duetPrice: 0,
+          groupPrice: 0,
+          discountEnabled: false,
+          discountMinEntries: 0,
+          discountAmount: 0,
+          registrationFee: 0,
           participationMode: 'hybrid',
           certificateTemplateUrl: undefined,
           eventType: 'REGIONAL_EVENT',
@@ -766,6 +794,13 @@ function AdminDashboard() {
       duoTrioFeePerDancer: event.duoTrioFeePerDancer !== undefined ? event.duoTrioFeePerDancer : 0,
       groupFeePerDancer: event.groupFeePerDancer !== undefined ? event.groupFeePerDancer : 0,
       largeGroupFeePerDancer: event.largeGroupFeePerDancer !== undefined ? event.largeGroupFeePerDancer : 0,
+      soloPrice: (event as any).soloPrice !== undefined ? (event as any).soloPrice : 0,
+      duetPrice: (event as any).duetPrice !== undefined ? (event as any).duetPrice : 0,
+      groupPrice: (event as any).groupPrice !== undefined ? (event as any).groupPrice : 0,
+      discountEnabled: (event as any).discountEnabled ?? false,
+      discountMinEntries: (event as any).discountMinEntries ?? 0,
+      discountAmount: (event as any).discountAmount ?? 0,
+      registrationFee: (event as any).registrationFee ?? 0,
       currency: event.currency || 'ZAR',
       // Event configuration
       participationMode: (event as any).participationMode || 'hybrid',
@@ -819,7 +854,7 @@ function AdminDashboard() {
 
         // Check if fees are being changed
         if (eventSafetyCheck && eventSafetyCheck.blocks.includes('fees')) {
-          const feeFields = ['registrationFeePerDancer', 'solo1Fee', 'solo2Fee', 'solo3Fee', 'soloAdditionalFee', 'duoTrioFeePerDancer', 'groupFeePerDancer', 'largeGroupFeePerDancer'];
+          const feeFields = ['registrationFeePerDancer', 'solo1Fee', 'solo2Fee', 'solo3Fee', 'soloAdditionalFee', 'duoTrioFeePerDancer', 'groupFeePerDancer', 'largeGroupFeePerDancer', 'soloPrice', 'duetPrice', 'groupPrice', 'discountEnabled', 'discountMinEntries', 'discountAmount', 'registrationFee'];
           const feeChanged = feeFields.some(field => {
             const originalValue = (editingEvent as any)[field] || 0;
             const newValue = editEventData[field as keyof typeof editEventData] || 0;
@@ -3229,139 +3264,42 @@ function AdminDashboard() {
               {/* Fee Configuration Section */}
               <div className={`mb-6 p-6 border-2 ${theme === 'dark' ? 'border-indigo-700/50 bg-indigo-900/20' : 'border-indigo-200 bg-indigo-50/50'} ${themeClasses.cardRadius}`}>
                 <h3 className={`${themeClasses.heading3} mb-4 flex items-center gap-2`}>
-                  💰 Fee Configuration (ZAR)
+                  💰 Fee Configuration (Flat Pricing)
                 </h3>
-                <p className={`text-xs ${themeClasses.textMuted} mb-4`}>
-                  All fees are in South African Rand (R). Enter amounts without the currency symbol.
-                </p>
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                  <div>
-                    <label className={`block ${themeClasses.label} mb-2`}>Registration Fee (per dancer)</label>
-                    <div className="relative">
-                      <span className={`absolute left-3 top-1/2 -translate-y-1/2 ${themeClasses.textPrimary} font-medium`}>R</span>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                        value={newEvent.registrationFeePerDancer || ''}
-                      onChange={(e) => setNewEvent(prev => ({ ...prev, registrationFeePerDancer: parseFloat(e.target.value) || 0 }))}
-                        className={`w-full pl-8 pr-4 py-3 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.inputFocus} ${themeClasses.textPrimary} placeholder:${themeClasses.textMuted} transition-all duration-200`}
-                        placeholder="300.00"
-                    />
-                    </div>
+                  <input type="number" min="0" step="0.01" value={newEvent.soloPrice || ''} onChange={(e) => setNewEvent(prev => ({ ...prev, soloPrice: parseFloat(e.target.value) || 0 }))} className={`w-full px-4 py-3 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.textPrimary}`} placeholder="Solo price" />
+                  <input type="number" min="0" step="0.01" value={newEvent.duetPrice || ''} onChange={(e) => setNewEvent(prev => ({ ...prev, duetPrice: parseFloat(e.target.value) || 0 }))} className={`w-full px-4 py-3 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.textPrimary}`} placeholder="Duet price" />
+                  <input type="number" min="0" step="0.01" value={newEvent.groupPrice || ''} onChange={(e) => setNewEvent(prev => ({ ...prev, groupPrice: parseFloat(e.target.value) || 0 }))} className={`w-full px-4 py-3 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.textPrimary}`} placeholder="Group price" />
+                  <div className="sm:col-span-2 lg:col-span-1">
+                    <input type="number" min="0" step="0.01" value={newEvent.registrationFee || ''} onChange={(e) => setNewEvent(prev => ({ ...prev, registrationFee: parseFloat(e.target.value) || 0 }))} className={`w-full px-4 py-3 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.textPrimary}`} placeholder="Registration fee" />
+                    <p className={`text-xs ${themeClasses.textMuted} mt-1`}>Charged once per dancer per event</p>
                   </div>
-
+                  <label className={`flex items-center gap-2 ${themeClasses.textPrimary}`}>
+                    <input type="checkbox" checked={newEvent.discountEnabled} onChange={(e) => setNewEvent(prev => ({ ...prev, discountEnabled: e.target.checked }))} />
+                    Discount enabled
+                  </label>
+                  <input type="number" min="0" step="1" disabled={!newEvent.discountEnabled} value={newEvent.discountMinEntries || ''} onChange={(e) => setNewEvent(prev => ({ ...prev, discountMinEntries: parseInt(e.target.value) || 0 }))} className={`w-full px-4 py-3 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.textPrimary} ${!newEvent.discountEnabled ? 'opacity-50 cursor-not-allowed' : ''}`} placeholder="Discount minimum entries" />
                   <div>
-                    <label className={`block ${themeClasses.label} mb-2`}>1 Solo Package</label>
-                    <div className="relative">
-                      <span className={`absolute left-3 top-1/2 -translate-y-1/2 ${themeClasses.textPrimary} font-medium`}>R</span>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                        value={newEvent.solo1Fee || ''}
-                      onChange={(e) => setNewEvent(prev => ({ ...prev, solo1Fee: parseFloat(e.target.value) || 0 }))}
-                        className={`w-full pl-8 pr-4 py-3 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.inputFocus} ${themeClasses.textPrimary} placeholder:${themeClasses.textMuted} transition-all duration-200`}
-                        placeholder="400.00"
-                    />
-                    </div>
+                    <input type="number" min="0" step="0.01" disabled={!newEvent.discountEnabled} value={newEvent.discountAmount || ''} onChange={(e) => setNewEvent(prev => ({ ...prev, discountAmount: parseFloat(e.target.value) || 0 }))} className={`w-full px-4 py-3 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.textPrimary} ${!newEvent.discountEnabled ? 'opacity-50 cursor-not-allowed' : ''}`} placeholder="Discount amount" />
+                    <p className={`text-xs ${themeClasses.textMuted} mt-1`}>Applies once when total entries meet minimum</p>
                   </div>
-
-                  <div>
-                    <label className={`block ${themeClasses.label} mb-2`}>2 Solos Package</label>
-                    <div className="relative">
-                      <span className={`absolute left-3 top-1/2 -translate-y-1/2 ${themeClasses.textPrimary} font-medium`}>R</span>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                        value={newEvent.solo2Fee || ''}
-                      onChange={(e) => setNewEvent(prev => ({ ...prev, solo2Fee: parseFloat(e.target.value) || 0 }))}
-                        className={`w-full pl-8 pr-4 py-3 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.inputFocus} ${themeClasses.textPrimary} placeholder:${themeClasses.textMuted} transition-all duration-200`}
-                        placeholder="750.00"
-                    />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className={`block ${themeClasses.label} mb-2`}>3 Solos Package</label>
-                    <div className="relative">
-                      <span className={`absolute left-3 top-1/2 -translate-y-1/2 ${themeClasses.textPrimary} font-medium`}>R</span>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                        value={newEvent.solo3Fee || ''}
-                      onChange={(e) => setNewEvent(prev => ({ ...prev, solo3Fee: parseFloat(e.target.value) || 0 }))}
-                        className={`w-full pl-8 pr-4 py-3 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.inputFocus} ${themeClasses.textPrimary} placeholder:${themeClasses.textMuted} transition-all duration-200`}
-                        placeholder="1050.00"
-                    />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className={`block ${themeClasses.label} mb-2`}>Each Additional Solo</label>
-                    <div className="relative">
-                      <span className={`absolute left-3 top-1/2 -translate-y-1/2 ${themeClasses.textPrimary} font-medium`}>R</span>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                        value={newEvent.soloAdditionalFee || ''}
-                      onChange={(e) => setNewEvent(prev => ({ ...prev, soloAdditionalFee: parseFloat(e.target.value) || 0 }))}
-                        className={`w-full pl-8 pr-4 py-3 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.inputFocus} ${themeClasses.textPrimary} placeholder:${themeClasses.textMuted} transition-all duration-200`}
-                        placeholder="100.00"
-                    />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className={`block ${themeClasses.label} mb-2`}>Duo/Trio (per dancer)</label>
-                    <div className="relative">
-                      <span className={`absolute left-3 top-1/2 -translate-y-1/2 ${themeClasses.textPrimary} font-medium`}>R</span>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                        value={newEvent.duoTrioFeePerDancer || ''}
-                      onChange={(e) => setNewEvent(prev => ({ ...prev, duoTrioFeePerDancer: parseFloat(e.target.value) || 0 }))}
-                        className={`w-full pl-8 pr-4 py-3 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.inputFocus} ${themeClasses.textPrimary} placeholder:${themeClasses.textMuted} transition-all duration-200`}
-                        placeholder="280.00"
-                    />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className={`block ${themeClasses.label} mb-2`}>Small Group (per dancer, 4-9)</label>
-                    <div className="relative">
-                      <span className={`absolute left-3 top-1/2 -translate-y-1/2 ${themeClasses.textPrimary} font-medium`}>R</span>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                        value={newEvent.groupFeePerDancer || ''}
-                      onChange={(e) => setNewEvent(prev => ({ ...prev, groupFeePerDancer: parseFloat(e.target.value) || 0 }))}
-                        className={`w-full pl-8 pr-4 py-3 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.inputFocus} ${themeClasses.textPrimary} placeholder:${themeClasses.textMuted} transition-all duration-200`}
-                        placeholder="220.00"
-                    />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className={`block ${themeClasses.label} mb-2`}>Large Group (per dancer, 10+)</label>
-                    <div className="relative">
-                      <span className={`absolute left-3 top-1/2 -translate-y-1/2 ${themeClasses.textPrimary} font-medium`}>R</span>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                        value={newEvent.largeGroupFeePerDancer || ''}
-                      onChange={(e) => setNewEvent(prev => ({ ...prev, largeGroupFeePerDancer: parseFloat(e.target.value) || 0 }))}
-                        className={`w-full pl-8 pr-4 py-3 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.inputFocus} ${themeClasses.textPrimary} placeholder:${themeClasses.textMuted} transition-all duration-200`}
-                        placeholder="190.00"
-                    />
-                    </div>
-                  </div>
+                </div>
+                <div className={`mt-4 p-4 border ${themeClasses.modalBorder} ${themeClasses.cardRadius}`}>
+                  <p className={`text-sm font-semibold ${themeClasses.textPrimary} mb-2`}>Live Preview (example: 3 entries, 3 dancers)</p>
+                  {(() => {
+                    const subtotal = (newEvent.soloPrice || 0) * 3;
+                    const discount = newEvent.discountEnabled && 3 >= (newEvent.discountMinEntries || 0) ? (newEvent.discountAmount || 0) : 0;
+                    const registration = (newEvent.registrationFee || 0) * 3;
+                    const total = subtotal - discount + registration;
+                    return (
+                      <div className={`text-sm ${themeClasses.textPrimary} space-y-1`}>
+                        <div>3 entries {"->"} Subtotal R{subtotal.toFixed(2)}</div>
+                        <div>Discount {"->"} -R{discount.toFixed(2)}</div>
+                        <div>Registration {"->"} R{registration.toFixed(2)}</div>
+                        <div className="font-semibold">Total {"->"} R{total.toFixed(2)}</div>
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
 
@@ -3801,142 +3739,42 @@ function AdminDashboard() {
               {/* Fee Configuration Section */}
               <div className={`mt-8 p-6 border-2 ${theme === 'dark' ? 'border-green-700/50 bg-green-900/20' : 'bg-gradient-to-br from-green-50 to-emerald-50 border-green-200'} ${themeClasses.cardRadius}`}>
                 <h3 className={`${themeClasses.heading3} mb-4 flex items-center space-x-2`}>
-                  💰 Fee Configuration
+                  💰 Fee Configuration (Flat Pricing)
                 </h3>
                 <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+                  <input type="number" min="0" step="0.01" value={(editEventData as any).soloPrice || ''} onChange={(e) => setEditEventData(prev => ({ ...prev, soloPrice: parseFloat(e.target.value) || 0 }))} disabled={eventSafetyCheck?.blocks.includes('fees') || false} className={`w-full px-4 py-2 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.textPrimary}`} placeholder="Solo price" />
+                  <input type="number" min="0" step="0.01" value={(editEventData as any).duetPrice || ''} onChange={(e) => setEditEventData(prev => ({ ...prev, duetPrice: parseFloat(e.target.value) || 0 }))} disabled={eventSafetyCheck?.blocks.includes('fees') || false} className={`w-full px-4 py-2 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.textPrimary}`} placeholder="Duet price" />
+                  <input type="number" min="0" step="0.01" value={(editEventData as any).groupPrice || ''} onChange={(e) => setEditEventData(prev => ({ ...prev, groupPrice: parseFloat(e.target.value) || 0 }))} disabled={eventSafetyCheck?.blocks.includes('fees') || false} className={`w-full px-4 py-2 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.textPrimary}`} placeholder="Group price" />
                   <div>
-                    <label className={`block ${themeClasses.label} mb-2`}>Currency</label>
-                    <select
-                      value={editEventData.currency}
-                      onChange={(e) => setEditEventData(prev => ({ ...prev, currency: e.target.value }))}
-                      className={`w-full px-4 py-2 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.inputFocus} ${themeClasses.textPrimary}`}
-                    >
-                      <option value="ZAR">ZAR (R)</option>
-                      <option value="USD">USD ($)</option>
-                      <option value="EUR">EUR (€)</option>
-                      <option value="GBP">GBP (£)</option>
-                    </select>
+                    <input type="number" min="0" step="0.01" value={(editEventData as any).registrationFee || ''} onChange={(e) => setEditEventData(prev => ({ ...prev, registrationFee: parseFloat(e.target.value) || 0 }))} disabled={eventSafetyCheck?.blocks.includes('fees') || false} className={`w-full px-4 py-2 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.textPrimary}`} placeholder="Registration fee" />
+                    <p className={`text-xs ${themeClasses.textMuted} mt-1`}>Charged once per dancer per event</p>
                   </div>
-
+                  <label className={`flex items-center gap-2 ${themeClasses.textPrimary}`}>
+                    <input type="checkbox" checked={(editEventData as any).discountEnabled} onChange={(e) => setEditEventData(prev => ({ ...prev, discountEnabled: e.target.checked }))} disabled={eventSafetyCheck?.blocks.includes('fees') || false} />
+                    Discount enabled
+                  </label>
+                  <input type="number" min="0" step="1" value={(editEventData as any).discountMinEntries || ''} onChange={(e) => setEditEventData(prev => ({ ...prev, discountMinEntries: parseInt(e.target.value) || 0 }))} disabled={eventSafetyCheck?.blocks.includes('fees') || !(editEventData as any).discountEnabled} className={`w-full px-4 py-2 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.textPrimary} ${!(editEventData as any).discountEnabled ? 'opacity-50 cursor-not-allowed' : ''}`} placeholder="Discount minimum entries" />
                   <div>
-                    <label className={`block ${themeClasses.label} mb-2`}>Registration Fee (per dancer)</label>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={editEventData.registrationFeePerDancer}
-                      onChange={(e) => setEditEventData(prev => ({ ...prev, registrationFeePerDancer: parseFloat(e.target.value) || 0 }))}
-                      disabled={eventSafetyCheck?.blocks.includes('fees') || false}
-                      className={`w-full px-4 py-2 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.inputFocus} ${themeClasses.textPrimary} ${
-                        eventSafetyCheck?.blocks.includes('fees') ? 'opacity-50 cursor-not-allowed' : ''
-                      }`}
-                    />
+                    <input type="number" min="0" step="0.01" value={(editEventData as any).discountAmount || ''} onChange={(e) => setEditEventData(prev => ({ ...prev, discountAmount: parseFloat(e.target.value) || 0 }))} disabled={eventSafetyCheck?.blocks.includes('fees') || !(editEventData as any).discountEnabled} className={`w-full px-4 py-2 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.textPrimary} ${!(editEventData as any).discountEnabled ? 'opacity-50 cursor-not-allowed' : ''}`} placeholder="Discount amount" />
+                    <p className={`text-xs ${themeClasses.textMuted} mt-1`}>Applies once when total entries meet minimum</p>
                   </div>
-
-                  <div>
-                    <label className={`block ${themeClasses.label} mb-2`}>1 Solo Package</label>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={editEventData.solo1Fee}
-                      onChange={(e) => setEditEventData(prev => ({ ...prev, solo1Fee: parseFloat(e.target.value) || 0 }))}
-                      disabled={eventSafetyCheck?.blocks.includes('fees') || false}
-                      className={`w-full px-4 py-2 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.inputFocus} ${themeClasses.textPrimary} ${
-                        eventSafetyCheck?.blocks.includes('fees') ? 'opacity-50 cursor-not-allowed' : ''
-                      }`}
-                    />
-                  </div>
-
-                  <div>
-                    <label className={`block ${themeClasses.label} mb-2`}>2 Solos Package</label>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={editEventData.solo2Fee}
-                      onChange={(e) => setEditEventData(prev => ({ ...prev, solo2Fee: parseFloat(e.target.value) || 0 }))}
-                      disabled={eventSafetyCheck?.blocks.includes('fees') || false}
-                      className={`w-full px-4 py-2 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.inputFocus} ${themeClasses.textPrimary} ${
-                        eventSafetyCheck?.blocks.includes('fees') ? 'opacity-50 cursor-not-allowed' : ''
-                      }`}
-                    />
-                  </div>
-
-                  <div>
-                    <label className={`block ${themeClasses.label} mb-2`}>3 Solos Package</label>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={editEventData.solo3Fee}
-                      onChange={(e) => setEditEventData(prev => ({ ...prev, solo3Fee: parseFloat(e.target.value) || 0 }))}
-                      disabled={eventSafetyCheck?.blocks.includes('fees') || false}
-                      className={`w-full px-4 py-2 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.inputFocus} ${themeClasses.textPrimary} ${
-                        eventSafetyCheck?.blocks.includes('fees') ? 'opacity-50 cursor-not-allowed' : ''
-                      }`}
-                    />
-                  </div>
-
-                  <div>
-                    <label className={`block ${themeClasses.label} mb-2`}>Each Additional Solo</label>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={editEventData.soloAdditionalFee}
-                      onChange={(e) => setEditEventData(prev => ({ ...prev, soloAdditionalFee: parseFloat(e.target.value) || 0 }))}
-                      disabled={eventSafetyCheck?.blocks.includes('fees') || false}
-                      className={`w-full px-4 py-2 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.inputFocus} ${themeClasses.textPrimary} ${
-                        eventSafetyCheck?.blocks.includes('fees') ? 'opacity-50 cursor-not-allowed' : ''
-                      }`}
-                    />
-                  </div>
-
-                  <div>
-                    <label className={`block ${themeClasses.label} mb-2`}>Duo/Trio (per dancer)</label>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={editEventData.duoTrioFeePerDancer}
-                      onChange={(e) => setEditEventData(prev => ({ ...prev, duoTrioFeePerDancer: parseFloat(e.target.value) || 0 }))}
-                      disabled={eventSafetyCheck?.blocks.includes('fees') || false}
-                      className={`w-full px-4 py-2 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.inputFocus} ${themeClasses.textPrimary} ${
-                        eventSafetyCheck?.blocks.includes('fees') ? 'opacity-50 cursor-not-allowed' : ''
-                      }`}
-                    />
-                  </div>
-
-                  <div>
-                    <label className={`block ${themeClasses.label} mb-2`}>Small Group (per dancer, 4-9)</label>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={editEventData.groupFeePerDancer}
-                      onChange={(e) => setEditEventData(prev => ({ ...prev, groupFeePerDancer: parseFloat(e.target.value) || 0 }))}
-                      disabled={eventSafetyCheck?.blocks.includes('fees') || false}
-                      className={`w-full px-4 py-2 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.inputFocus} ${themeClasses.textPrimary} ${
-                        eventSafetyCheck?.blocks.includes('fees') ? 'opacity-50 cursor-not-allowed' : ''
-                      }`}
-                    />
-                  </div>
-
-                  <div>
-                    <label className={`block ${themeClasses.label} mb-2`}>Large Group (per dancer, 10+)</label>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={editEventData.largeGroupFeePerDancer}
-                      onChange={(e) => setEditEventData(prev => ({ ...prev, largeGroupFeePerDancer: parseFloat(e.target.value) || 0 }))}
-                      disabled={eventSafetyCheck?.blocks.includes('fees') || false}
-                      className={`w-full px-4 py-2 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.inputFocus} ${themeClasses.textPrimary} ${
-                        eventSafetyCheck?.blocks.includes('fees') ? 'opacity-50 cursor-not-allowed' : ''
-                      }`}
-                    />
-                  </div>
+                </div>
+                <div className={`mt-4 p-4 border ${themeClasses.modalBorder} ${themeClasses.cardRadius}`}>
+                  <p className={`text-sm font-semibold ${themeClasses.textPrimary} mb-2`}>Live Preview (example: 3 entries, 3 dancers)</p>
+                  {(() => {
+                    const subtotal = ((editEventData as any).soloPrice || 0) * 3;
+                    const discount = (editEventData as any).discountEnabled && 3 >= ((editEventData as any).discountMinEntries || 0) ? ((editEventData as any).discountAmount || 0) : 0;
+                    const registration = ((editEventData as any).registrationFee || 0) * 3;
+                    const total = subtotal - discount + registration;
+                    return (
+                      <div className={`text-sm ${themeClasses.textPrimary} space-y-1`}>
+                        <div>3 entries {"->"} Subtotal R{subtotal.toFixed(2)}</div>
+                        <div>Discount {"->"} -R{discount.toFixed(2)}</div>
+                        <div>Registration {"->"} R{registration.toFixed(2)}</div>
+                        <div className="font-semibold">Total {"->"} R{total.toFixed(2)}</div>
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
 

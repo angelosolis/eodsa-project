@@ -7,6 +7,7 @@ import { PERFORMANCE_TYPES, MASTERY_LEVELS, REGIONAL_MASTERY_LEVELS, ITEM_STYLES
 import CountdownTimer from '@/app/components/CountdownTimer';
 import { useToast } from '@/components/ui/simple-toast';
 import MusicUpload from '@/components/MusicUpload';
+import { calculateEventPricing, getFixedEntryPrice } from '@/lib/event-pricing';
 // Registration fee checking moved to API calls
 import React from 'react';
 
@@ -172,7 +173,7 @@ export default function CompetitionEntryPage() {
   const [studioInfo, setStudioInfo] = useState<StudioSession | null>(null);
   const [availableDancers, setAvailableDancers] = useState<any[]>([]);
   const [isStudioMode, setIsStudioMode] = useState(false);
-  const [event, setEvent] = useState<Event | null>(null);
+  const [event, setEvent] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [entries, setEntries] = useState<PerformanceEntry[]>([]);
   const [existingDbEntries, setExistingDbEntries] = useState<any[]>([]);
@@ -533,15 +534,11 @@ export default function CompetitionEntryPage() {
 
   const getStartingFee = (performanceType: string) => {
     if (!event) return 0;
-    
-    if (performanceType === 'Solo') {
-      return event.solo1Fee || 400; // First solo fee
-    } else if (performanceType === 'Duet' || performanceType === 'Trio') {
-      return event.duoTrioFeePerDancer || 280; // Per person
-    } else if (performanceType === 'Group') {
-      return event.groupFeePerDancer || 220; // Per person for small groups
-    }
-    return 0;
+    return getFixedEntryPrice(performanceType, {
+      soloPrice: event.soloPrice,
+      duetPrice: event.duetPrice,
+      groupPrice: event.groupPrice
+    });
   };
 
   // Resolve a dancer's EODSA ID from an internal participant ID (studio mode)
@@ -623,23 +620,12 @@ export default function CompetitionEntryPage() {
     
     const currency = event.currency || 'ZAR';
     const symbol = currency === 'USD' ? '$' : currency === 'EUR' ? '€' : currency === 'GBP' ? '£' : 'R';
-    const regFee = event.registrationFeePerDancer || 300;
-    
-    if (performanceType === 'Solo') {
-      const solo1 = event.solo1Fee || 400;
-      const solo2 = event.solo2Fee || 750;
-      const solo3 = event.solo3Fee || 1050;
-      const additional = event.soloAdditionalFee || 100;
-      return `Solo packages: 1st solo ${symbol}${solo1}, 2 solos ${symbol}${solo2}, 3 solos ${symbol}${solo3}, additional solos ${symbol}${additional} each. Plus ${symbol}${regFee} registration.`;
-    } else if (performanceType === 'Duet' || performanceType === 'Trio') {
-      const duoTrioFee = event.duoTrioFeePerDancer || 280;
-      return `${symbol}${duoTrioFee} per person + ${symbol}${regFee} registration each`;
-    } else if (performanceType === 'Group') {
-      const smallGroupFee = event.groupFeePerDancer || 220;
-      const largeGroupFee = event.largeGroupFeePerDancer || 190;
-      return `Small groups (4-9): ${symbol}${smallGroupFee}pp, Large groups (10+): ${symbol}${largeGroupFee}pp. Plus ${symbol}${regFee} registration each.`;
+    const regFee = event.registrationFee || 0;
+    const base = getStartingFee(performanceType);
+    if (performanceType === 'Duet' || performanceType === 'Trio') {
+      return `${symbol}${base} per entry. Registration ${symbol}${regFee} per dancer (once per event).`;
     }
-    return `Per person + ${symbol}${regFee} registration each`;
+    return `${symbol}${base} per entry. Registration ${symbol}${regFee} per dancer (once per event).`;
   };
 
   // NEW: Helper function to get maximum duration display for performance type
@@ -696,6 +682,13 @@ export default function CompetitionEntryPage() {
   };
 
   const calculateEntryFee = async (performanceType: string, participantIds: string[]) => {
+    if (event) {
+      return getFixedEntryPrice(performanceType, {
+        soloPrice: (event as any).soloPrice,
+        duetPrice: (event as any).duetPrice,
+        groupPrice: (event as any).groupPrice
+      });
+    }
     try {
       if (!currentForm.mastery) {
         console.warn('No mastery level selected, using default performance fee calculation');
@@ -862,80 +855,11 @@ export default function CompetitionEntryPage() {
 
   // Fallback fee calculation for when smart calculation fails
   const calculateFallbackEntryFee = (performanceType: string, participantCount: number, specificParticipantIds?: string[]) => {
-    if (performanceType === 'Solo') {
-      let existingSoloCount = 0;
-      let sessionSoloCount = 0;
-      
-      // If we have specific participant info, count per dancer
-      if (specificParticipantIds && specificParticipantIds.length === 1) {
-        const dancerEodsaId = specificParticipantIds[0];
-        
-        // Count existing solos for this specific dancer
-        existingSoloCount = existingDbEntries.filter(entry => {
-          if (!entry.participantIds || entry.participantIds.length !== 1) return false;
-          
-          let entryParticipants = [];
-          if (Array.isArray(entry.participantIds)) {
-            entryParticipants = entry.participantIds;
-          } else if (typeof entry.participantIds === 'string') {
-            try {
-              entryParticipants = JSON.parse(entry.participantIds);
-            } catch (e) {
-              entryParticipants = [entry.participantIds];
-            }
-          }
-          
-          return entryParticipants.includes(dancerEodsaId);
-        }).length;
-        
-        // Count session solos for this specific dancer
-        sessionSoloCount = entries.filter(entry => 
-          entry.performanceType === 'Solo' && 
-          entry.participantIds.length === 1 && 
-          entry.participantIds[0] === dancerEodsaId
-        ).length;
-      } else {
-        // Fallback to old logic if no specific participant info
-        existingSoloCount = existingDbEntries.filter(entry => 
-          entry.participantIds && entry.participantIds.length === 1
-        ).length;
-        sessionSoloCount = entries.filter(entry => entry.performanceType === 'Solo').length;
-      }
-      
-      const totalSoloCount = existingSoloCount + sessionSoloCount + 1; // +1 for current entry
-      
-      // Use event-specific solo pricing
-      let performanceFee = 0;
-      
-      // Solo pricing: solo1Fee, solo2Fee, solo3Fee are INDIVIDUAL fees, NOT cumulative
-      const solo1Fee = event?.solo1Fee || 400;
-      const solo2Fee = event?.solo2Fee || 200;
-      const solo3Fee = event?.solo3Fee || 100;
-      const soloAdditionalFee = event?.soloAdditionalFee || 100;
-      
-      if (totalSoloCount === 1) {
-        performanceFee = solo1Fee;
-      } else if (totalSoloCount === 2) {
-        performanceFee = solo2Fee;
-      } else if (totalSoloCount === 3) {
-        performanceFee = solo3Fee;
-      } else {
-        // More than 3: additional fee
-        performanceFee = soloAdditionalFee;
-      }
-      // Performance-only
-      return performanceFee;
-    } else if (performanceType === 'Duet' || performanceType === 'Trio') {
-      // Performance-only per person
-      return (event?.duoTrioFeePerDancer || 280) * participantCount;
-    } else if (performanceType === 'Group') {
-      // Performance-only per person
-      const perPerson = participantCount <= 9 
-        ? (event?.groupFeePerDancer || 220)
-        : (event?.largeGroupFeePerDancer || 190);
-      return perPerson * participantCount;
-    }
-    return 0;
+    return getFixedEntryPrice(performanceType, {
+      soloPrice: event?.soloPrice,
+      duetPrice: event?.duetPrice,
+      groupPrice: event?.groupPrice
+    });
   };
 
   const handleAddPerformanceType = (performanceType: string) => {
@@ -1163,6 +1087,39 @@ export default function CompetitionEntryPage() {
 
   const calculateTotalFee = async () => {
     setIsCalculatingFee(true);
+    const existingParticipantIds = new Set<string>();
+    existingDbEntries.forEach((dbEntry) => {
+      let ids: string[] = [];
+      if (Array.isArray(dbEntry.participantIds)) ids = dbEntry.participantIds;
+      else if (typeof dbEntry.participantIds === 'string') {
+        try { ids = JSON.parse(dbEntry.participantIds); } catch { ids = [dbEntry.participantIds]; }
+      }
+      ids.forEach((id) => id && existingParticipantIds.add(id));
+      if (dbEntry.eodsaId) existingParticipantIds.add(dbEntry.eodsaId);
+    });
+
+    const pricing = calculateEventPricing(entries.map((entry) => ({
+      performanceType: entry.performanceType,
+      participantIds: entry.participantIds,
+      eodsaId: entry.participantIds?.[0]
+    })), {
+      soloPrice: (event as any)?.soloPrice,
+      duetPrice: (event as any)?.duetPrice,
+      groupPrice: (event as any)?.groupPrice,
+      discountEnabled: (event as any)?.discountEnabled,
+      discountMinEntries: (event as any)?.discountMinEntries,
+      discountAmount: (event as any)?.discountAmount,
+      registrationFee: (event as any)?.registrationFee
+    }, Array.from(existingParticipantIds));
+
+    const pricingResult = {
+      performanceFee: pricing.subtotal - pricing.discount,
+      registrationFee: pricing.registrationTotal,
+      total: pricing.total
+    };
+    setTotalFeeCalculation(pricingResult);
+    setIsCalculatingFee(false);
+    return pricingResult;
     
     // Recalculate fees for all entries using the API (backend is source of truth)
     // This ensures cumulative solo package pricing is correct
@@ -1910,12 +1867,12 @@ export default function CompetitionEntryPage() {
                   const existingSolos = existingDbEntries.filter(e => e.participantIds && e.participantIds.length === 1).length;
                   const sessionSolos = entries.filter(e => e.performanceType === 'Solo').length;
                   const totalSoloCount = existingSolos + sessionSolos;
-                  const nextSoloFee = type === 'Solo' ? calculateFallbackEntryFee('Solo', 1) : 0;
+                  const nextSoloFee = getStartingFee(type);
                   
                   // Get currency symbol from event
                   const currency = event?.currency || 'ZAR';
                   const currencySymbol = currency === 'USD' ? '$' : currency === 'EUR' ? '€' : currency === 'GBP' ? '£' : 'R';
-                  const additionalFee = event?.soloAdditionalFee || 100;
+                  
                   
                   // For independent dancers (non-studio mode), only allow Solo
                   const isDisabled = !isStudioMode && type !== 'Solo';
@@ -1939,18 +1896,13 @@ export default function CompetitionEntryPage() {
                            {isDisabled && <span className="block text-xs mt-1 opacity-75">Requires studio membership</span>}
                          </h4>
                          
-                         {/* Dynamic pricing for Solo */}
+                         {/* Flat pricing */}
                          {type === 'Solo' && (
                            <div className="text-sm mb-2">
                              <div className="font-semibold text-emerald-200">
                                Next: {currencySymbol}{nextSoloFee}
                              </div>
-                             {totalSoloCount === 0 && <div className="text-xs opacity-75">1st Solo</div>}
-                             {totalSoloCount === 1 && <div className="text-xs opacity-75">2nd Solo (Package deal)</div>}
-                             {totalSoloCount === 2 && <div className="text-xs opacity-75">3rd Solo (Package deal)</div>}
-                             {totalSoloCount === 3 && <div className="text-xs opacity-75">4th Solo (Package deal)</div>}
-                             {totalSoloCount === 4 && <div className="text-xs opacity-75">FREE!</div>}
-                             {totalSoloCount > 4 && <div className="text-xs opacity-75">+{currencySymbol}{additionalFee}</div>}
+                             <div className="text-xs opacity-75">Fixed per solo entry</div>
                            </div>
                          )}
                          
@@ -2502,18 +2454,14 @@ export default function CompetitionEntryPage() {
                           : (previewFee === 0 ? 'FREE' : `${getCurrencySymbol()}${previewFee}`)}
                       </span>
                      </div>
-                     {showAddForm === 'Solo' && !(
-                      currentForm.participantIds.length < getParticipantLimits(showAddForm).min ||
-                      currentForm.participantIds.length > getParticipantLimits(showAddForm).max
-                    ) && (
-                      <div className="text-xs text-slate-400 mt-1">
-                        {(existingDbEntries.filter(e => e.participantIds && e.participantIds.length === 1).length + entries.filter(e => e.performanceType === 'Solo').length) === 0 && `1st Solo: ${getCurrencySymbol()}${event?.solo1Fee || 400}`}
-                        {(existingDbEntries.filter(e => e.participantIds && e.participantIds.length === 1).length + entries.filter(e => e.performanceType === 'Solo').length) === 1 && `2nd Solo: ${getCurrencySymbol()}${event?.solo2Fee || 200}`}
-                        {(existingDbEntries.filter(e => e.participantIds && e.participantIds.length === 1).length + entries.filter(e => e.performanceType === 'Solo').length) === 2 && `3rd Solo: ${getCurrencySymbol()}${event?.solo3Fee || 100}`}
-                        {(existingDbEntries.filter(e => e.participantIds && e.participantIds.length === 1).length + entries.filter(e => e.performanceType === 'Solo').length) === 3 && `4th Solo: ${getCurrencySymbol()}${event?.soloAdditionalFee || 100}`}
-                        {(existingDbEntries.filter(e => e.participantIds && e.participantIds.length === 1).length + entries.filter(e => e.performanceType === 'Solo').length) >= 4 && `5th+ Solo: ${getCurrencySymbol()}${event?.soloAdditionalFee || 100} each`}
-                      </div>
-                    )}
+                    {showAddForm === 'Solo' && !(
+                     currentForm.participantIds.length < getParticipantLimits(showAddForm).min ||
+                     currentForm.participantIds.length > getParticipantLimits(showAddForm).max
+                   ) && (
+                     <div className="text-xs text-slate-400 mt-1">
+                       Fixed solo price: {getCurrencySymbol()}{(event as any)?.soloPrice || 0}
+                     </div>
+                   )}
                      {(currentForm.participantIds.length > 0 && (
                        currentForm.participantIds.length < getParticipantLimits(showAddForm).min ||
                        currentForm.participantIds.length > getParticipantLimits(showAddForm).max
@@ -2614,6 +2562,11 @@ export default function CompetitionEntryPage() {
                    <span>Entries:</span>
                    <span>{entries.length}{showAddForm && previewFee > 0 && <span className="text-slate-400"> (+1)</span>}</span>
                  </div>
+                {event?.discountEnabled && (
+                  <div className="text-xs text-slate-400">
+                    Add enough entries to qualify for discount: {entries.length}/{event?.discountMinEntries || 0}
+                  </div>
+                )}
                  
                 {/* Pending entry preview */}
                 {showAddForm && previewFee > 0 && (
@@ -2625,25 +2578,11 @@ export default function CompetitionEntryPage() {
                   </div>
                 )}
                  
-                 {/* Solo package info */}
-                 {(existingDbEntries.filter(e => e.participantIds && e.participantIds.length === 1).length + entries.filter(e => e.performanceType === 'Solo').length) > 0 && (
-                   <div className="text-xs text-slate-400 bg-slate-700/30 p-2 rounded">
-                     <div className="flex justify-between">
-                       <span>Solo entries:</span>
-                       <span>{existingDbEntries.filter(e => e.participantIds && e.participantIds.length === 1).length + entries.filter(e => e.performanceType === 'Solo').length}</span>
-                     </div>
-                     {entries.filter(e => e.performanceType === 'Solo').length >= 2 && (
-                       <div className="text-emerald-400 mt-1">
-                         ✓ Solo package pricing applied
-                       </div>
-                     )}
-                    {entries.filter(e => e.performanceType === 'Solo').length >= 4 && (
-                      <div className="text-emerald-400">
-                        ✓ Additional solos: {getCurrencySymbol()}{event?.soloAdditionalFee || 100} each
-                      </div>
-                    )}
-                   </div>
-                 )}
+                {event?.discountEnabled && (
+                  <div className="text-xs text-slate-400 bg-slate-700/30 p-2 rounded">
+                    Discount applies once when you add at least {event?.discountMinEntries || 0} entries.
+                  </div>
+                )}
                  
                  {isCalculatingFee ? (
                    <div className="flex items-center justify-center py-4">
@@ -2652,18 +2591,22 @@ export default function CompetitionEntryPage() {
                    </div>
                  ) : (
                   <>
-                    <div className="flex justify-between">
-                      <span>Performance Fees:</span>
-                      <span>{getCurrencySymbol()}{feeCalculation.performanceFee}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Registration Fees:</span>
-                      <span>{getCurrencySymbol()}{feeCalculation.registrationFee}</span>
-                    </div>
+                   <div className="flex justify-between">
+                     <span>Subtotal:</span>
+                     <span>{getCurrencySymbol()}{feeCalculation.performanceFee + ((event?.discountEnabled && entries.length >= (event?.discountMinEntries || 0)) ? (event?.discountAmount || 0) : 0)}</span>
+                   </div>
+                   <div className="flex justify-between">
+                     <span>Discount:</span>
+                     <span>-{getCurrencySymbol()}{(event?.discountEnabled && entries.length >= (event?.discountMinEntries || 0)) ? (event?.discountAmount || 0) : 0}</span>
+                   </div>
+                   <div className="flex justify-between">
+                     <span>Registration:</span>
+                     <span>{getCurrencySymbol()}{feeCalculation.registrationFee}</span>
+                   </div>
                   </>
                  )}
                 <div className="text-xs text-slate-400">
-                  ({new Set(entries.flatMap(e => e.participantIds)).size} unique participants × {getCurrencySymbol()}{event?.registrationFeePerDancer || 300})
+                  ({new Set(entries.flatMap(e => e.participantIds)).size} unique participants × {getCurrencySymbol()}{event?.registrationFee || 0})
                 </div>
                  
                  {/* Preview total with pending entry */}

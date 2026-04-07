@@ -1,13 +1,12 @@
 /**
  * Payment Validation Helpers
- * 
- * Functions to validate payment amounts against computed incremental fees
- * and create transaction records for payment tracking.
+ *
+ * Uses flat pricing + global discount with per-event registration charging.
  */
 
-import { computeIncrementalFee, markRegistrationCharged } from './incremental-fee-calculator';
 import { createTransactionRecord } from './transaction-records';
 import { getSql } from './database';
+import { calculateEventPricing, getFixedEntryPrice } from './event-pricing';
 
 export interface EntryFeeValidation {
   entryIndex: number;
@@ -43,248 +42,78 @@ export async function validateBatchEntryFees(
   eventId: string,
   clientSentTotal: number
 ): Promise<BatchValidationResult> {
+  const sql = getSql();
   const validations: EntryFeeValidation[] = [];
-  let totalComputedFee = 0;
+  const normalizedEntries = Array.isArray(entries) ? entries : [];
 
-  // Track solo counts per dancer as we process entries
-  // This is critical for batch additions where multiple solos are added at once
-  const soloCountTracker: Map<string, number> = new Map(); // Map<eodsaId, currentSoloCount>
-  
-  // Track registration charged status per dancer to ensure it's only charged once
-  const registrationChargedTracker: Map<string, boolean> = new Map(); // Map<eodsaId, registrationCharged>
+  const eventRows = await sql`
+    SELECT solo_price, duet_price, group_price, discount_enabled, discount_min_entries, discount_amount, registration_fee
+    FROM events
+    WHERE id = ${eventId}
+  ` as any[];
+  if (!eventRows.length) throw new Error(`Event ${eventId} not found`);
 
-  for (let i = 0; i < entries.length; i++) {
-    const entry = entries[i];
-    
-    try {
-      // For solo entries, we need to track the solo count as we process entries in the batch
-      // This ensures that if 3 solos are added at once, they get solo numbers 1, 2, 3
-      let existingSoloCount = 0;
-      let batchSoloCount = 0; // Store this to check if it's the first solo in batch
-      let soloEodsaId: string | undefined;
-      if (entry.performanceType === 'Solo') {
-        soloEodsaId = entry.eodsaId || (entry.participantIds && entry.participantIds[0]);
-        if (soloEodsaId) {
-          // Get existing count from database
-          const initialFeeResult = await computeIncrementalFee({
-            eventId,
-            dancerId: entry.contestantId || entry.eodsaId,
-            eodsaId: soloEodsaId,
-            performanceType: 'Solo',
-            participantIds: Array.isArray(entry.participantIds) ? entry.participantIds : [entry.participantIds],
-            masteryLevel: entry.mastery
-          });
-          
-          existingSoloCount = initialFeeResult.entryCount;
-          
-          // Add count from entries already processed in this batch
-          // Store this BEFORE incrementing to check if it's the first solo in batch
-          batchSoloCount = soloCountTracker.get(soloEodsaId) || 0;
-          existingSoloCount += batchSoloCount;
-          
-          // Update tracker for next entry (do this AFTER we've used batchSoloCount)
-          soloCountTracker.set(soloEodsaId, batchSoloCount + 1);
-        }
-      }
+  const event = eventRows[0];
+  const allParticipantIds = new Set<string>();
+  normalizedEntries.forEach((entry) => {
+    const ids = Array.isArray(entry.participantIds) ? entry.participantIds : [];
+    ids.forEach((id: string) => id && allParticipantIds.add(id));
+    if (!ids.length && entry.eodsaId) allParticipantIds.add(entry.eodsaId);
+  });
 
-      // Compute incremental fee for this entry
-      // For solo entries, we need to manually calculate based on the tracked solo count
-      let feeResult;
-      if (entry.performanceType === 'Solo' && existingSoloCount !== undefined) {
-        // Manually calculate solo fee using the tracked count
-        const { getSql } = await import('./database');
-        const sql = getSql();
-        
-        // Get event config
-        const eventResult = await sql`
-          SELECT 
-            registration_fee_per_dancer, solo_1_fee, solo_2_fee, solo_3_fee, solo_additional_fee,
-            duo_trio_fee_per_dancer, group_fee_per_dancer, large_group_fee_per_dancer, currency
-          FROM events
-          WHERE id = ${eventId}
-        ` as any[];
-
-        if (!eventResult || eventResult.length === 0) {
-          throw new Error(`Event ${eventId} not found`);
-        }
-
-        const event = eventResult[0];
-        const eventConfig = {
-          registrationFeePerDancer: parseFloat(event.registration_fee_per_dancer) || 300,
-          solo1Fee: parseFloat(event.solo_1_fee) || 400,
-          solo2Fee: parseFloat(event.solo_2_fee) || 200,
-          solo3Fee: parseFloat(event.solo_3_fee) || 100,
-          soloAdditionalFee: parseFloat(event.solo_additional_fee) || 100,
-          duoTrioFeePerDancer: parseFloat(event.duo_trio_fee_per_dancer) || 280,
-          groupFeePerDancer: parseFloat(event.group_fee_per_dancer) || 220,
-          largeGroupFeePerDancer: parseFloat(event.large_group_fee_per_dancer) || 190,
-          currency: event.currency || 'ZAR'
-        };
-
-        // Check registration charged status (only check once per dancer)
-        // CRITICAL: Use ONLY eodsa_id - no fallbacks, no OR conditions
-        // Ensure soloEodsaId is set (should be set above, but check again)
-        if (!soloEodsaId) {
-          soloEodsaId = entry.eodsaId || (entry.participantIds && entry.participantIds[0]);
-        }
-        
-        // Only check registration if we have a valid EODSA ID
-        let registrationCharged = false;
-        const eodsaIdForCheck = soloEodsaId; // Use const to help TypeScript narrow the type
-        if (eodsaIdForCheck) {
-          const cached = registrationChargedTracker.get(eodsaIdForCheck);
-          if (cached !== undefined) {
-            registrationCharged = cached;
-          } else {
-            // First time checking this dancer - query database using ONLY eodsa_id
-            const registrationChargedResult = await sql`
-              SELECT COUNT(*) as count
-              FROM registration_charged_flags
-              WHERE event_id = ${eventId}
-              AND eodsa_id = ${eodsaIdForCheck}
-            ` as any[];
-
-            const flagCount = registrationChargedResult && registrationChargedResult[0] ? parseInt(registrationChargedResult[0].count) : 0;
-            registrationCharged = flagCount > 0;
-            
-            // Store in tracker
-            registrationChargedTracker.set(eodsaIdForCheck, registrationCharged);
-          }
-        } else {
-          // If no eodsaId provided, assume registration not charged (safer to charge it)
-          registrationCharged = false;
-        }
-
-        // Calculate solo fee using CUMULATIVE PACKAGE PRICING (same logic as calculateSmartEODSAFee)
-        // solo1Fee, solo2Fee, solo3Fee are CUMULATIVE package totals, not individual fees
-        const solo1Package = eventConfig.solo1Fee || 550;
-        const solo2Package = eventConfig.solo2Fee || 942;
-        const solo3Package = eventConfig.solo3Fee || 1256;
-        const additionalSoloFee = eventConfig.soloAdditionalFee || 349;
-        
-        // Calculate previous package total (what they should have paid for existing solos)
-        let previousPackageTotal = 0;
-        if (existingSoloCount === 0) {
-          previousPackageTotal = 0;
-        } else if (existingSoloCount === 1) {
-          previousPackageTotal = solo1Package;
-        } else if (existingSoloCount === 2) {
-          previousPackageTotal = solo2Package;
-        } else if (existingSoloCount === 3) {
-          previousPackageTotal = solo3Package;
-        } else {
-          // 4+ solos: 3-solo package + additional solos
-          previousPackageTotal = solo3Package + ((existingSoloCount - 3) * additionalSoloFee);
-        }
-        
-        // Calculate new package total (what they should pay for new total count)
-        const newTotalSoloCount = existingSoloCount + 1;
-        let newPackageTotal = 0;
-        if (newTotalSoloCount === 1) {
-          newPackageTotal = solo1Package;
-        } else if (newTotalSoloCount === 2) {
-          newPackageTotal = solo2Package;
-        } else if (newTotalSoloCount === 3) {
-          newPackageTotal = solo3Package;
-        } else {
-          // 4+ solos: 3-solo package + additional solos
-          newPackageTotal = solo3Package + ((newTotalSoloCount - 3) * additionalSoloFee);
-        }
-        
-        // Entry fee is the INCREMENTAL difference (new package - previous package)
-        const entryFee = Math.max(0, newPackageTotal - previousPackageTotal);
-        
-        // Registration fee: only charge if not already charged AND this is the first solo for this dancer in this batch
-        // Use batchSoloCount (value BEFORE incrementing) to check if it's the first solo in batch
-        const isFirstSoloInBatch = batchSoloCount === 0;
-        const registrationFee = (!registrationCharged && isFirstSoloInBatch && soloEodsaId) ? eventConfig.registrationFeePerDancer : 0;
-        const totalFee = entryFee + registrationFee;
-        
-        // Debug logging for registration fee calculation
-        console.log(`🔍 Solo entry ${i + 1} fee calculation:`, {
-          entryIndex: i,
-          itemName: entry.itemName,
-          soloEodsaId,
-          existingSoloCount,
-          batchSoloCount,
-          isFirstSoloInBatch,
-          registrationCharged,
-          entryFee,
-          registrationFee,
-          totalFee,
-          registrationFeePerDancer: eventConfig.registrationFeePerDancer
-        });
-        
-        // Mark registration as charged in tracker after first solo
-        if (!registrationCharged && isFirstSoloInBatch && soloEodsaId) {
-          registrationChargedTracker.set(soloEodsaId, true);
-        }
-
-        feeResult = {
-          registrationFee,
-          entryFee,
-          totalFee,
-          registrationCharged: !registrationCharged && registrationFee > 0,
-          registrationWasAlreadyCharged: registrationCharged,
-          entryCount: existingSoloCount,
-          breakdown: `Solo Package (${newTotalSoloCount} solos total): ${eventConfig.currency}${newPackageTotal} - Previous: ${eventConfig.currency}${previousPackageTotal} = ${eventConfig.currency}${entryFee}${registrationFee > 0 ? ` + Registration: ${eventConfig.currency}${registrationFee}` : ' (Registration already charged)'}`,
-          warnings: []
-        };
-      } else {
-        // For non-solo entries, use the standard computeIncrementalFee
-        feeResult = await computeIncrementalFee({
-          eventId,
-          dancerId: entry.contestantId || entry.eodsaId,
-          eodsaId: entry.eodsaId,
-          performanceType: entry.performanceType as 'Solo' | 'Duet' | 'Trio' | 'Group',
-          participantIds: Array.isArray(entry.participantIds) ? entry.participantIds : [entry.participantIds],
-          masteryLevel: entry.mastery
-        });
-      }
-
-      const clientSentFee = entry.calculatedFee || 0;
-      
-      // NOTE: Do NOT check per-entry mismatch. The frontend sends entryFee without registrationFee.
-      // We only validate the total batch amount, not individual entry fees.
-      
-      validations.push({
-        entryIndex: i,
-        entry,
-        computedFee: feeResult.totalFee,
-        clientSentFee,
-        registrationFee: feeResult.registrationFee,
-        entryFee: feeResult.entryFee,
-        registrationCharged: feeResult.registrationCharged,
-        registrationWasAlreadyCharged: feeResult.registrationWasAlreadyCharged,
-        entryCount: feeResult.entryCount,
-        breakdown: feeResult.breakdown,
-        warnings: feeResult.warnings,
-        isValid: true, // Always valid - we only check total mismatch
-        mismatchDetected: false, // Never mark individual entries as mismatched
-        mismatchReason: undefined
-      });
-
-      totalComputedFee += feeResult.totalFee;
-    } catch (error: any) {
-      console.error(`Error validating entry ${i + 1}:`, error);
-      validations.push({
-        entryIndex: i,
-        entry,
-        computedFee: 0,
-        clientSentFee: entry.calculatedFee || 0,
-        registrationFee: 0,
-        entryFee: 0,
-        registrationCharged: false,
-        registrationWasAlreadyCharged: false,
-        entryCount: 0,
-        breakdown: '',
-        warnings: [`Error computing fee: ${error.message}`],
-        isValid: false,
-        mismatchDetected: true,
-        mismatchReason: `Error computing fee for entry ${i + 1}: ${error.message}`
-      });
-    }
+  const alreadyRegistered = new Set<string>();
+  for (const pid of allParticipantIds) {
+    const existing = await sql`
+      SELECT id FROM event_entries
+      WHERE event_id = ${eventId}
+      AND (
+        eodsa_id = ${pid}
+        OR participant_ids::text LIKE ${`%${pid}%`}
+      )
+      LIMIT 1
+    ` as any[];
+    if (existing.length > 0) alreadyRegistered.add(pid);
   }
+
+  const pricing = calculateEventPricing(normalizedEntries, {
+    soloPrice: event.solo_price,
+    duetPrice: event.duet_price,
+    groupPrice: event.group_price,
+    discountEnabled: event.discount_enabled,
+    discountMinEntries: event.discount_min_entries,
+    discountAmount: event.discount_amount,
+    registrationFee: event.registration_fee
+  }, Array.from(alreadyRegistered));
+
+  const entryCount = normalizedEntries.length || 1;
+  const perEntryDiscount = pricing.discount / entryCount;
+
+  for (let i = 0; i < normalizedEntries.length; i++) {
+    const entry = normalizedEntries[i];
+    const basePrice = getFixedEntryPrice(entry.performanceType, {
+      soloPrice: event.solo_price,
+      duetPrice: event.duet_price,
+      groupPrice: event.group_price
+    });
+    const computedFee = Math.max(0, basePrice - perEntryDiscount);
+    validations.push({
+      entryIndex: i,
+      entry,
+      computedFee,
+      clientSentFee: entry.calculatedFee || 0,
+      registrationFee: 0,
+      entryFee: basePrice,
+      registrationCharged: false,
+      registrationWasAlreadyCharged: false,
+      entryCount: 0,
+      breakdown: `Fixed ${entry.performanceType} price`,
+      warnings: [],
+      isValid: true,
+      mismatchDetected: false
+    });
+  }
+
+  const totalComputedFee = pricing.total;
 
   // Check total mismatch
   const totalMismatchDetected = Math.abs(clientSentTotal - totalComputedFee) > 0.01;
@@ -332,50 +161,24 @@ export async function createBatchTransactionRecords(
   computedTotal: number
 ): Promise<string[]> {
   const transactionIds: string[] = [];
-  const sql = getSql();
-
   for (let i = 0; i < entries.length; i++) {
     const entry = entries[i];
-    
     try {
-      // Compute fee to get registration charged status
-      const feeResult = await computeIncrementalFee({
-        eventId,
-        dancerId: entry.contestantId || entry.eodsaId,
-        eodsaId: entry.eodsaId,
-        performanceType: entry.performanceType as 'Solo' | 'Duet' | 'Trio' | 'Group',
-        participantIds: Array.isArray(entry.participantIds) ? entry.participantIds : [entry.participantIds],
-        masteryLevel: entry.mastery
-      });
-
-      // Mark registration as charged if this entry charges registration
-      if (feeResult.registrationCharged) {
-        await markRegistrationCharged(
-          eventId,
-          entry.contestantId || entry.eodsaId,
-          entry.eodsaId
-        );
-      }
-
-      // Create transaction record (entry_id will be set later when entry is created)
       const transactionId = await createTransactionRecord({
-        entryId: undefined, // Will be set when entry is created
+        entryId: undefined,
         eventId,
         dancerId: entry.contestantId || entry.eodsaId,
         eodsaId: entry.eodsaId,
-        expectedAmount: feeResult.totalFee,
-        amountPaid: 0, // Will be updated when payment completes
-        registrationPaidFlag: false, // Will be updated when payment completes
-        registrationChargedFlag: feeResult.registrationCharged,
+        expectedAmount: entry.calculatedFee || 0,
+        amountPaid: 0,
+        registrationPaidFlag: false,
+        registrationChargedFlag: false,
         status: 'pending',
         paymentMethod,
         paymentReference: paymentId,
         clientSentTotal: entry.calculatedFee,
-        computedTotal: feeResult.totalFee,
-        mismatchDetected: Math.abs((entry.calculatedFee || 0) - feeResult.totalFee) > 0.01,
-        mismatchReason: Math.abs((entry.calculatedFee || 0) - feeResult.totalFee) > 0.01
-          ? `Entry ${i + 1}: Client sent ${entry.calculatedFee}, computed ${feeResult.totalFee}`
-          : undefined
+        computedTotal: entry.calculatedFee || 0,
+        mismatchDetected: false
       });
 
       transactionIds.push(transactionId);

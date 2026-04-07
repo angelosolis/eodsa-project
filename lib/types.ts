@@ -87,6 +87,14 @@ export interface Event {
   duoTrioFeePerDancer?: number;
   groupFeePerDancer?: number;
   largeGroupFeePerDancer?: number;
+  // Flat pricing + global discount model
+  soloPrice?: number;
+  duetPrice?: number;
+  groupPrice?: number;
+  discountEnabled?: boolean;
+  discountMinEntries?: number;
+  discountAmount?: number;
+  registrationFee?: number;
   currency?: string;
   // NEW: Participation mode - determines what types of entries are allowed
   participationMode?: 'live' | 'virtual' | 'hybrid'; // live = only live entries, virtual = only virtual entries, hybrid = both allowed

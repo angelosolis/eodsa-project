@@ -156,6 +156,14 @@ export const initializeDatabase = async () => {
     await sqlClient`ALTER TABLE events ADD COLUMN IF NOT EXISTS group_fee_per_dancer DECIMAL(10,2) DEFAULT 220`;
     await sqlClient`ALTER TABLE events ADD COLUMN IF NOT EXISTS large_group_fee_per_dancer DECIMAL(10,2) DEFAULT 190`;
     await sqlClient`ALTER TABLE events ADD COLUMN IF NOT EXISTS currency TEXT DEFAULT 'ZAR'`;
+    // Flat pricing + global discount model (safe additive migration)
+    await sqlClient`ALTER TABLE events ADD COLUMN IF NOT EXISTS solo_price DECIMAL(10,2) DEFAULT 0`;
+    await sqlClient`ALTER TABLE events ADD COLUMN IF NOT EXISTS duet_price DECIMAL(10,2) DEFAULT 0`;
+    await sqlClient`ALTER TABLE events ADD COLUMN IF NOT EXISTS group_price DECIMAL(10,2) DEFAULT 0`;
+    await sqlClient`ALTER TABLE events ADD COLUMN IF NOT EXISTS discount_enabled BOOLEAN DEFAULT FALSE`;
+    await sqlClient`ALTER TABLE events ADD COLUMN IF NOT EXISTS discount_min_entries INTEGER DEFAULT 0`;
+    await sqlClient`ALTER TABLE events ADD COLUMN IF NOT EXISTS discount_amount DECIMAL(10,2) DEFAULT 0`;
+    await sqlClient`ALTER TABLE events ADD COLUMN IF NOT EXISTS registration_fee DECIMAL(10,2) DEFAULT 0`;
     
     // Add participation mode column to events table (live, virtual, or hybrid)
     await sqlClient`ALTER TABLE events ADD COLUMN IF NOT EXISTS participation_mode TEXT DEFAULT 'hybrid' CHECK (participation_mode IN ('live', 'virtual', 'hybrid'))`;
@@ -3450,6 +3458,7 @@ export const db = {
         registration_deadline, venue, status, max_participants, entry_fee, created_by, created_at,
         registration_fee_per_dancer, solo_1_fee, solo_2_fee, solo_3_fee, solo_additional_fee,
         duo_trio_fee_per_dancer, group_fee_per_dancer, large_group_fee_per_dancer, currency,
+        solo_price, duet_price, group_price, discount_enabled, discount_min_entries, discount_amount, registration_fee,
         participation_mode, certificate_template_url, number_of_judges,
         event_type, event_mode, qualification_required, qualification_source, minimum_qualification_score
       )
@@ -3461,6 +3470,8 @@ export const db = {
         ${event.registrationFeePerDancer ?? 300}, ${event.solo1Fee ?? 400}, ${event.solo2Fee ?? 750}, 
         ${event.solo3Fee ?? 1050}, ${event.soloAdditionalFee ?? 100}, ${event.duoTrioFeePerDancer ?? 280},
         ${event.groupFeePerDancer ?? 220}, ${event.largeGroupFeePerDancer ?? 190}, ${event.currency || 'ZAR'},
+        ${(event as any).soloPrice ?? 0}, ${(event as any).duetPrice ?? 0}, ${(event as any).groupPrice ?? 0},
+        ${(event as any).discountEnabled ?? false}, ${(event as any).discountMinEntries ?? 0}, ${(event as any).discountAmount ?? 0}, ${(event as any).registrationFee ?? 0},
         ${event.participationMode || 'hybrid'}, ${event.certificateTemplateUrl || null}, ${numberOfJudges},
         ${eventType}, ${eventMode}, ${qualificationRequired}, ${qualificationSource}, ${minimumQualificationScore}
       )
@@ -3503,6 +3514,13 @@ export const db = {
       duoTrioFeePerDancer: row.duo_trio_fee_per_dancer != null ? parseFloat(row.duo_trio_fee_per_dancer) : 280,
       groupFeePerDancer: row.group_fee_per_dancer != null ? parseFloat(row.group_fee_per_dancer) : 220,
       largeGroupFeePerDancer: row.large_group_fee_per_dancer != null ? parseFloat(row.large_group_fee_per_dancer) : 190,
+      soloPrice: row.solo_price != null ? parseFloat(row.solo_price) : 0,
+      duetPrice: row.duet_price != null ? parseFloat(row.duet_price) : 0,
+      groupPrice: row.group_price != null ? parseFloat(row.group_price) : 0,
+      discountEnabled: row.discount_enabled ?? false,
+      discountMinEntries: row.discount_min_entries != null ? parseInt(row.discount_min_entries) : 0,
+      discountAmount: row.discount_amount != null ? parseFloat(row.discount_amount) : 0,
+      registrationFee: row.registration_fee != null ? parseFloat(row.registration_fee) : 0,
       currency: row.currency || 'ZAR',
       participationMode: row.participation_mode || 'hybrid',
       certificateTemplateUrl: row.certificate_template_url || undefined,
@@ -3545,6 +3563,13 @@ export const db = {
       duoTrioFeePerDancer: row.duo_trio_fee_per_dancer != null ? parseFloat(row.duo_trio_fee_per_dancer) : 280,
       groupFeePerDancer: row.group_fee_per_dancer != null ? parseFloat(row.group_fee_per_dancer) : 220,
       largeGroupFeePerDancer: row.large_group_fee_per_dancer != null ? parseFloat(row.large_group_fee_per_dancer) : 190,
+      soloPrice: row.solo_price != null ? parseFloat(row.solo_price) : 0,
+      duetPrice: row.duet_price != null ? parseFloat(row.duet_price) : 0,
+      groupPrice: row.group_price != null ? parseFloat(row.group_price) : 0,
+      discountEnabled: row.discount_enabled ?? false,
+      discountMinEntries: row.discount_min_entries != null ? parseInt(row.discount_min_entries) : 0,
+      discountAmount: row.discount_amount != null ? parseFloat(row.discount_amount) : 0,
+      registrationFee: row.registration_fee != null ? parseFloat(row.registration_fee) : 0,
       currency: row.currency || 'ZAR',
       participationMode: row.participation_mode || 'hybrid',
       certificateTemplateUrl: row.certificate_template_url || undefined,
