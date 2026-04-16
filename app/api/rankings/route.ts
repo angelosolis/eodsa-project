@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db, initializeDatabase } from '@/lib/database';
-import { isPhase2Enabled, getFeatureUnavailableMessage } from '@/lib/feature-flags';
 
 // Initialize database on first request
 let dbInitialized = false;
@@ -13,14 +12,6 @@ async function ensureDbInitialized() {
 }
 
 export async function GET(request: NextRequest) {
-  // Check Phase 2 feature flag
-  if (!isPhase2Enabled()) {
-    return NextResponse.json(
-      { error: getFeatureUnavailableMessage() },
-      { status: 403 }
-    );
-  }
-
   try {
     await ensureDbInitialized();
     
@@ -59,14 +50,6 @@ export async function GET(request: NextRequest) {
 
 // New endpoint to get events with scores
 export async function POST(request: NextRequest) {
-  // Check Phase 2 feature flag
-  if (!isPhase2Enabled()) {
-    return NextResponse.json(
-      { error: getFeatureUnavailableMessage() },
-      { status: 403 }
-    );
-  }
-
   try {
     await ensureDbInitialized();
     
