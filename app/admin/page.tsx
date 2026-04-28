@@ -175,6 +175,20 @@ interface JudgeAssignmentsTabContentProps {
   themeClasses: any;
 }
 
+type PricingFormData = {
+  soloPrice?: number;
+  duetPrice?: number;
+  groupPrice?: number;
+  registrationFee?: number;
+  discountEnabled?: boolean;
+  discountMinEntries?: number;
+  discountAmount?: number;
+  registrationFeePerDancer?: number;
+  solo1Fee?: number;
+  duoTrioFeePerDancer?: number;
+  groupFeePerDancer?: number;
+};
+
 function AdminDashboard() {
   const { theme } = useTheme();
   const themeClasses = getThemeClasses(theme);
@@ -365,6 +379,38 @@ function AdminDashboard() {
   const [pendingUpdate, setPendingUpdate] = useState<any>(null);
 
   const router = useRouter();
+
+  const getActivePricingModel = (pricing: PricingFormData): 'flat' | 'legacy' => {
+    const hasFlatPricing =
+      (pricing.soloPrice || 0) > 0 ||
+      (pricing.duetPrice || 0) > 0 ||
+      (pricing.groupPrice || 0) > 0 ||
+      (pricing.registrationFee || 0) > 0 ||
+      Boolean(pricing.discountEnabled) ||
+      (pricing.discountAmount || 0) > 0 ||
+      (pricing.discountMinEntries || 0) > 0;
+
+    return hasFlatPricing ? 'flat' : 'legacy';
+  };
+
+  const activateFlatPricing = <T extends PricingFormData>(pricing: T): T => ({
+    ...pricing,
+    soloPrice: (pricing.soloPrice || 0) > 0 ? pricing.soloPrice : pricing.solo1Fee || 0,
+    duetPrice: (pricing.duetPrice || 0) > 0 ? pricing.duetPrice : pricing.duoTrioFeePerDancer || 0,
+    groupPrice: (pricing.groupPrice || 0) > 0 ? pricing.groupPrice : pricing.groupFeePerDancer || 0,
+    registrationFee: (pricing.registrationFee || 0) > 0 ? pricing.registrationFee : pricing.registrationFeePerDancer || 0
+  });
+
+  const activateLegacyPricing = <T extends PricingFormData>(pricing: T): T => ({
+    ...pricing,
+    soloPrice: 0,
+    duetPrice: 0,
+    groupPrice: 0,
+    registrationFee: 0,
+    discountEnabled: false,
+    discountMinEntries: 0,
+    discountAmount: 0
+  });
 
   useEffect(() => {
     const session = localStorage.getItem('adminSession');
@@ -3271,6 +3317,32 @@ function AdminDashboard() {
                     If flat pricing values are set, legacy pricing is disregarded for new calculations.
                   </p>
                 </div>
+                <div className={`mb-4 p-3 border ${themeClasses.modalBorder} ${themeClasses.cardRadius} ${getActivePricingModel(newEvent) === 'flat' ? (theme === 'dark' ? 'bg-green-900/30' : 'bg-green-50') : (theme === 'dark' ? 'bg-yellow-900/30' : 'bg-yellow-50')}`}>
+                  <p className={`text-sm font-semibold ${themeClasses.textPrimary}`}>
+                    Active pricing model: {getActivePricingModel(newEvent) === 'flat' ? 'Flat Pricing' : 'Legacy Pricing'}
+                  </p>
+                  <p className={`text-xs ${themeClasses.textMuted} mt-1`}>
+                    {getActivePricingModel(newEvent) === 'flat'
+                      ? 'New calculations will use Solo/Duet/Group flat prices and global discount settings.'
+                      : 'New calculations will fall back to legacy pricing values until flat pricing is activated.'}
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setNewEvent(prev => activateFlatPricing(prev))}
+                      className={`px-3 py-2 text-xs font-semibold rounded-md transition-colors ${theme === 'dark' ? 'bg-green-600 hover:bg-green-500 text-white' : 'bg-green-600 hover:bg-green-700 text-white'}`}
+                    >
+                      Activate Flat Pricing
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setNewEvent(prev => activateLegacyPricing(prev))}
+                      className={`px-3 py-2 text-xs font-semibold rounded-md transition-colors ${theme === 'dark' ? 'bg-gray-700 hover:bg-gray-600 text-white' : 'bg-gray-600 hover:bg-gray-700 text-white'}`}
+                    >
+                      Use Legacy Pricing
+                    </button>
+                  </div>
+                </div>
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                   <input type="number" min="0" step="0.01" value={newEvent.soloPrice || ''} onChange={(e) => setNewEvent(prev => ({ ...prev, soloPrice: parseFloat(e.target.value) || 0 }))} className={`w-full px-4 py-3 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.textPrimary}`} placeholder="Solo price" />
                   <input type="number" min="0" step="0.01" value={newEvent.duetPrice || ''} onChange={(e) => setNewEvent(prev => ({ ...prev, duetPrice: parseFloat(e.target.value) || 0 }))} className={`w-full px-4 py-3 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.textPrimary}`} placeholder="Duet price" />
@@ -3763,6 +3835,34 @@ function AdminDashboard() {
                   <p className={`text-sm ${themeClasses.textPrimary}`}>
                     If flat pricing values are set, legacy pricing is disregarded for new calculations.
                   </p>
+                </div>
+                <div className={`mb-4 p-3 border ${themeClasses.modalBorder} ${themeClasses.cardRadius} ${getActivePricingModel(editEventData) === 'flat' ? (theme === 'dark' ? 'bg-green-900/30' : 'bg-green-50') : (theme === 'dark' ? 'bg-yellow-900/30' : 'bg-yellow-50')}`}>
+                  <p className={`text-sm font-semibold ${themeClasses.textPrimary}`}>
+                    Active pricing model: {getActivePricingModel(editEventData) === 'flat' ? 'Flat Pricing' : 'Legacy Pricing'}
+                  </p>
+                  <p className={`text-xs ${themeClasses.textMuted} mt-1`}>
+                    {getActivePricingModel(editEventData) === 'flat'
+                      ? 'This event currently uses flat pricing for new calculations.'
+                      : 'This event currently uses legacy pricing for new calculations.'}
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setEditEventData(prev => activateFlatPricing(prev))}
+                      disabled={eventSafetyCheck?.blocks.includes('fees') || false}
+                      className={`px-3 py-2 text-xs font-semibold rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${theme === 'dark' ? 'bg-green-600 hover:bg-green-500 text-white' : 'bg-green-600 hover:bg-green-700 text-white'}`}
+                    >
+                      Activate Flat Pricing
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditEventData(prev => activateLegacyPricing(prev))}
+                      disabled={eventSafetyCheck?.blocks.includes('fees') || false}
+                      className={`px-3 py-2 text-xs font-semibold rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${theme === 'dark' ? 'bg-gray-700 hover:bg-gray-600 text-white' : 'bg-gray-600 hover:bg-gray-700 text-white'}`}
+                    >
+                      Use Legacy Pricing
+                    </button>
+                  </div>
                 </div>
                 <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
                   <input type="number" min="0" step="0.01" value={(editEventData as any).soloPrice || ''} onChange={(e) => setEditEventData(prev => ({ ...prev, soloPrice: parseFloat(e.target.value) || 0 }))} disabled={eventSafetyCheck?.blocks.includes('fees') || false} className={`w-full px-4 py-2 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.textPrimary}`} placeholder="Solo price" />
