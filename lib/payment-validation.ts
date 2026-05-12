@@ -1,7 +1,7 @@
 /**
  * Payment Validation Helpers
  *
- * Uses flat pricing + global discount with per-event registration charging.
+ * Uses flat pricing + per-contestant discount with per-event registration charging.
  */
 
 import { createTransactionRecord } from './transaction-records';
@@ -85,8 +85,9 @@ export async function validateBatchEntryFees(
     registrationFee: event.registration_fee
   }, Array.from(alreadyRegistered));
 
-  const entryCount = normalizedEntries.length || 1;
-  const perEntryDiscount = pricing.discount / entryCount;
+  const entryDiscounts = pricing.entryDiscounts?.length === normalizedEntries.length
+    ? pricing.entryDiscounts
+    : normalizedEntries.map(() => 0);
 
   for (let i = 0; i < normalizedEntries.length; i++) {
     const entry = normalizedEntries[i];
@@ -95,7 +96,8 @@ export async function validateBatchEntryFees(
       duetPrice: event.duet_price,
       groupPrice: event.group_price
     });
-    const computedFee = Math.max(0, basePrice - perEntryDiscount);
+    const lineDiscount = entryDiscounts[i] || 0;
+    const computedFee = Math.max(0, basePrice - lineDiscount);
     validations.push({
       entryIndex: i,
       entry,

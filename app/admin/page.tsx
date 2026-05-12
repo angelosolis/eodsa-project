@@ -3358,22 +3358,48 @@ function AdminDashboard() {
                   <input type="number" min="0" step="1" disabled={!newEvent.discountEnabled} value={newEvent.discountMinEntries || ''} onChange={(e) => setNewEvent(prev => ({ ...prev, discountMinEntries: parseInt(e.target.value) || 0 }))} className={`w-full px-4 py-3 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.textPrimary} ${!newEvent.discountEnabled ? 'opacity-50 cursor-not-allowed' : ''}`} placeholder="Discount minimum entries" />
                   <div>
                     <input type="number" min="0" step="0.01" disabled={!newEvent.discountEnabled} value={newEvent.discountAmount || ''} onChange={(e) => setNewEvent(prev => ({ ...prev, discountAmount: parseFloat(e.target.value) || 0 }))} className={`w-full px-4 py-3 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.textPrimary} ${!newEvent.discountEnabled ? 'opacity-50 cursor-not-allowed' : ''}`} placeholder="Discount amount" />
-                    <p className={`text-xs ${themeClasses.textMuted} mt-1`}>Applies once when total entries meet minimum</p>
+                    <p className={`text-xs ${themeClasses.textMuted} mt-1`}>Per contestant: applies when the same dancer has at least the minimum number of entries (not by combining different dancers).</p>
                   </div>
                 </div>
+                <p className={`text-xs ${themeClasses.textMuted} mb-2`}>
+                  Flat pricing: every Solo item uses the same Solo price (there is no separate &quot;Solo 4&quot; tier). For tiered solo pricing (e.g. different fee after the 3rd solo), use Legacy fields — especially <strong>Legacy fee after third solo</strong>.
+                </p>
                 <div className={`mt-4 p-4 border ${themeClasses.modalBorder} ${themeClasses.cardRadius}`}>
-                  <p className={`text-sm font-semibold ${themeClasses.textPrimary} mb-2`}>Live Preview (example: 3 entries, 3 dancers)</p>
+                  <p className={`text-sm font-semibold ${themeClasses.textPrimary} mb-2`}>Live preview (flat pricing + registration)</p>
                   {(() => {
-                    const subtotal = (newEvent.soloPrice || 0) * 3;
-                    const discount = newEvent.discountEnabled && 3 >= (newEvent.discountMinEntries || 0) ? (newEvent.discountAmount || 0) : 0;
-                    const registration = (newEvent.registrationFee || 0) * 3;
-                    const total = subtotal - discount + registration;
+                    const sp = newEvent.soloPrice || 0;
+                    const rf = newEvent.registrationFee || 0;
+                    const minE = newEvent.discountMinEntries || 0;
+                    const discEnabled = newEvent.discountEnabled;
+                    const discAmt = newEvent.discountAmount || 0;
+                    const subOne = sp * 3;
+                    const discOne = discEnabled && minE > 0 && 3 >= minE ? Math.min(discAmt, subOne) : 0;
+                    const regOne = rf * 1;
+                    const totalOne = subOne - discOne + regOne;
+                    const subThree = sp * 3;
+                    const discThree = 0;
+                    const regThree = rf * 3;
+                    const totalThree = subThree - discThree + regThree;
                     return (
-                      <div className={`text-sm ${themeClasses.textPrimary} space-y-1`}>
-                        <div>3 entries {"->"} Subtotal R{subtotal.toFixed(2)}</div>
-                        <div>Discount {"->"} -R{discount.toFixed(2)}</div>
-                        <div>Registration {"->"} R{registration.toFixed(2)}</div>
-                        <div className="font-semibold">Total {"->"} R{total.toFixed(2)}</div>
+                      <div className={`text-sm ${themeClasses.textPrimary} space-y-3`}>
+                        <div>
+                          <div className="font-medium mb-1">A — One dancer, 3 Solo entries</div>
+                          <div className="space-y-1 text-xs sm:text-sm">
+                            <div>Subtotal {"->"} R{subOne.toFixed(2)}</div>
+                            <div>Discount {"->"} -R{discOne.toFixed(2)}</div>
+                            <div>Registration {"->"} R{regOne.toFixed(2)} (one dancer)</div>
+                            <div className="font-semibold">Total {"->"} R{totalOne.toFixed(2)}</div>
+                          </div>
+                        </div>
+                        <div>
+                          <div className="font-medium mb-1">B — Three dancers, 1 Solo each</div>
+                          <div className="space-y-1 text-xs sm:text-sm">
+                            <div>Subtotal {"->"} R{subThree.toFixed(2)}</div>
+                            <div>Discount {"->"} -R{discThree.toFixed(2)} (each dancer only has one item)</div>
+                            <div>Registration {"->"} R{regThree.toFixed(2)} (three dancers)</div>
+                            <div className="font-semibold">Total {"->"} R{totalThree.toFixed(2)}</div>
+                          </div>
+                        </div>
                       </div>
                     );
                   })()}
@@ -3622,6 +3648,18 @@ function AdminDashboard() {
                       <p>📊 Event Stats: {eventSafetyCheck.stats.entries} entries ({eventSafetyCheck.stats.liveEntries} live, {eventSafetyCheck.stats.virtualEntries} virtual), {eventSafetyCheck.stats.payments} payments, {eventSafetyCheck.stats.scores} scores</p>
                     </div>
                   )}
+                </div>
+              )}
+
+              {eventSafetyCheck?.blocks.includes('fees') && (
+                <div className={`mb-6 p-4 border-2 ${theme === 'dark' ? 'border-orange-700/60 bg-orange-950/40' : 'border-orange-300 bg-orange-50'} ${themeClasses.cardRadius}`}>
+                  <h3 className={`text-sm font-semibold ${theme === 'dark' ? 'text-orange-200' : 'text-orange-900'} mb-2`}>🔒 Pricing fields are locked</h3>
+                  <p className={`text-sm ${theme === 'dark' ? 'text-orange-100/90' : 'text-orange-900/90'}`}>
+                    This event has at least one <strong>paid</strong> entry. To prevent payment mismatches, fee amounts and pricing toggles cannot be edited here. You can still change non-fee settings (for example dates or descriptions) where allowed.
+                  </p>
+                  <p className={`text-xs mt-2 ${theme === 'dark' ? 'text-orange-200/80' : 'text-orange-800'}`}>
+                    If pricing truly must change after payments exist, use a controlled process (e.g. new event year or manual support) so totals stay consistent with what families already paid.
+                  </p>
                 </div>
               )}
 
@@ -3879,22 +3917,48 @@ function AdminDashboard() {
                   <input type="number" min="0" step="1" value={(editEventData as any).discountMinEntries || ''} onChange={(e) => setEditEventData(prev => ({ ...prev, discountMinEntries: parseInt(e.target.value) || 0 }))} disabled={eventSafetyCheck?.blocks.includes('fees') || !(editEventData as any).discountEnabled} className={`w-full px-4 py-2 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.textPrimary} ${!(editEventData as any).discountEnabled ? 'opacity-50 cursor-not-allowed' : ''}`} placeholder="Discount minimum entries" />
                   <div>
                     <input type="number" min="0" step="0.01" value={(editEventData as any).discountAmount || ''} onChange={(e) => setEditEventData(prev => ({ ...prev, discountAmount: parseFloat(e.target.value) || 0 }))} disabled={eventSafetyCheck?.blocks.includes('fees') || !(editEventData as any).discountEnabled} className={`w-full px-4 py-2 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.textPrimary} ${!(editEventData as any).discountEnabled ? 'opacity-50 cursor-not-allowed' : ''}`} placeholder="Discount amount" />
-                    <p className={`text-xs ${themeClasses.textMuted} mt-1`}>Applies once when total entries meet minimum</p>
+                    <p className={`text-xs ${themeClasses.textMuted} mt-1`}>Per contestant: applies when the same dancer has at least the minimum number of entries (not by combining different dancers).</p>
                   </div>
                 </div>
+                <p className={`text-xs ${themeClasses.textMuted} mb-2`}>
+                  Flat pricing: every Solo item uses the same Solo price (there is no separate &quot;Solo 4&quot; tier). For tiered solo pricing (e.g. different fee after the 3rd solo), use Legacy fields — especially <strong>Legacy fee after third solo</strong>.
+                </p>
                 <div className={`mt-4 p-4 border ${themeClasses.modalBorder} ${themeClasses.cardRadius}`}>
-                  <p className={`text-sm font-semibold ${themeClasses.textPrimary} mb-2`}>Live Preview (example: 3 entries, 3 dancers)</p>
+                  <p className={`text-sm font-semibold ${themeClasses.textPrimary} mb-2`}>Live preview (flat pricing + registration)</p>
                   {(() => {
-                    const subtotal = ((editEventData as any).soloPrice || 0) * 3;
-                    const discount = (editEventData as any).discountEnabled && 3 >= ((editEventData as any).discountMinEntries || 0) ? ((editEventData as any).discountAmount || 0) : 0;
-                    const registration = ((editEventData as any).registrationFee || 0) * 3;
-                    const total = subtotal - discount + registration;
+                    const sp = (editEventData as any).soloPrice || 0;
+                    const rf = (editEventData as any).registrationFee || 0;
+                    const minE = (editEventData as any).discountMinEntries || 0;
+                    const discEnabled = (editEventData as any).discountEnabled;
+                    const discAmt = (editEventData as any).discountAmount || 0;
+                    const subOne = sp * 3;
+                    const discOne = discEnabled && minE > 0 && 3 >= minE ? Math.min(discAmt, subOne) : 0;
+                    const regOne = rf * 1;
+                    const totalOne = subOne - discOne + regOne;
+                    const subThree = sp * 3;
+                    const discThree = 0;
+                    const regThree = rf * 3;
+                    const totalThree = subThree - discThree + regThree;
                     return (
-                      <div className={`text-sm ${themeClasses.textPrimary} space-y-1`}>
-                        <div>3 entries {"->"} Subtotal R{subtotal.toFixed(2)}</div>
-                        <div>Discount {"->"} -R{discount.toFixed(2)}</div>
-                        <div>Registration {"->"} R{registration.toFixed(2)}</div>
-                        <div className="font-semibold">Total {"->"} R{total.toFixed(2)}</div>
+                      <div className={`text-sm ${themeClasses.textPrimary} space-y-3`}>
+                        <div>
+                          <div className="font-medium mb-1">A — One dancer, 3 Solo entries</div>
+                          <div className="space-y-1 text-xs sm:text-sm">
+                            <div>Subtotal {"->"} R{subOne.toFixed(2)}</div>
+                            <div>Discount {"->"} -R{discOne.toFixed(2)}</div>
+                            <div>Registration {"->"} R{regOne.toFixed(2)} (one dancer)</div>
+                            <div className="font-semibold">Total {"->"} R{totalOne.toFixed(2)}</div>
+                          </div>
+                        </div>
+                        <div>
+                          <div className="font-medium mb-1">B — Three dancers, 1 Solo each</div>
+                          <div className="space-y-1 text-xs sm:text-sm">
+                            <div>Subtotal {"->"} R{subThree.toFixed(2)}</div>
+                            <div>Discount {"->"} -R{discThree.toFixed(2)} (each dancer only has one item)</div>
+                            <div>Registration {"->"} R{regThree.toFixed(2)} (three dancers)</div>
+                            <div className="font-semibold">Total {"->"} R{totalThree.toFixed(2)}</div>
+                          </div>
+                        </div>
                       </div>
                     );
                   })()}

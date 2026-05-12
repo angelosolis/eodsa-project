@@ -179,7 +179,13 @@ export default function CompetitionEntryPage() {
   const [existingDbEntries, setExistingDbEntries] = useState<any[]>([]);
   const [showAddForm, setShowAddForm] = useState<string | null>(null);
   const [registrationFeeCache, setRegistrationFeeCache] = useState<{[key: string]: number}>({});
-  const [totalFeeCalculation, setTotalFeeCalculation] = useState<{performanceFee: number, registrationFee: number, total: number}>({performanceFee: 0, registrationFee: 0, total: 0});
+  const [totalFeeCalculation, setTotalFeeCalculation] = useState<{
+    subtotal: number;
+    discount: number;
+    performanceFee: number;
+    registrationFee: number;
+    total: number;
+  }>({ subtotal: 0, discount: 0, performanceFee: 0, registrationFee: 0, total: 0 });
   const [previewFee, setPreviewFee] = useState<number>(0);
   const [isCalculatingFee, setIsCalculatingFee] = useState(false);
   const [currentForm, setCurrentForm] = useState({
@@ -1113,6 +1119,8 @@ export default function CompetitionEntryPage() {
     }, Array.from(existingParticipantIds));
 
     const pricingResult = {
+      subtotal: pricing.subtotal,
+      discount: pricing.discount,
       performanceFee: pricing.subtotal - pricing.discount,
       registrationFee: pricing.registrationTotal,
       total: pricing.total
@@ -1121,194 +1129,6 @@ export default function CompetitionEntryPage() {
     setIsCalculatingFee(false);
     return pricingResult;
     
-    // Recalculate fees for all entries using the API (backend is source of truth)
-    // This ensures cumulative solo package pricing is correct
-    let totalPerformanceFee = 0;
-    
-    // For solo entries, we need to recalculate in order to get cumulative package pricing
-    const soloEntries = entries.filter(e => e.performanceType === 'Solo');
-    const nonSoloEntries = entries.filter(e => e.performanceType !== 'Solo');
-    
-    // Calculate solo fees using API with proper solo count tracking
-    for (let i = 0; i < soloEntries.length; i++) {
-      const entry = soloEntries[i];
-      if (entry.participantIds.length === 1 && eventId) {
-        try {
-          // Count existing solos in DB + previous solos in this session
-          let existingSoloCount = 0;
-          if (studioInfo) {
-            existingSoloCount = await getExistingSoloCountForDancer(entry.participantIds[0]);
-          } else {
-            existingSoloCount = existingDbEntries.filter(e => {
-              if (!e.participantIds || e.participantIds.length !== 1) return false;
-              let entryParticipants: string[] = [];
-              if (Array.isArray(e.participantIds)) {
-                entryParticipants = e.participantIds;
-              } else if (typeof e.participantIds === 'string') {
-                try {
-                  entryParticipants = JSON.parse(e.participantIds);
-                } catch {
-                  entryParticipants = [e.participantIds];
-                }
-              }
-              return entryParticipants.includes(entry.participantIds[0]);
-            }).length;
-          }
-          
-          // Count solos already processed in this session (before current entry)
-          const sessionSoloCount = soloEntries.slice(0, i).filter(e => 
-            e.participantIds.length === 1 && e.participantIds[0] === entry.participantIds[0]
-          ).length;
-          
-          const soloCount = existingSoloCount + sessionSoloCount + 1;
-          
-          // Get fee from API (backend is source of truth)
-          const response = await fetch('/api/eodsa-fees', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              masteryLevel: entry.mastery || 'Water (Competitive)',
-              performanceType: 'Solo',
-              participantIds: entry.participantIds,
-              soloCount: soloCount,
-              includeRegistration: false, // Only get performance fee
-              eventId: eventId
-            })
-          });
-          
-          if (response.ok) {
-            const data = await response.json();
-            const fee = data.fees.performanceFee || 0;
-            totalPerformanceFee += fee;
-            // Update entry fee to match API calculation
-            entry.fee = fee;
-          } else {
-            // Fallback to stored fee
-            totalPerformanceFee += entry.fee || 0;
-          }
-        } catch (error) {
-          console.error('Error recalculating solo fee:', error);
-          // Fallback to stored fee
-          totalPerformanceFee += entry.fee || 0;
-        }
-      } else {
-        // Fallback to stored fee
-        totalPerformanceFee += entry.fee || 0;
-      }
-    }
-    
-    // For non-solo entries, use stored fees (they don't have cumulative pricing)
-    nonSoloEntries.forEach(entry => {
-      totalPerformanceFee += entry.fee || 0;
-    });
-    
-    const uniqueParticipants = new Set<string>();
-    entries.forEach(entry => {
-      entry.participantIds.forEach(id => uniqueParticipants.add(id));
-    });
-    
-    // Check registration status for unique participants
-    const participantIds = Array.from(uniqueParticipants);
-    const cacheKey = participantIds.sort().join(',');
-    
-    let registrationFee = 0;
-    if (participantIds.length > 0) {
-      // CRITICAL: Check if any participant already has an entry in the current session or database
-      // Registration fee is charged ONCE per participant per event
-      // If a participant appears in multiple entries, they only pay registration on the first one
-      
-      // Track which participants appear in which entries
-      const participantEntryCount = new Map<string, number>();
-      entries.forEach(entry => {
-        entry.participantIds.forEach(id => {
-          participantEntryCount.set(id, (participantEntryCount.get(id) || 0) + 1);
-        });
-      });
-      
-      // Check existing database entries
-      const participantsWithDbEntries = new Set<string>();
-      existingDbEntries.forEach(dbEntry => {
-        let dbParticipantIds: string[] = [];
-        if (Array.isArray(dbEntry.participantIds)) {
-          dbParticipantIds = dbEntry.participantIds;
-        } else if (typeof dbEntry.participantIds === 'string') {
-          try {
-            dbParticipantIds = JSON.parse(dbEntry.participantIds);
-          } catch {
-            dbParticipantIds = [dbEntry.participantIds];
-          }
-        }
-        dbParticipantIds.forEach(id => {
-          if (participantIds.includes(id)) {
-            participantsWithDbEntries.add(id);
-          }
-        });
-      });
-      
-      // Participants who need registration:
-      // - Appear in only ONE entry in session AND
-      // - Don't have any database entries
-      // All other participants already have entries (session or DB), so registration is waived
-      const participantsNeedingRegistration = participantIds.filter(id => {
-        const sessionEntryCount = participantEntryCount.get(id) || 0;
-        const hasDbEntry = participantsWithDbEntries.has(id);
-        // Need registration if: only 1 entry in session AND no DB entries
-        return sessionEntryCount === 1 && !hasDbEntry;
-      });
-      
-      if (participantsNeedingRegistration.length === 0) {
-        // All participants already have entries - no registration fee
-        registrationFee = 0;
-        console.log('✅ Registration fee waived - all participants already have entries in session or database');
-      } else {
-        // Some participants need registration - check cache or call API
-        if (registrationFeeCache[cacheKey] !== undefined) {
-          registrationFee = registrationFeeCache[cacheKey];
-        } else {
-          try {
-            // Use the first entry's mastery level (they should all be the same for Nationals)
-            const masteryLevel = entries.length > 0 ? entries[0].mastery : 'Fire (Advanced)';
-            
-            // Call API to get smart fee calculation with registration checking
-            // Use 'Solo' as performance type since we're only calculating registration fees
-            const response = await fetch('/api/eodsa-fees', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                masteryLevel,
-                performanceType: 'Solo', // Use Solo to trigger registration fee logic
-                participantIds: participantsNeedingRegistration, // Only check participants who need registration
-                includeRegistration: true,
-                eventId: eventId // Pass eventId to get event-specific fees
-              })
-            });
-            
-            if (response.ok) {
-              const data = await response.json();
-              registrationFee = data.fees.registrationFee;
-            } else {
-              throw new Error('API call failed');
-            }
-            
-            // Cache the result
-            setRegistrationFeeCache(prev => ({
-              ...prev,
-              [cacheKey]: registrationFee
-            }));
-          } catch (error) {
-            console.error('Error checking registration status:', error);
-            // Fallback: charge only participants who need registration
-            const regFeePerDancer = event?.registrationFeePerDancer || 300;
-            registrationFee = participantsNeedingRegistration.length * regFeePerDancer;
-          }
-        }
-      }
-    }
-    
-    const result = { performanceFee: totalPerformanceFee, registrationFee, total: totalPerformanceFee + registrationFee };
-    setTotalFeeCalculation(result);
-    setIsCalculatingFee(false);
-    return result;
   };
 
   // Recalculate fees whenever entries change
@@ -1316,7 +1136,7 @@ export default function CompetitionEntryPage() {
     if (entries.length > 0) {
       calculateTotalFee();
     } else {
-      setTotalFeeCalculation({performanceFee: 0, registrationFee: 0, total: 0});
+      setTotalFeeCalculation({ subtotal: 0, discount: 0, performanceFee: 0, registrationFee: 0, total: 0 });
       setIsCalculatingFee(false);
     }
   }, [entries, registrationFeeCache]);
@@ -2564,7 +2384,7 @@ export default function CompetitionEntryPage() {
                  </div>
                 {event?.discountEnabled && (
                   <div className="text-xs text-slate-400">
-                    Add enough entries to qualify for discount: {entries.length}/{event?.discountMinEntries || 0}
+                    Per-contestant: a discount applies when the same dancer has at least {event?.discountMinEntries || 0} entries in this cart (not by mixing different dancers).
                   </div>
                 )}
                  
@@ -2580,7 +2400,7 @@ export default function CompetitionEntryPage() {
                  
                 {event?.discountEnabled && (
                   <div className="text-xs text-slate-400 bg-slate-700/30 p-2 rounded">
-                    Discount applies once when you add at least {event?.discountMinEntries || 0} entries.
+                    Discount is evaluated per contestant: three different dancers with one solo each do not share one discount; one dancer with multiple entries can qualify.
                   </div>
                 )}
                  
@@ -2593,11 +2413,11 @@ export default function CompetitionEntryPage() {
                   <>
                    <div className="flex justify-between">
                      <span>Subtotal:</span>
-                     <span>{getCurrencySymbol()}{feeCalculation.performanceFee + ((event?.discountEnabled && entries.length >= (event?.discountMinEntries || 0)) ? (event?.discountAmount || 0) : 0)}</span>
+                     <span>{getCurrencySymbol()}{feeCalculation.subtotal.toFixed(2)}</span>
                    </div>
                    <div className="flex justify-between">
                      <span>Discount:</span>
-                     <span>-{getCurrencySymbol()}{(event?.discountEnabled && entries.length >= (event?.discountMinEntries || 0)) ? (event?.discountAmount || 0) : 0}</span>
+                     <span>-{getCurrencySymbol()}{feeCalculation.discount.toFixed(2)}</span>
                    </div>
                    <div className="flex justify-between">
                      <span>Registration:</span>
