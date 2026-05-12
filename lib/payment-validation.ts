@@ -1,12 +1,12 @@
 /**
  * Payment Validation Helpers
  *
- * Uses flat pricing + per-contestant discount with per-event registration charging.
+ * Uses flat pricing + every-Nth-solo discount with per-event registration charging.
  */
 
 import { createTransactionRecord } from './transaction-records';
 import { getSql } from './database';
-import { calculateEventPricing, getFixedEntryPrice } from './event-pricing';
+import { calculateEventPricing, getFixedEntryPrice, getPricingDancerKey } from './event-pricing';
 
 export interface EntryFeeValidation {
   entryIndex: number;
@@ -75,6 +75,25 @@ export async function validateBatchEntryFees(
     if (existing.length > 0) alreadyRegistered.add(pid);
   }
 
+  const existingSoloCountByDancer: Record<string, number> = {};
+  for (let i = 0; i < normalizedEntries.length; i++) {
+    const key = getPricingDancerKey(normalizedEntries[i], i);
+    if (key.startsWith('__unassigned_')) continue;
+    if (existingSoloCountByDancer[key] !== undefined) continue;
+    const likePattern = `%${key}%`;
+    const [cntRow] = await sql`
+      SELECT COUNT(*)::int AS c
+      FROM event_entries
+      WHERE event_id = ${eventId}
+      AND LOWER(TRIM(COALESCE(performance_type, ''))) = 'solo'
+      AND (
+        eodsa_id = ${key}
+        OR participant_ids::text LIKE ${likePattern}
+      )
+    ` as any[];
+    existingSoloCountByDancer[key] = cntRow?.c ?? 0;
+  }
+
   const pricing = calculateEventPricing(normalizedEntries, {
     soloPrice: event.solo_price,
     duetPrice: event.duet_price,
@@ -83,7 +102,7 @@ export async function validateBatchEntryFees(
     discountMinEntries: event.discount_min_entries,
     discountAmount: event.discount_amount,
     registrationFee: event.registration_fee
-  }, Array.from(alreadyRegistered));
+  }, Array.from(alreadyRegistered), existingSoloCountByDancer);
 
   const entryDiscounts = pricing.entryDiscounts?.length === normalizedEntries.length
     ? pricing.entryDiscounts

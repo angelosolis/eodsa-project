@@ -11,6 +11,7 @@ export interface EventPricingConfig {
   duetPrice?: number | null;
   groupPrice?: number | null;
   discountEnabled?: boolean | null;
+  /** Every Nth solo (per dancer) receives `discount_amount` off that line (e.g. 3 → 3rd, 6th, 9th…). */
   discountMinEntries?: number | null;
   discountAmount?: number | null;
   registrationFee?: number | null;
@@ -18,11 +19,13 @@ export interface EventPricingConfig {
 
 export interface EventPricingResult {
   itemizedEntries: Array<{ index: number; type: string; price: number }>;
+  /** Sum of base line prices before nth-solo discounts. */
   subtotal: number;
+  /** Sum of discounts applied on qualifying nth solos. */
   discount: number;
   registrationTotal: number;
   total: number;
-  /** Discount amount allocated to each entry index (same length as input entries); sums to `discount`. */
+  /** Discount amount taken off each entry line (same length as input entries); sums to `discount`. */
   entryDiscounts: number[];
 }
 
@@ -33,32 +36,11 @@ function toAmount(value: number | string | null | undefined, fallback = 0): numb
 }
 
 /** Primary grouping key: first participant, else eodsaId, else unique per row (no accidental cross-dancer bundling). */
-function dancerGroupKey(entry: PricingEntry, index: number): string {
+export function getPricingDancerKey(entry: PricingEntry, index: number): string {
   const ids = Array.isArray(entry.participantIds) ? entry.participantIds.filter(Boolean) : [];
   if (ids.length > 0) return String(ids[0]);
   if (entry.eodsaId) return String(entry.eodsaId);
   return `__unassigned_${index}`;
-}
-
-/**
- * Split a discount across entries proportionally by line price; fixes rounding on last line.
- */
-function splitDiscountAcrossPrices(prices: number[], totalDiscount: number): number[] {
-  const n = prices.length;
-  if (n === 0 || totalDiscount <= 0) return [];
-  const sum = prices.reduce((a, b) => a + b, 0);
-  if (sum <= 0) {
-    const each = Math.floor((totalDiscount * 100) / n) / 100;
-    const out = new Array(n).fill(each);
-    const drift = Math.round((totalDiscount - each * n) * 100) / 100;
-    if (n > 0) out[n - 1] = Math.round((out[n - 1] + drift) * 100) / 100;
-    return out;
-  }
-  const raw = prices.map((p) => (p / sum) * totalDiscount);
-  const rounded = raw.map((r) => Math.round(r * 100) / 100);
-  const drift = Math.round((totalDiscount - rounded.reduce((a, b) => a + b, 0)) * 100) / 100;
-  if (n > 0) rounded[n - 1] = Math.round((rounded[n - 1] + drift) * 100) / 100;
-  return rounded;
 }
 
 export function getFixedEntryPrice(entryType: string, event: EventPricingConfig): number {
@@ -70,49 +52,74 @@ export function getFixedEntryPrice(entryType: string, event: EventPricingConfig)
 }
 
 /**
- * Flat line-item prices + discount evaluated **per contestant** (same dancer / primary participant):
- * discount applies when that contestant's number of entries in this batch >= discount_min_entries.
- * Multiple different dancers each with 1 entry do **not** combine toward one discount.
+ * Net performance fee for one line (nth-solo discount applied only to Solo when enabled).
+ * `soloOrdinal` is 1-based count for this dancer (including existing event solos before this batch).
+ */
+export function getNetPerformanceLineParts(
+  entry: PricingEntry,
+  event: EventPricingConfig,
+  soloOrdinal: number
+): { gross: number; discount: number; net: number } {
+  const gross = getFixedEntryPrice(entry.performanceType, event);
+  const isSolo = (entry.performanceType || '').toLowerCase() === 'solo';
+  const intervalN = Math.max(0, Math.floor(toAmount(event.discountMinEntries, 0)));
+  const discCfg = Math.max(0, toAmount(event.discountAmount, 0));
+
+  if (
+    !isSolo ||
+    !event.discountEnabled ||
+    intervalN <= 0 ||
+    discCfg <= 0 ||
+    soloOrdinal <= 0 ||
+    soloOrdinal % intervalN !== 0
+  ) {
+    return { gross, discount: 0, net: gross };
+  }
+
+  const lineDiscount = Math.min(discCfg, gross);
+  return { gross, discount: lineDiscount, net: gross - lineDiscount };
+}
+
+/**
+ * Flat line-item prices + **every Nth solo** discount per dancer (3rd/6th/9th when N=3).
+ * Pass `existingSoloCountByDancer` with DB solo counts per participant id before this cart (so batch order + DB ordinals match checkout).
  */
 export function calculateEventPricing(
   entries: PricingEntry[],
   event: EventPricingConfig,
-  alreadyRegisteredDancerIds: string[] = []
+  alreadyRegisteredDancerIds: string[] = [],
+  existingSoloCountByDancer: Record<string, number> = {}
 ): EventPricingResult {
   const safeEntries = Array.isArray(entries) ? entries : [];
-  const itemizedEntries = safeEntries.map((entry, index) => {
-    const price = getFixedEntryPrice(entry.performanceType, event);
-    return { index, type: entry.performanceType || 'Unknown', price };
-  });
-
-  const subtotal = itemizedEntries.reduce((sum, item) => sum + item.price, 0);
-
-  const discountEnabled = Boolean(event.discountEnabled);
-  const minEntries = Math.max(0, toAmount(event.discountMinEntries, 0));
-  const configuredDiscount = Math.max(0, toAmount(event.discountAmount, 0));
-
   const entryDiscounts = new Array(safeEntries.length).fill(0);
+  const itemizedEntries: EventPricingResult['itemizedEntries'] = [];
+
+  /** Running solo ordinal per dancer within this batch (starts after DB count). */
+  const batchSoloAdded: Record<string, number> = {};
+
+  let subtotal = 0;
   let discount = 0;
 
-  if (discountEnabled && configuredDiscount > 0 && minEntries > 0 && safeEntries.length > 0) {
-    const groups = new Map<string, number[]>();
-    safeEntries.forEach((entry, index) => {
-      const key = dancerGroupKey(entry, index);
-      const list = groups.get(key) || [];
-      list.push(index);
-      groups.set(key, list);
-    });
+  for (let i = 0; i < safeEntries.length; i++) {
+    const entry = safeEntries[i];
+    const base = getFixedEntryPrice(entry.performanceType, event);
+    itemizedEntries.push({ index: i, type: entry.performanceType || 'Unknown', price: base });
+    subtotal += base;
 
-    for (const indices of groups.values()) {
-      if (indices.length < minEntries) continue;
-      const prices = indices.map((i) => itemizedEntries[i]?.price ?? 0);
-      const groupSubtotal = prices.reduce((a, b) => a + b, 0);
-      const groupDiscount = Math.min(configuredDiscount, groupSubtotal);
-      discount += groupDiscount;
-      const parts = splitDiscountAcrossPrices(prices, groupDiscount);
-      indices.forEach((entryIndex, j) => {
-        entryDiscounts[entryIndex] = Math.round(((entryDiscounts[entryIndex] || 0) + (parts[j] || 0)) * 100) / 100;
-      });
+    const key = getPricingDancerKey(entry, i);
+    const isSolo = (entry.performanceType || '').toLowerCase() === 'solo';
+
+    if (!isSolo) continue;
+
+    const priorDb = Math.max(0, Math.floor(existingSoloCountByDancer[key] ?? 0));
+    const prevBatch = batchSoloAdded[key] ?? 0;
+    batchSoloAdded[key] = prevBatch + 1;
+    const soloOrdinal = priorDb + batchSoloAdded[key];
+
+    const parts = getNetPerformanceLineParts(entry, event, soloOrdinal);
+    if (parts.discount > 0) {
+      entryDiscounts[i] = parts.discount;
+      discount += parts.discount;
     }
   }
 

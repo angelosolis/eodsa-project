@@ -7,9 +7,28 @@ import { PERFORMANCE_TYPES, MASTERY_LEVELS, REGIONAL_MASTERY_LEVELS, ITEM_STYLES
 import CountdownTimer from '@/app/components/CountdownTimer';
 import { useToast } from '@/components/ui/simple-toast';
 import MusicUpload from '@/components/MusicUpload';
-import { calculateEventPricing, getFixedEntryPrice } from '@/lib/event-pricing';
+import { calculateEventPricing, getFixedEntryPrice, getNetPerformanceLineParts } from '@/lib/event-pricing';
 // Registration fee checking moved to API calls
-import React from 'react';
+/** Solo counts per dancer already on file for this event (every-Nth-solo sequence). */
+function buildExistingSoloCountsFromDb(dbEntries: any[]): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const dbEntry of dbEntries) {
+    if ((dbEntry.performanceType || '').toLowerCase() !== 'solo') continue;
+    let ids: string[] = [];
+    if (Array.isArray(dbEntry.participantIds)) ids = dbEntry.participantIds;
+    else if (typeof dbEntry.participantIds === 'string') {
+      try {
+        ids = JSON.parse(dbEntry.participantIds);
+      } catch {
+        ids = dbEntry.participantIds ? [dbEntry.participantIds] : [];
+      }
+    }
+    const key = ids[0] || dbEntry.eodsaId;
+    if (!key) continue;
+    counts[key] = (counts[key] || 0) + 1;
+  }
+  return counts;
+}
 
 function TourOverlay({
   step,
@@ -689,11 +708,45 @@ export default function CompetitionEntryPage() {
 
   const calculateEntryFee = async (performanceType: string, participantIds: string[]) => {
     if (event) {
-      return getFixedEntryPrice(performanceType, {
+      const cfg = {
         soloPrice: (event as any).soloPrice,
         duetPrice: (event as any).duetPrice,
-        groupPrice: (event as any).groupPrice
-      });
+        groupPrice: (event as any).groupPrice,
+        discountEnabled: (event as any).discountEnabled,
+        discountMinEntries: (event as any).discountMinEntries,
+        discountAmount: (event as any).discountAmount,
+        registrationFee: (event as any).registrationFee
+      };
+      if ((performanceType || '').toLowerCase() === 'solo' && participantIds.length >= 1) {
+        const pid = participantIds[0];
+        const dbSolos = existingDbEntries.filter((entry) => {
+          if ((entry.performanceType || '').toLowerCase() !== 'solo') return false;
+          let entryParticipants: string[] = [];
+          if (Array.isArray(entry.participantIds)) entryParticipants = entry.participantIds;
+          else if (typeof entry.participantIds === 'string') {
+            try {
+              entryParticipants = JSON.parse(entry.participantIds);
+            } catch {
+              entryParticipants = entry.participantIds ? [entry.participantIds] : [];
+            }
+          }
+          return entryParticipants.includes(pid);
+        }).length;
+        const sessionSolos = entries.filter(
+          (e) =>
+            e.performanceType === 'Solo' &&
+            e.participantIds?.length === 1 &&
+            e.participantIds[0] === pid
+        ).length;
+        const soloOrdinal = dbSolos + sessionSolos + 1;
+        const parts = getNetPerformanceLineParts(
+          { performanceType: 'Solo', participantIds, eodsaId: pid },
+          cfg,
+          soloOrdinal
+        );
+        return parts.net;
+      }
+      return getFixedEntryPrice(performanceType, cfg);
     }
     try {
       if (!currentForm.mastery) {
@@ -1104,6 +1157,8 @@ export default function CompetitionEntryPage() {
       if (dbEntry.eodsaId) existingParticipantIds.add(dbEntry.eodsaId);
     });
 
+    const existingSoloCountByDancer = buildExistingSoloCountsFromDb(existingDbEntries);
+
     const pricing = calculateEventPricing(entries.map((entry) => ({
       performanceType: entry.performanceType,
       participantIds: entry.participantIds,
@@ -1116,7 +1171,7 @@ export default function CompetitionEntryPage() {
       discountMinEntries: (event as any)?.discountMinEntries,
       discountAmount: (event as any)?.discountAmount,
       registrationFee: (event as any)?.registrationFee
-    }, Array.from(existingParticipantIds));
+    }, Array.from(existingParticipantIds), existingSoloCountByDancer);
 
     const pricingResult = {
       subtotal: pricing.subtotal,
@@ -2384,7 +2439,7 @@ export default function CompetitionEntryPage() {
                  </div>
                 {event?.discountEnabled && (
                   <div className="text-xs text-slate-400">
-                    Per-contestant: a discount applies when the same dancer has at least {event?.discountMinEntries || 0} entries in this cart (not by mixing different dancers).
+                    Every {event?.discountMinEntries || 0}th solo per dancer gets R{Number(event?.discountAmount || 0).toFixed(2)} off that line (e.g. 3rd, 6th, 9th when N is 3).
                   </div>
                 )}
                  
@@ -2400,7 +2455,7 @@ export default function CompetitionEntryPage() {
                  
                 {event?.discountEnabled && (
                   <div className="text-xs text-slate-400 bg-slate-700/30 p-2 rounded">
-                    Discount is evaluated per contestant: three different dancers with one solo each do not share one discount; one dancer with multiple entries can qualify.
+                    Solo discount repeats: same dancer, every Nth solo in this event (counts existing items + this cart).
                   </div>
                 )}
                  

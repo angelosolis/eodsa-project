@@ -45,6 +45,23 @@ export async function POST(request: NextRequest) {
       if (existing.length > 0) alreadyRegistered.push(pid);
     }
 
+    let existingSoloCountByDancer: Record<string, number> = {};
+    const primaryId = normalizedParticipantIds[0];
+    if (primaryId && (performanceType || '').toLowerCase() === 'solo') {
+      const likePattern = `%${primaryId}%`;
+      const [cntRow] = await sql`
+        SELECT COUNT(*)::int AS c
+        FROM event_entries
+        WHERE event_id = ${eventId}
+        AND LOWER(TRIM(COALESCE(performance_type, ''))) = 'solo'
+        AND (
+          eodsa_id = ${primaryId}
+          OR participant_ids::text LIKE ${likePattern}
+        )
+      ` as any[];
+      existingSoloCountByDancer = { [primaryId]: cntRow?.c ?? 0 };
+    }
+
     const feeResult = calculateEventPricing([{
       performanceType,
       participantIds: normalizedParticipantIds,
@@ -57,7 +74,7 @@ export async function POST(request: NextRequest) {
       discountMinEntries: event.discount_min_entries,
       discountAmount: event.discount_amount,
       registrationFee: event.registration_fee
-    }, alreadyRegistered);
+    }, alreadyRegistered, existingSoloCountByDancer);
 
     // Check for mismatch
     let mismatchDetected = false;

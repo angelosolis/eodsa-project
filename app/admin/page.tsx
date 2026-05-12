@@ -3342,10 +3342,13 @@ function AdminDashboard() {
                     <input type="checkbox" checked={newEvent.discountEnabled} onChange={(e) => setNewEvent(prev => ({ ...prev, discountEnabled: e.target.checked }))} />
                     Discount enabled
                   </label>
-                  <input type="number" min="0" step="1" disabled={!newEvent.discountEnabled} value={newEvent.discountMinEntries || ''} onChange={(e) => setNewEvent(prev => ({ ...prev, discountMinEntries: parseInt(e.target.value) || 0 }))} className={`w-full px-4 py-3 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.textPrimary} ${!newEvent.discountEnabled ? 'opacity-50 cursor-not-allowed' : ''}`} placeholder="Discount minimum entries" />
                   <div>
-                    <input type="number" min="0" step="0.01" disabled={!newEvent.discountEnabled} value={newEvent.discountAmount || ''} onChange={(e) => setNewEvent(prev => ({ ...prev, discountAmount: parseFloat(e.target.value) || 0 }))} className={`w-full px-4 py-3 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.textPrimary} ${!newEvent.discountEnabled ? 'opacity-50 cursor-not-allowed' : ''}`} placeholder="Discount amount" />
-                    <p className={`text-xs ${themeClasses.textMuted} mt-1`}>Per contestant: applies when the same dancer has at least the minimum number of entries (not by combining different dancers).</p>
+                    <input type="number" min="0" step="1" disabled={!newEvent.discountEnabled} value={newEvent.discountMinEntries || ''} onChange={(e) => setNewEvent(prev => ({ ...prev, discountMinEntries: parseInt(e.target.value) || 0 }))} className={`w-full px-4 py-3 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.textPrimary} ${!newEvent.discountEnabled ? 'opacity-50 cursor-not-allowed' : ''}`} placeholder="Every Nth solo (e.g. 3)" />
+                    <p className={`text-xs ${themeClasses.textMuted} mt-1`}>Same dancer: every Nth solo in this event gets the discount (3rd, 6th, 9th…).</p>
+                  </div>
+                  <div>
+                    <input type="number" min="0" step="0.01" disabled={!newEvent.discountEnabled} value={newEvent.discountAmount || ''} onChange={(e) => setNewEvent(prev => ({ ...prev, discountAmount: parseFloat(e.target.value) || 0 }))} className={`w-full px-4 py-3 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.textPrimary} ${!newEvent.discountEnabled ? 'opacity-50 cursor-not-allowed' : ''}`} placeholder="Discount per nth solo" />
+                    <p className={`text-xs ${themeClasses.textMuted} mt-1`}>Amount taken off each discounted solo line (capped at solo price).</p>
                   </div>
                 </div>
                 <p className={`text-xs ${themeClasses.textMuted} mb-2`}>
@@ -3356,35 +3359,49 @@ function AdminDashboard() {
                   {(() => {
                     const sp = newEvent.soloPrice || 0;
                     const rf = newEvent.registrationFee || 0;
-                    const minE = newEvent.discountMinEntries || 0;
+                    const N = Math.floor(newEvent.discountMinEntries || 0);
                     const discEnabled = newEvent.discountEnabled;
                     const discAmt = newEvent.discountAmount || 0;
-                    const subOne = sp * 3;
-                    const discOne = discEnabled && minE > 0 && 3 >= minE ? Math.min(discAmt, subOne) : 0;
-                    const regOne = rf * 1;
-                    const totalOne = subOne - discOne + regOne;
-                    const subThree = sp * 3;
-                    const discThree = 0;
-                    const regThree = rf * 3;
-                    const totalThree = subThree - discThree + regThree;
+                    const lineDisc = (soloIdx: number) =>
+                      discEnabled && N > 0 && discAmt > 0 && soloIdx > 0 && soloIdx % N === 0
+                        ? Math.min(discAmt, sp)
+                        : 0;
+                    const grossA = sp * 3;
+                    const discA = lineDisc(3);
+                    const perfNetA = grossA - discA;
+                    const totalOne = perfNetA + rf * 1;
+                    const grossB = sp * 3;
+                    const totalThree = grossB + rf * 3;
+                    let gross7 = 0;
+                    let disc7 = 0;
+                    for (let i = 1; i <= 7; i++) {
+                      gross7 += sp;
+                      disc7 += lineDisc(i);
+                    }
+                    const totalSevenOneDancer = gross7 - disc7 + rf * 1;
                     return (
                       <div className={`text-sm ${themeClasses.textPrimary} space-y-3`}>
                         <div>
-                          <div className="font-medium mb-1">A — One dancer, 3 Solo entries</div>
+                          <div className="font-medium mb-1">A — One dancer, 3 Solos</div>
                           <div className="space-y-1 text-xs sm:text-sm">
-                            <div>Subtotal {"->"} R{subOne.toFixed(2)}</div>
-                            <div>Discount {"->"} -R{discOne.toFixed(2)}</div>
-                            <div>Registration {"->"} R{regOne.toFixed(2)} (one dancer)</div>
+                            <div>Performance lines {"->"} R{perfNetA.toFixed(2)} (3rd solo −R{discA.toFixed(2)} if N=3)</div>
+                            <div>Registration {"->"} R{(rf * 1).toFixed(2)}</div>
                             <div className="font-semibold">Total {"->"} R{totalOne.toFixed(2)}</div>
                           </div>
                         </div>
                         <div>
                           <div className="font-medium mb-1">B — Three dancers, 1 Solo each</div>
                           <div className="space-y-1 text-xs sm:text-sm">
-                            <div>Subtotal {"->"} R{subThree.toFixed(2)}</div>
-                            <div>Discount {"->"} -R{discThree.toFixed(2)} (each dancer only has one item)</div>
-                            <div>Registration {"->"} R{regThree.toFixed(2)} (three dancers)</div>
+                            <div>Performance {"->"} R{grossB.toFixed(2)} (each dancer&apos;s 1st solo — no nth discount)</div>
+                            <div>Registration {"->"} R{(rf * 3).toFixed(2)}</div>
                             <div className="font-semibold">Total {"->"} R{totalThree.toFixed(2)}</div>
+                          </div>
+                        </div>
+                        <div>
+                          <div className="font-medium mb-1">C — One dancer, 7 Solos (every {N || 'N'}th discounted)</div>
+                          <div className="space-y-1 text-xs sm:text-sm">
+                            <div>Discount on solos 3 &amp; 6 {"->"} −R{disc7.toFixed(2)}</div>
+                            <div className="font-semibold">Sample total {"->"} R{totalSevenOneDancer.toFixed(2)}</div>
                           </div>
                         </div>
                       </div>
@@ -3896,10 +3913,13 @@ function AdminDashboard() {
                     <input type="checkbox" checked={(editEventData as any).discountEnabled} onChange={(e) => setEditEventData(prev => ({ ...prev, discountEnabled: e.target.checked }))} />
                     Discount enabled
                   </label>
-                  <input type="number" min="0" step="1" value={(editEventData as any).discountMinEntries || ''} onChange={(e) => setEditEventData(prev => ({ ...prev, discountMinEntries: parseInt(e.target.value) || 0 }))} disabled={!(editEventData as any).discountEnabled} className={`w-full px-4 py-2 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.textPrimary} ${!(editEventData as any).discountEnabled ? 'opacity-50 cursor-not-allowed' : ''}`} placeholder="Discount minimum entries" />
                   <div>
-                    <input type="number" min="0" step="0.01" value={(editEventData as any).discountAmount || ''} onChange={(e) => setEditEventData(prev => ({ ...prev, discountAmount: parseFloat(e.target.value) || 0 }))} disabled={!(editEventData as any).discountEnabled} className={`w-full px-4 py-2 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.textPrimary} ${!(editEventData as any).discountEnabled ? 'opacity-50 cursor-not-allowed' : ''}`} placeholder="Discount amount" />
-                    <p className={`text-xs ${themeClasses.textMuted} mt-1`}>Per contestant: applies when the same dancer has at least the minimum number of entries (not by combining different dancers).</p>
+                    <input type="number" min="0" step="1" value={(editEventData as any).discountMinEntries || ''} onChange={(e) => setEditEventData(prev => ({ ...prev, discountMinEntries: parseInt(e.target.value) || 0 }))} disabled={!(editEventData as any).discountEnabled} className={`w-full px-4 py-2 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.textPrimary} ${!(editEventData as any).discountEnabled ? 'opacity-50 cursor-not-allowed' : ''}`} placeholder="Every Nth solo (e.g. 3)" />
+                    <p className={`text-xs ${themeClasses.textMuted} mt-1`}>Same dancer: every Nth solo in this event (3rd, 6th, 9th…).</p>
+                  </div>
+                  <div>
+                    <input type="number" min="0" step="0.01" value={(editEventData as any).discountAmount || ''} onChange={(e) => setEditEventData(prev => ({ ...prev, discountAmount: parseFloat(e.target.value) || 0 }))} disabled={!(editEventData as any).discountEnabled} className={`w-full px-4 py-2 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.textPrimary} ${!(editEventData as any).discountEnabled ? 'opacity-50 cursor-not-allowed' : ''}`} placeholder="Discount per nth solo" />
+                    <p className={`text-xs ${themeClasses.textMuted} mt-1`}>Amount taken off each discounted solo line (capped at solo price).</p>
                   </div>
                 </div>
                 <p className={`text-xs ${themeClasses.textMuted} mb-2`}>
@@ -3910,35 +3930,49 @@ function AdminDashboard() {
                   {(() => {
                     const sp = (editEventData as any).soloPrice || 0;
                     const rf = (editEventData as any).registrationFee || 0;
-                    const minE = (editEventData as any).discountMinEntries || 0;
+                    const N = Math.floor((editEventData as any).discountMinEntries || 0);
                     const discEnabled = (editEventData as any).discountEnabled;
                     const discAmt = (editEventData as any).discountAmount || 0;
-                    const subOne = sp * 3;
-                    const discOne = discEnabled && minE > 0 && 3 >= minE ? Math.min(discAmt, subOne) : 0;
-                    const regOne = rf * 1;
-                    const totalOne = subOne - discOne + regOne;
-                    const subThree = sp * 3;
-                    const discThree = 0;
-                    const regThree = rf * 3;
-                    const totalThree = subThree - discThree + regThree;
+                    const lineDisc = (soloIdx: number) =>
+                      discEnabled && N > 0 && discAmt > 0 && soloIdx > 0 && soloIdx % N === 0
+                        ? Math.min(discAmt, sp)
+                        : 0;
+                    const grossA = sp * 3;
+                    const discA = lineDisc(3);
+                    const perfNetA = grossA - discA;
+                    const totalOne = perfNetA + rf * 1;
+                    const grossB = sp * 3;
+                    const totalThree = grossB + rf * 3;
+                    let gross7 = 0;
+                    let disc7 = 0;
+                    for (let i = 1; i <= 7; i++) {
+                      gross7 += sp;
+                      disc7 += lineDisc(i);
+                    }
+                    const totalSevenOneDancer = gross7 - disc7 + rf * 1;
                     return (
                       <div className={`text-sm ${themeClasses.textPrimary} space-y-3`}>
                         <div>
-                          <div className="font-medium mb-1">A — One dancer, 3 Solo entries</div>
+                          <div className="font-medium mb-1">A — One dancer, 3 Solos</div>
                           <div className="space-y-1 text-xs sm:text-sm">
-                            <div>Subtotal {"->"} R{subOne.toFixed(2)}</div>
-                            <div>Discount {"->"} -R{discOne.toFixed(2)}</div>
-                            <div>Registration {"->"} R{regOne.toFixed(2)} (one dancer)</div>
+                            <div>Performance lines {"->"} R{perfNetA.toFixed(2)} (3rd solo −R{discA.toFixed(2)} if N=3)</div>
+                            <div>Registration {"->"} R{(rf * 1).toFixed(2)}</div>
                             <div className="font-semibold">Total {"->"} R{totalOne.toFixed(2)}</div>
                           </div>
                         </div>
                         <div>
                           <div className="font-medium mb-1">B — Three dancers, 1 Solo each</div>
                           <div className="space-y-1 text-xs sm:text-sm">
-                            <div>Subtotal {"->"} R{subThree.toFixed(2)}</div>
-                            <div>Discount {"->"} -R{discThree.toFixed(2)} (each dancer only has one item)</div>
-                            <div>Registration {"->"} R{regThree.toFixed(2)} (three dancers)</div>
+                            <div>Performance {"->"} R{grossB.toFixed(2)} (each 1st solo — no nth discount)</div>
+                            <div>Registration {"->"} R{(rf * 3).toFixed(2)}</div>
                             <div className="font-semibold">Total {"->"} R{totalThree.toFixed(2)}</div>
+                          </div>
+                        </div>
+                        <div>
+                          <div className="font-medium mb-1">C — One dancer, 7 Solos (every {N || 'N'}th)</div>
+                          <div className="space-y-1 text-xs sm:text-sm">
+                            <div>Discount on solos 3 &amp; 6 {"->"} −R{disc7.toFixed(2)}</div>
+                            <div className="font-semibold">Sample total {"->"} R{totalSevenOneDancer.toFixed(2)}</div>
                           </div>
                         </div>
                       </div>
