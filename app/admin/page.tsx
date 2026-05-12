@@ -897,19 +897,6 @@ function AdminDashboard() {
               riskyChanges.push(`Changing to "Virtual only" would invalidate ${eventSafetyCheck.stats.liveEntries} live entry/entries.`);
             }
           }
-
-        // Check if fees are being changed
-        if (eventSafetyCheck && eventSafetyCheck.blocks.includes('fees')) {
-          const feeFields = ['registrationFeePerDancer', 'solo1Fee', 'solo2Fee', 'solo3Fee', 'soloAdditionalFee', 'duoTrioFeePerDancer', 'groupFeePerDancer', 'largeGroupFeePerDancer', 'soloPrice', 'duetPrice', 'groupPrice', 'discountEnabled', 'discountMinEntries', 'discountAmount', 'registrationFee'];
-          const feeChanged = feeFields.some(field => {
-            const originalValue = (editingEvent as any)[field] || 0;
-            const newValue = editEventData[field as keyof typeof editEventData] || 0;
-            return originalValue !== newValue;
-          });
-          if (feeChanged) {
-            blockedChanges.push('Cannot change fees - event has paid entries. This could cause payment discrepancies.');
-          }
-        }
       }
 
       // If there are blocked changes, show error
@@ -3651,14 +3638,11 @@ function AdminDashboard() {
                 </div>
               )}
 
-              {eventSafetyCheck?.blocks.includes('fees') && (
-                <div className={`mb-6 p-4 border-2 ${theme === 'dark' ? 'border-orange-700/60 bg-orange-950/40' : 'border-orange-300 bg-orange-50'} ${themeClasses.cardRadius}`}>
-                  <h3 className={`text-sm font-semibold ${theme === 'dark' ? 'text-orange-200' : 'text-orange-900'} mb-2`}>🔒 Pricing fields are locked</h3>
-                  <p className={`text-sm ${theme === 'dark' ? 'text-orange-100/90' : 'text-orange-900/90'}`}>
-                    This event has at least one <strong>paid</strong> entry. To prevent payment mismatches, fee amounts and pricing toggles cannot be edited here. You can still change non-fee settings (for example dates or descriptions) where allowed.
-                  </p>
-                  <p className={`text-xs mt-2 ${theme === 'dark' ? 'text-orange-200/80' : 'text-orange-800'}`}>
-                    If pricing truly must change after payments exist, use a controlled process (e.g. new event year or manual support) so totals stay consistent with what families already paid.
+              {eventSafetyCheck?.stats && eventSafetyCheck.stats.payments > 0 && (
+                <div className={`mb-6 p-4 border ${theme === 'dark' ? 'border-amber-700/50 bg-amber-950/30' : 'border-amber-300 bg-amber-50'} ${themeClasses.cardRadius}`}>
+                  <h3 className={`text-sm font-semibold ${theme === 'dark' ? 'text-amber-200' : 'text-amber-900'} mb-2`}>💳 Paid entries on this event</h3>
+                  <p className={`text-sm ${theme === 'dark' ? 'text-amber-100/90' : 'text-amber-950/90'}`}>
+                    You can edit pricing below. Existing payments are not automatically adjusted — confirm amounts against what families already paid before saving.
                   </p>
                 </div>
               )}
@@ -3887,7 +3871,6 @@ function AdminDashboard() {
                     <button
                       type="button"
                       onClick={() => setEditEventData(prev => activateFlatPricing(prev))}
-                      disabled={eventSafetyCheck?.blocks.includes('fees') || false}
                       className={`px-3 py-2 text-xs font-semibold rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${theme === 'dark' ? 'bg-green-600 hover:bg-green-500 text-white' : 'bg-green-600 hover:bg-green-700 text-white'}`}
                     >
                       Activate Flat Pricing
@@ -3895,7 +3878,6 @@ function AdminDashboard() {
                     <button
                       type="button"
                       onClick={() => setEditEventData(prev => activateLegacyPricing(prev))}
-                      disabled={eventSafetyCheck?.blocks.includes('fees') || false}
                       className={`px-3 py-2 text-xs font-semibold rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${theme === 'dark' ? 'bg-gray-700 hover:bg-gray-600 text-white' : 'bg-gray-600 hover:bg-gray-700 text-white'}`}
                     >
                       Use Legacy Pricing
@@ -3903,20 +3885,20 @@ function AdminDashboard() {
                   </div>
                 </div>
                 <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-                  <input type="number" min="0" step="0.01" value={(editEventData as any).soloPrice || ''} onChange={(e) => setEditEventData(prev => ({ ...prev, soloPrice: parseFloat(e.target.value) || 0 }))} disabled={eventSafetyCheck?.blocks.includes('fees') || false} className={`w-full px-4 py-2 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.textPrimary}`} placeholder="Solo price" />
-                  <input type="number" min="0" step="0.01" value={(editEventData as any).duetPrice || ''} onChange={(e) => setEditEventData(prev => ({ ...prev, duetPrice: parseFloat(e.target.value) || 0 }))} disabled={eventSafetyCheck?.blocks.includes('fees') || false} className={`w-full px-4 py-2 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.textPrimary}`} placeholder="Duet price" />
-                  <input type="number" min="0" step="0.01" value={(editEventData as any).groupPrice || ''} onChange={(e) => setEditEventData(prev => ({ ...prev, groupPrice: parseFloat(e.target.value) || 0 }))} disabled={eventSafetyCheck?.blocks.includes('fees') || false} className={`w-full px-4 py-2 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.textPrimary}`} placeholder="Group price" />
+                  <input type="number" min="0" step="0.01" value={(editEventData as any).soloPrice || ''} onChange={(e) => setEditEventData(prev => ({ ...prev, soloPrice: parseFloat(e.target.value) || 0 }))} className={`w-full px-4 py-2 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.textPrimary}`} placeholder="Solo price" />
+                  <input type="number" min="0" step="0.01" value={(editEventData as any).duetPrice || ''} onChange={(e) => setEditEventData(prev => ({ ...prev, duetPrice: parseFloat(e.target.value) || 0 }))} className={`w-full px-4 py-2 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.textPrimary}`} placeholder="Duet price" />
+                  <input type="number" min="0" step="0.01" value={(editEventData as any).groupPrice || ''} onChange={(e) => setEditEventData(prev => ({ ...prev, groupPrice: parseFloat(e.target.value) || 0 }))} className={`w-full px-4 py-2 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.textPrimary}`} placeholder="Group price" />
                   <div>
-                    <input type="number" min="0" step="0.01" value={(editEventData as any).registrationFee || ''} onChange={(e) => setEditEventData(prev => ({ ...prev, registrationFee: parseFloat(e.target.value) || 0 }))} disabled={eventSafetyCheck?.blocks.includes('fees') || false} className={`w-full px-4 py-2 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.textPrimary}`} placeholder="Registration fee" />
+                    <input type="number" min="0" step="0.01" value={(editEventData as any).registrationFee || ''} onChange={(e) => setEditEventData(prev => ({ ...prev, registrationFee: parseFloat(e.target.value) || 0 }))} className={`w-full px-4 py-2 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.textPrimary}`} placeholder="Registration fee" />
                     <p className={`text-xs ${themeClasses.textMuted} mt-1`}>Charged once per dancer per event</p>
                   </div>
                   <label className={`flex items-center gap-2 ${themeClasses.textPrimary}`}>
-                    <input type="checkbox" checked={(editEventData as any).discountEnabled} onChange={(e) => setEditEventData(prev => ({ ...prev, discountEnabled: e.target.checked }))} disabled={eventSafetyCheck?.blocks.includes('fees') || false} />
+                    <input type="checkbox" checked={(editEventData as any).discountEnabled} onChange={(e) => setEditEventData(prev => ({ ...prev, discountEnabled: e.target.checked }))} />
                     Discount enabled
                   </label>
-                  <input type="number" min="0" step="1" value={(editEventData as any).discountMinEntries || ''} onChange={(e) => setEditEventData(prev => ({ ...prev, discountMinEntries: parseInt(e.target.value) || 0 }))} disabled={eventSafetyCheck?.blocks.includes('fees') || !(editEventData as any).discountEnabled} className={`w-full px-4 py-2 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.textPrimary} ${!(editEventData as any).discountEnabled ? 'opacity-50 cursor-not-allowed' : ''}`} placeholder="Discount minimum entries" />
+                  <input type="number" min="0" step="1" value={(editEventData as any).discountMinEntries || ''} onChange={(e) => setEditEventData(prev => ({ ...prev, discountMinEntries: parseInt(e.target.value) || 0 }))} disabled={!(editEventData as any).discountEnabled} className={`w-full px-4 py-2 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.textPrimary} ${!(editEventData as any).discountEnabled ? 'opacity-50 cursor-not-allowed' : ''}`} placeholder="Discount minimum entries" />
                   <div>
-                    <input type="number" min="0" step="0.01" value={(editEventData as any).discountAmount || ''} onChange={(e) => setEditEventData(prev => ({ ...prev, discountAmount: parseFloat(e.target.value) || 0 }))} disabled={eventSafetyCheck?.blocks.includes('fees') || !(editEventData as any).discountEnabled} className={`w-full px-4 py-2 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.textPrimary} ${!(editEventData as any).discountEnabled ? 'opacity-50 cursor-not-allowed' : ''}`} placeholder="Discount amount" />
+                    <input type="number" min="0" step="0.01" value={(editEventData as any).discountAmount || ''} onChange={(e) => setEditEventData(prev => ({ ...prev, discountAmount: parseFloat(e.target.value) || 0 }))} disabled={!(editEventData as any).discountEnabled} className={`w-full px-4 py-2 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.textPrimary} ${!(editEventData as any).discountEnabled ? 'opacity-50 cursor-not-allowed' : ''}`} placeholder="Discount amount" />
                     <p className={`text-xs ${themeClasses.textMuted} mt-1`}>Per contestant: applies when the same dancer has at least the minimum number of entries (not by combining different dancers).</p>
                   </div>
                 </div>
@@ -3966,14 +3948,14 @@ function AdminDashboard() {
                 <div className={`mt-4 p-4 border ${themeClasses.modalBorder} ${themeClasses.cardRadius}`}>
                   <p className={`text-sm font-semibold mb-3 ${themeClasses.textPrimary}`}>Legacy Pricing (for reference/backward compatibility)</p>
                   <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-                    <div><input type="number" min="0" step="0.01" value={editEventData.registrationFeePerDancer} onChange={(e) => setEditEventData(prev => ({ ...prev, registrationFeePerDancer: parseFloat(e.target.value) || 0 }))} disabled={eventSafetyCheck?.blocks.includes('fees') || false} className={`w-full px-4 py-2 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.textPrimary}`} placeholder="Legacy registration (per dancer)" /><p className={`text-xs ${themeClasses.textMuted} mt-1`}>Legacy registration charged per dancer</p></div>
-                    <div><input type="number" min="0" step="0.01" value={editEventData.solo1Fee} onChange={(e) => setEditEventData(prev => ({ ...prev, solo1Fee: parseFloat(e.target.value) || 0 }))} disabled={eventSafetyCheck?.blocks.includes('fees') || false} className={`w-full px-4 py-2 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.textPrimary}`} placeholder="Legacy solo_1_fee" /><p className={`text-xs ${themeClasses.textMuted} mt-1`}>Legacy first solo/package value</p></div>
-                    <div><input type="number" min="0" step="0.01" value={editEventData.solo2Fee} onChange={(e) => setEditEventData(prev => ({ ...prev, solo2Fee: parseFloat(e.target.value) || 0 }))} disabled={eventSafetyCheck?.blocks.includes('fees') || false} className={`w-full px-4 py-2 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.textPrimary}`} placeholder="Legacy solo_2_fee" /><p className={`text-xs ${themeClasses.textMuted} mt-1`}>Legacy second solo/package value</p></div>
-                    <div><input type="number" min="0" step="0.01" value={editEventData.solo3Fee} onChange={(e) => setEditEventData(prev => ({ ...prev, solo3Fee: parseFloat(e.target.value) || 0 }))} disabled={eventSafetyCheck?.blocks.includes('fees') || false} className={`w-full px-4 py-2 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.textPrimary}`} placeholder="Legacy solo_3_fee" /><p className={`text-xs ${themeClasses.textMuted} mt-1`}>Legacy third solo/package value</p></div>
-                    <div><input type="number" min="0" step="0.01" value={editEventData.soloAdditionalFee} onChange={(e) => setEditEventData(prev => ({ ...prev, soloAdditionalFee: parseFloat(e.target.value) || 0 }))} disabled={eventSafetyCheck?.blocks.includes('fees') || false} className={`w-full px-4 py-2 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.textPrimary}`} placeholder="Legacy solo_additional_fee" /><p className={`text-xs ${themeClasses.textMuted} mt-1`}>Legacy fee after third solo</p></div>
-                    <div><input type="number" min="0" step="0.01" value={editEventData.duoTrioFeePerDancer} onChange={(e) => setEditEventData(prev => ({ ...prev, duoTrioFeePerDancer: parseFloat(e.target.value) || 0 }))} disabled={eventSafetyCheck?.blocks.includes('fees') || false} className={`w-full px-4 py-2 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.textPrimary}`} placeholder="Legacy duo_trio_fee_per_dancer" /><p className={`text-xs ${themeClasses.textMuted} mt-1`}>Legacy duet/trio fee per dancer</p></div>
-                    <div><input type="number" min="0" step="0.01" value={editEventData.groupFeePerDancer} onChange={(e) => setEditEventData(prev => ({ ...prev, groupFeePerDancer: parseFloat(e.target.value) || 0 }))} disabled={eventSafetyCheck?.blocks.includes('fees') || false} className={`w-full px-4 py-2 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.textPrimary}`} placeholder="Legacy group_fee_per_dancer" /><p className={`text-xs ${themeClasses.textMuted} mt-1`}>Legacy small-group fee per dancer</p></div>
-                    <div><input type="number" min="0" step="0.01" value={editEventData.largeGroupFeePerDancer} onChange={(e) => setEditEventData(prev => ({ ...prev, largeGroupFeePerDancer: parseFloat(e.target.value) || 0 }))} disabled={eventSafetyCheck?.blocks.includes('fees') || false} className={`w-full px-4 py-2 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.textPrimary}`} placeholder="Legacy large_group_fee_per_dancer" /><p className={`text-xs ${themeClasses.textMuted} mt-1`}>Legacy large-group fee per dancer</p></div>
+                    <div><input type="number" min="0" step="0.01" value={editEventData.registrationFeePerDancer} onChange={(e) => setEditEventData(prev => ({ ...prev, registrationFeePerDancer: parseFloat(e.target.value) || 0 }))} className={`w-full px-4 py-2 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.textPrimary}`} placeholder="Legacy registration (per dancer)" /><p className={`text-xs ${themeClasses.textMuted} mt-1`}>Legacy registration charged per dancer</p></div>
+                    <div><input type="number" min="0" step="0.01" value={editEventData.solo1Fee} onChange={(e) => setEditEventData(prev => ({ ...prev, solo1Fee: parseFloat(e.target.value) || 0 }))} className={`w-full px-4 py-2 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.textPrimary}`} placeholder="Legacy solo_1_fee" /><p className={`text-xs ${themeClasses.textMuted} mt-1`}>Legacy first solo/package value</p></div>
+                    <div><input type="number" min="0" step="0.01" value={editEventData.solo2Fee} onChange={(e) => setEditEventData(prev => ({ ...prev, solo2Fee: parseFloat(e.target.value) || 0 }))} className={`w-full px-4 py-2 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.textPrimary}`} placeholder="Legacy solo_2_fee" /><p className={`text-xs ${themeClasses.textMuted} mt-1`}>Legacy second solo/package value</p></div>
+                    <div><input type="number" min="0" step="0.01" value={editEventData.solo3Fee} onChange={(e) => setEditEventData(prev => ({ ...prev, solo3Fee: parseFloat(e.target.value) || 0 }))} className={`w-full px-4 py-2 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.textPrimary}`} placeholder="Legacy solo_3_fee" /><p className={`text-xs ${themeClasses.textMuted} mt-1`}>Legacy third solo/package value</p></div>
+                    <div><input type="number" min="0" step="0.01" value={editEventData.soloAdditionalFee} onChange={(e) => setEditEventData(prev => ({ ...prev, soloAdditionalFee: parseFloat(e.target.value) || 0 }))} className={`w-full px-4 py-2 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.textPrimary}`} placeholder="Legacy solo_additional_fee" /><p className={`text-xs ${themeClasses.textMuted} mt-1`}>Legacy fee after third solo</p></div>
+                    <div><input type="number" min="0" step="0.01" value={editEventData.duoTrioFeePerDancer} onChange={(e) => setEditEventData(prev => ({ ...prev, duoTrioFeePerDancer: parseFloat(e.target.value) || 0 }))} className={`w-full px-4 py-2 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.textPrimary}`} placeholder="Legacy duo_trio_fee_per_dancer" /><p className={`text-xs ${themeClasses.textMuted} mt-1`}>Legacy duet/trio fee per dancer</p></div>
+                    <div><input type="number" min="0" step="0.01" value={editEventData.groupFeePerDancer} onChange={(e) => setEditEventData(prev => ({ ...prev, groupFeePerDancer: parseFloat(e.target.value) || 0 }))} className={`w-full px-4 py-2 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.textPrimary}`} placeholder="Legacy group_fee_per_dancer" /><p className={`text-xs ${themeClasses.textMuted} mt-1`}>Legacy small-group fee per dancer</p></div>
+                    <div><input type="number" min="0" step="0.01" value={editEventData.largeGroupFeePerDancer} onChange={(e) => setEditEventData(prev => ({ ...prev, largeGroupFeePerDancer: parseFloat(e.target.value) || 0 }))} className={`w-full px-4 py-2 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.textPrimary}`} placeholder="Legacy large_group_fee_per_dancer" /><p className={`text-xs ${themeClasses.textMuted} mt-1`}>Legacy large-group fee per dancer</p></div>
                   </div>
                 </div>
               </div>

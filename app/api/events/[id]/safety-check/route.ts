@@ -100,7 +100,7 @@ export async function GET(
     const restrictions = {
       canChangeJudgeCount: !hasScores, // Can't change if scores exist
       canChangeEventType: true, // Can change but with warnings
-      canChangeFees: !hasPayments, // Can't change if payments exist
+      canChangeFees: true, // Admins may edit; clients should still read warnings for paid events
       canChangeDates: event.status !== 'completed' && event.status !== 'in_progress',
       canChangeCertificateTemplate: true, // Always safe
       warnings: [] as string[],
@@ -117,8 +117,7 @@ export async function GET(
     }
 
     if (hasPayments) {
-      restrictions.warnings.push('💰 This event has paid entries. Changing fees could cause payment discrepancies.');
-      restrictions.blocks.push('fees');
+      restrictions.warnings.push('💰 This event has paid entries. Changing fees may not retroactively match amounts already paid — review totals carefully.');
     }
 
     if (liveEntries > 0 && event.participation_mode === 'virtual') {
