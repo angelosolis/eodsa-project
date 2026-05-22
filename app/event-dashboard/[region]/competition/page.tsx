@@ -31,6 +31,66 @@ function buildExistingSoloCountsFromDb(dbEntries: any[]): Record<string, number>
   return counts;
 }
 
+/** IDs already linked to this event (prior entries) — used for cart registration display only. */
+function buildAlreadyRegisteredParticipantSet(
+  existingDbEntries: any[],
+  availableDancers: { id?: string; eodsaId?: string }[]
+): Set<string> {
+  const registered = new Set<string>();
+  const addKey = (key: string | undefined | null) => {
+    if (key) registered.add(String(key));
+  };
+
+  for (const dbEntry of existingDbEntries) {
+    let ids: string[] = [];
+    if (Array.isArray(dbEntry.participantIds)) ids = dbEntry.participantIds;
+    else if (typeof dbEntry.participantIds === 'string') {
+      try {
+        ids = JSON.parse(dbEntry.participantIds);
+      } catch {
+        ids = dbEntry.participantIds ? [dbEntry.participantIds] : [];
+      }
+    }
+    for (const id of ids) {
+      addKey(id);
+      const dancer = availableDancers.find((d) => d.id === id || d.eodsaId === id);
+      addKey(dancer?.id);
+      addKey(dancer?.eodsaId);
+    }
+    addKey(dbEntry.eodsaId);
+  }
+  return registered;
+}
+
+function getRegistrationUiBreakdown(
+  cartEntries: { participantIds?: string[] }[],
+  alreadyRegistered: Set<string>,
+  availableDancers: { id?: string; eodsaId?: string }[]
+) {
+  const cartIds = Array.from(new Set(cartEntries.flatMap((e) => e.participantIds || []).filter(Boolean)));
+  let participantsNeedingReg = 0;
+  let participantsAlreadyRegistered = 0;
+
+  for (const pid of cartIds) {
+    const dancer = availableDancers.find((d) => d.id === pid || d.eodsaId === pid);
+    const keys = [pid, dancer?.id, dancer?.eodsaId].filter(Boolean) as string[];
+    if (keys.some((k) => alreadyRegistered.has(k))) {
+      participantsAlreadyRegistered++;
+    } else {
+      participantsNeedingReg++;
+    }
+  }
+
+  return { participantsNeedingReg, participantsAlreadyRegistered, cartParticipantCount: cartIds.length };
+}
+
+function formatOrdinal(n: number): string {
+  const v = n % 100;
+  if (v >= 11 && v <= 13) return `${n}th`;
+  const suffix = ['th', 'st', 'nd', 'rd'][n % 10] || 'th';
+  return `${n}${suffix}`;
+}
+
 function TourOverlay({
   step,
   getTargetRect,
@@ -198,7 +258,11 @@ export default function CompetitionEntryPage() {
   const [entries, setEntries] = useState<PerformanceEntry[]>([]);
   const [existingDbEntries, setExistingDbEntries] = useState<any[]>([]);
   const [showAddForm, setShowAddForm] = useState<string | null>(null);
-  const [registrationFeeCache, setRegistrationFeeCache] = useState<{[key: string]: number}>({});
+  const [registrationUi, setRegistrationUi] = useState({
+    participantsNeedingReg: 0,
+    participantsAlreadyRegistered: 0,
+    cartParticipantCount: 0,
+  });
   const [totalFeeCalculation, setTotalFeeCalculation] = useState<{
     subtotal: number;
     discount: number;
@@ -266,6 +330,7 @@ export default function CompetitionEntryPage() {
       } else if (studioId) {
         setIsStudioMode(true);
         loadStudioData(studioId);
+        loadStudioEventEntries(studioId, eventId);
       }
       loadEvent(eventId);
     }
@@ -466,6 +531,25 @@ export default function CompetitionEntryPage() {
       }
     } catch (error) {
       console.error('Failed to load studio data:', error);
+    }
+  };
+
+  const loadStudioEventEntries = async (studioId: string, eventId: string) => {
+    if (!studioId || !eventId) return;
+
+    try {
+      const response = await fetch(`/api/studios/entries?studioId=${studioId}`);
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && Array.isArray(data.entries)) {
+          const eventEntries = data.entries.filter((entry: any) => entry.eventId === eventId);
+          setExistingDbEntries(eventEntries);
+          console.log(`📊 Studio: ${eventEntries.length} existing entries for this event`);
+        }
+      }
+    } catch (error) {
+      console.error('Error loading studio event entries:', error);
+      setExistingDbEntries([]);
     }
   };
 
@@ -1156,16 +1240,10 @@ export default function CompetitionEntryPage() {
 
   const calculateTotalFee = async () => {
     setIsCalculatingFee(true);
-    const existingParticipantIds = new Set<string>();
-    existingDbEntries.forEach((dbEntry) => {
-      let ids: string[] = [];
-      if (Array.isArray(dbEntry.participantIds)) ids = dbEntry.participantIds;
-      else if (typeof dbEntry.participantIds === 'string') {
-        try { ids = JSON.parse(dbEntry.participantIds); } catch { ids = [dbEntry.participantIds]; }
-      }
-      ids.forEach((id) => id && existingParticipantIds.add(id));
-      if (dbEntry.eodsaId) existingParticipantIds.add(dbEntry.eodsaId);
-    });
+    const existingParticipantIds = buildAlreadyRegisteredParticipantSet(
+      existingDbEntries,
+      availableDancers
+    );
 
     const existingSoloCountByDancer = buildExistingSoloCountsFromDb(existingDbEntries);
 
@@ -1183,6 +1261,8 @@ export default function CompetitionEntryPage() {
       registrationFee: (event as any)?.registrationFee
     }, Array.from(existingParticipantIds), existingSoloCountByDancer);
 
+    const regUi = getRegistrationUiBreakdown(entries, existingParticipantIds, availableDancers);
+
     const pricingResult = {
       subtotal: pricing.subtotal,
       discount: pricing.discount,
@@ -1190,6 +1270,7 @@ export default function CompetitionEntryPage() {
       registrationFee: pricing.registrationTotal,
       total: pricing.total
     };
+    setRegistrationUi(regUi);
     setTotalFeeCalculation(pricingResult);
     setIsCalculatingFee(false);
     return pricingResult;
@@ -1202,9 +1283,10 @@ export default function CompetitionEntryPage() {
       calculateTotalFee();
     } else {
       setTotalFeeCalculation({ subtotal: 0, discount: 0, performanceFee: 0, registrationFee: 0, total: 0 });
+      setRegistrationUi({ participantsNeedingReg: 0, participantsAlreadyRegistered: 0, cartParticipantCount: 0 });
       setIsCalculatingFee(false);
     }
-  }, [entries, registrationFeeCache]);
+  }, [entries, existingDbEntries, availableDancers]);
 
   // Compute async preview fee whenever selection changes
   useEffect(() => {
@@ -2448,9 +2530,10 @@ export default function CompetitionEntryPage() {
                    <span>Entries:</span>
                    <span>{entries.length}{showAddForm && previewFee > 0 && <span className="text-slate-400"> (+1)</span>}</span>
                  </div>
-                {event?.discountEnabled && (
+                {event?.discountEnabled && (event?.discountMinEntries || 0) > 0 && (
                   <div className="text-xs text-slate-400">
-                    Every {event?.discountMinEntries || 0}th solo per dancer gets R{Number(event?.discountAmount || 0).toFixed(2)} off that line (e.g. 3rd, 6th, 9th when N is 3).
+                    Every {formatOrdinal(event?.discountMinEntries || 0)} solo per dancer gets {getCurrencySymbol()}
+                    {Number(event?.discountAmount || 0).toFixed(2)} off that line (e.g. 3rd, 6th, 9th when N is 3).
                   </div>
                 )}
                  
@@ -2485,15 +2568,40 @@ export default function CompetitionEntryPage() {
                      <span>Discount:</span>
                      <span>-{getCurrencySymbol()}{feeCalculation.discount.toFixed(2)}</span>
                    </div>
-                   <div className="flex justify-between">
-                     <span>Registration:</span>
-                     <span>{getCurrencySymbol()}{feeCalculation.registrationFee}</span>
-                   </div>
+                   {feeCalculation.registrationFee > 0 ? (
+                     <>
+                       <div className="flex justify-between">
+                         <span>Registration:</span>
+                         <span>{getCurrencySymbol()}{feeCalculation.registrationFee.toFixed(2)}</span>
+                       </div>
+                       <div className="text-xs text-slate-400">
+                         ({registrationUi.participantsNeedingReg} new dancer
+                         {registrationUi.participantsNeedingReg !== 1 ? 's' : ''} × {getCurrencySymbol()}
+                         {event?.registrationFee || 0} — once per event)
+                       </div>
+                       {registrationUi.participantsAlreadyRegistered > 0 && (
+                         <div className="text-xs text-emerald-400/80">
+                           {registrationUi.participantsAlreadyRegistered} dancer
+                           {registrationUi.participantsAlreadyRegistered !== 1 ? 's' : ''} already registered for this event — no repeat fee
+                         </div>
+                       )}
+                     </>
+                   ) : registrationUi.cartParticipantCount > 0 && (event?.registrationFee || 0) > 0 ? (
+                     <div className="flex justify-between text-sm">
+                       <span>Registration:</span>
+                       <span className="text-emerald-400/90 text-right max-w-[60%]">
+                         Already paid for this event
+                         {registrationUi.participantsAlreadyRegistered > 0 && (
+                           <span className="block text-xs text-slate-400 font-normal mt-0.5">
+                             ({registrationUi.participantsAlreadyRegistered} dancer
+                             {registrationUi.participantsAlreadyRegistered !== 1 ? 's' : ''} in your cart)
+                           </span>
+                         )}
+                       </span>
+                     </div>
+                   ) : null}
                   </>
                  )}
-                <div className="text-xs text-slate-400">
-                  ({new Set(entries.flatMap(e => e.participantIds)).size} unique participants × {getCurrencySymbol()}{event?.registrationFee || 0})
-                </div>
                  
                  {/* Preview total with pending entry */}
                 {showAddForm && previewFee > 0 && (
