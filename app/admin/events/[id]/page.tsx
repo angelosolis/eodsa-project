@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAlert } from '@/components/ui/custom-alert';
 import { calculateEODSAFee } from '@/lib/types';
+import { eventUsesFlatPricing, getFixedEntryPrice } from '@/lib/event-pricing';
 import { getSql } from '@/lib/database';
 import { ThemeProvider, useTheme, getThemeClasses } from '@/components/providers/ThemeProvider';
 import { calculateAgeOnDate, getAgeCategoryFromAge } from '@/lib/types';
@@ -32,6 +33,22 @@ interface Event {
   soloAdditionalFee?: number;
   duoTrioFeePerDancer?: number;
   groupFeePerDancer?: number;
+  soloPrice?: number;
+  duetPrice?: number;
+  groupPrice?: number;
+  registrationFee?: number;
+}
+
+interface PaymentBatchSummary {
+  paymentId: string;
+  amountGross: number;
+  description?: string | null;
+  paidAt?: string | null;
+  expectedEntryCount: number;
+  savedEntryCount: number;
+  performanceFeesOnEntries: number;
+  registrationInPayment: number;
+  isComplete: boolean;
 }
 
 interface EventEntry {
@@ -45,6 +62,7 @@ interface EventEntry {
   paymentMethod?: string;
   paymentReference?: string;
   paymentDate?: string;
+  paymentId?: string;
   submittedAt: string;
   approved: boolean;
   qualifiedForNationals: boolean;
@@ -105,6 +123,7 @@ function EventParticipantsPage() {
   
   const [event, setEvent] = useState<Event | null>(null);
   const [entries, setEntries] = useState<EventEntry[]>([]);
+  const [paymentBatches, setPaymentBatches] = useState<PaymentBatchSummary[]>([]);
   const [performances, setPerformances] = useState<Performance[]>([]);
   const [showDancersModal, setShowDancersModal] = useState(false);
   const [dancerModalEntry, setDancerModalEntry] = useState<EventEntry | null>(null);
@@ -248,6 +267,7 @@ function EventParticipantsPage() {
       if (entriesResponse.ok) {
         const entriesData = await entriesResponse.json();
         setEntries(entriesData.entries || []);
+        setPaymentBatches(entriesData.paymentBatches || []);
       }
 
       // Load performances for this event
@@ -1597,6 +1617,43 @@ function EventParticipantsPage() {
                   )}
                 </div>
               </div>
+
+              {paymentBatches.length > 0 && eventUsesFlatPricing(event || {}) && (
+                <div className={`mt-4 p-4 rounded-lg border ${theme === 'dark' ? 'bg-slate-800/60 border-slate-600' : 'bg-amber-50 border-amber-200'}`}>
+                  <p className={`text-sm font-semibold ${themeClasses.textPrimary} mb-2`}>
+                    PayFast batch payments (flat pricing)
+                  </p>
+                  <p className={`text-xs ${themeClasses.textMuted} mb-3`}>
+                    Line fees on each entry are performance-only (flat solo/duet/group). Registration is charged once per dancer on the batch payment, not repeated on every row.
+                  </p>
+                  <div className="space-y-2">
+                    {paymentBatches.map((batch) => {
+                      const sym = event?.currency === 'USD' ? '$' : event?.currency === 'EUR' ? '€' : event?.currency === 'GBP' ? '£' : 'R';
+                      return (
+                        <div
+                          key={batch.paymentId}
+                          className={`text-xs rounded-md p-3 ${theme === 'dark' ? 'bg-slate-900/50' : 'bg-white'}`}
+                        >
+                          <div className="flex flex-wrap gap-x-4 gap-y-1">
+                            <span><strong>Payment:</strong> {batch.paymentId}</span>
+                            <span><strong>Paid:</strong> {sym}{batch.amountGross.toFixed(2)}</span>
+                            <span><strong>Items:</strong> {batch.savedEntryCount}/{batch.expectedEntryCount || '?'}</span>
+                            {!batch.isComplete && (
+                              <span className="text-orange-600 font-semibold">Incomplete — missing entries</span>
+                            )}
+                          </div>
+                          <div className={`mt-1 ${themeClasses.textMuted}`}>
+                            Performance on entries: {sym}{batch.performanceFeesOnEntries.toFixed(2)}
+                            {batch.registrationInPayment > 0.5 && (
+                              <> · Registration in payment (est.): {sym}{batch.registrationInPayment.toFixed(2)}</>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
               
               {/* Search and Filters */}
               {entries.length > 0 && (
@@ -2497,7 +2554,29 @@ function FeeBreakdownComponent({ entry, event, allEntries }: { entry: EventEntry
         else if (participantCount === 3) performanceType = 'Trio';
         else if (participantCount >= 4) performanceType = 'Group';
 
-        // Call API to get fee breakdown
+        const currencySymbol =
+          event.currency === 'USD' ? '$' : event.currency === 'EUR' ? '€' : event.currency === 'GBP' ? '£' : 'R';
+
+        if (eventUsesFlatPricing(event)) {
+          const performanceFee = getFixedEntryPrice(performanceType, {
+            soloPrice: event.soloPrice,
+            duetPrice: event.duetPrice,
+            groupPrice: event.groupPrice,
+          });
+          setBreakdown({
+            performanceFee,
+            registrationFee: 0,
+            totalFee: performanceFee,
+            breakdown: `Flat ${performanceType} fee (${currencySymbol}${performanceFee.toFixed(2)} per item, not per dancer)`,
+            registrationBreakdown:
+              'Registration (if charged) is included once on the PayFast batch total for each new dancer — not on this line.',
+            totalFeeDescription: `Stored line fee matches flat ${performanceType} pricing`,
+          });
+          setLoadingBreakdown(false);
+          return;
+        }
+
+        // Call API to get fee breakdown (legacy per-dancer pricing)
         // The API will calculate solo count automatically based on existing entries
         const requestBody = {
           masteryLevel: entry.mastery || 'Water (Competitive)',

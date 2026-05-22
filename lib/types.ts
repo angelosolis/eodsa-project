@@ -121,6 +121,7 @@ export interface EventEntry {
   paymentMethod?: 'credit_card' | 'bank_transfer' | 'invoice' | 'payfast' | 'eft';
   paymentReference?: string; // Payment reference number/transaction ID
   paymentDate?: string; // Date when payment was processed
+  paymentId?: string; // PayFast batch payment id when paid via gateway
   submittedAt: string;
   approved: boolean;
   qualifiedForNationals: boolean;

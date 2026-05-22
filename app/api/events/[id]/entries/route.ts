@@ -387,10 +387,54 @@ export async function GET(
     );
 
     console.log(`Enhanced ${enhancedEntries.length} entries for event ${eventId}`);
+
+    const sqlClient = getSql();
+    const paymentRows = await sqlClient`
+      SELECT payment_id, amount, amount_gross, description, paid_at,
+        pending_entries_data
+      FROM payments
+      WHERE event_id = ${eventId} AND status = 'completed'
+      ORDER BY paid_at DESC NULLS LAST
+    ` as Array<{
+      payment_id: string;
+      amount: string;
+      amount_gross: string | null;
+      description: string | null;
+      paid_at: string | null;
+      pending_entries_data: unknown;
+    }>;
+
+    const paymentBatches = paymentRows.map((p) => {
+      let expectedCount = 0;
+      try {
+        const raw = p.pending_entries_data;
+        const arr = typeof raw === 'string' ? JSON.parse(raw) : raw;
+        expectedCount = Array.isArray(arr) ? arr.length : 0;
+      } catch {
+        expectedCount = 0;
+      }
+      const savedCount = enhancedEntries.filter((e) => e.paymentId === p.payment_id).length;
+      const performanceTotal = enhancedEntries
+        .filter((e) => e.paymentId === p.payment_id)
+        .reduce((sum, e) => sum + (e.calculatedFee || 0), 0);
+      const gross = parseFloat(p.amount_gross || p.amount || '0');
+      return {
+        paymentId: p.payment_id,
+        amountGross: gross,
+        description: p.description,
+        paidAt: p.paid_at,
+        expectedEntryCount: expectedCount,
+        savedEntryCount: savedCount,
+        performanceFeesOnEntries: performanceTotal,
+        registrationInPayment: Math.max(0, gross - performanceTotal),
+        isComplete: expectedCount > 0 ? savedCount >= expectedCount : savedCount > 0,
+      };
+    });
     
     return NextResponse.json({
       success: true,
-      entries: enhancedEntries
+      entries: enhancedEntries,
+      paymentBatches,
     });
   } catch (error) {
     console.error('Error fetching event entries:', error);

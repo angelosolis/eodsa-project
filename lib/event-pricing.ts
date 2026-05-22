@@ -43,6 +43,19 @@ export function getPricingDancerKey(entry: PricingEntry, index: number): string 
   return `__unassigned_${index}`;
 }
 
+/** Event uses flat per-item prices (solo/duet/group) rather than legacy per-dancer columns. */
+export function eventUsesFlatPricing(event: {
+  soloPrice?: number | null;
+  duetPrice?: number | null;
+  groupPrice?: number | null;
+}): boolean {
+  return (
+    toAmount(event.soloPrice, 0) > 0 ||
+    toAmount(event.duetPrice, 0) > 0 ||
+    toAmount(event.groupPrice, 0) > 0
+  );
+}
+
 export function getFixedEntryPrice(entryType: string, event: EventPricingConfig): number {
   const normalized = (entryType || '').toLowerCase();
   if (normalized === 'solo') return toAmount(event.soloPrice, 0);

@@ -7,6 +7,10 @@ import { validatePayFastHost, PayFastWebhookData, PAYFAST_CONFIG } from '@/lib/p
 import crypto from 'crypto';
 import { neon } from '@neondatabase/serverless';
 import { autoMarkRegistrationForParticipants } from '@/lib/registration-fee-tracker';
+import {
+  reconcileBatchEntriesFromPending,
+  parsePendingEntriesData,
+} from '@/lib/batch-entry-creation';
 
 const sql = neon(process.env.DATABASE_URL!);
 
@@ -252,222 +256,55 @@ export async function POST(request: NextRequest) {
     // Handle successful payment
     if (updatedStatus === 'completed') {
       console.log(`✅ Payment completed: ${webhookData.m_payment_id}`);
-      console.log(`🎯 Auto-approving entries for payment: ${webhookData.m_payment_id}`);
-      
-      // Idempotency guard: if entries already exist for this payment, skip auto-creation
-      const priorEntries = await sql`
-        SELECT id FROM event_entries WHERE payment_id = ${webhookData.m_payment_id} LIMIT 1
-      `;
-      if (priorEntries.length > 0) {
-        console.log(`🛑 Entries already exist for payment ${webhookData.m_payment_id}. Ensuring performances exist for each approved entry...`);
+      console.log(`🎯 Reconciling batch entries for payment: ${webhookData.m_payment_id}`);
 
-        // Ensure a Performance exists for each approved entry tied to this payment
-        try {
-          const { db, unifiedDb } = await import('@/lib/database');
-
-          const paidEntries = await sql`
-            SELECT id, event_id, contestant_id, item_name, participant_ids, estimated_duration,
-                   choreographer, mastery, item_style, item_number
-            FROM event_entries
-            WHERE payment_id = ${webhookData.m_payment_id} AND approved = TRUE
-          ` as any[];
-
-          for (const entry of paidEntries) {
-            const existingPerf = await sql`SELECT id FROM performances WHERE event_entry_id = ${entry.id} LIMIT 1` as any[];
-            if (existingPerf.length > 0) continue;
-
-            // Build participant names via unified dancer records when possible
-            const participantNames: string[] = [];
-            try {
-              const ids = JSON.parse(entry.participant_ids || '[]');
-              for (let i = 0; i < ids.length; i++) {
-                try {
-                  const dancer = await unifiedDb.getDancerById(ids[i]);
-                  participantNames.push(dancer?.name || `Participant ${i + 1}`);
-                } catch {
-                  participantNames.push(`Participant ${i + 1}`);
-                }
-              }
-            } catch {
-              participantNames.push('Participant 1');
-            }
-
-            await db.createPerformance({
-              eventId: entry.event_id,
-              eventEntryId: entry.id,
-              contestantId: entry.contestant_id,
-              title: entry.item_name,
-              participantNames,
-              duration: entry.estimated_duration || 0,
-              choreographer: entry.choreographer,
-              mastery: entry.mastery,
-              itemStyle: entry.item_style,
-              status: 'scheduled',
-              itemNumber: entry.item_number || null as any
-            });
-          }
-        } catch (ensureErr) {
-          console.warn('⚠️ Failed ensuring performances for existing paid entries:', ensureErr);
-        }
-
-        await sql`
-          INSERT INTO payment_logs (payment_id, event_type, event_data, ip_address, user_agent)
-          VALUES (
-            ${webhookData.m_payment_id}, 'duplicate_webhook_skipped',
-            ${JSON.stringify({ reason: 'entries already exist for this payment_id', ensured_performances: true })},
-            ${clientIP}, ${request.headers.get('user-agent') || 'webhook'}
-          )
-        `;
-      } else {
-      // Check if this is a batch payment with pending entries that need to be created
-      const pendingEntries = await sql`
-        SELECT pending_entries_data FROM payments 
-        WHERE payment_id = ${webhookData.m_payment_id} 
-        AND pending_entries_data IS NOT NULL
+      const pendingRows = await sql`
+        SELECT pending_entries_data FROM payments
+        WHERE payment_id = ${webhookData.m_payment_id}
+          AND pending_entries_data IS NOT NULL
       `;
 
-      if (pendingEntries.length > 0 && pendingEntries[0].pending_entries_data) {
-        console.log(`🔄 Creating entries automatically for batch payment: ${webhookData.m_payment_id}`);
-        
+      if (pendingRows.length > 0 && pendingRows[0].pending_entries_data) {
         try {
-          const rawPending = pendingEntries[0].pending_entries_data as any;
-          const entriesData = typeof rawPending === 'string' ? JSON.parse(rawPending) : rawPending;
-          if (!Array.isArray(entriesData)) {
-            throw new Error('pending_entries_data is not an array');
-          }
-          
-          // Import the database module to create entries
-          const { db, unifiedDb } = await import('@/lib/database');
-          
-          const createdEntries = [];
-          
-          // Create each entry
-          for (let i = 0; i < entriesData.length; i++) {
-            const entry = entriesData[i];
-            
-            try {
-              console.log(`📝 Auto-creating entry ${i + 1}/${entriesData.length}: ${entry.itemName}`);
+          const entriesData = parsePendingEntriesData(pendingRows[0].pending_entries_data);
+          const reconcileResult = await reconcileBatchEntriesFromPending(
+            webhookData.m_payment_id,
+            entriesData,
+            'webhook'
+          );
 
-              // Option C: Enforce qualification before creating (Water/Fire only; Air/Earth never qualify)
-              const primaryDancerId = entry.participantIds?.[0];
-              if (primaryDancerId) {
-                const { allowed, error } = await db.checkEventEntryQualification(entry.eventId, primaryDancerId);
-                if (!allowed) {
-                  console.warn(`⚠️ Qualification check failed for entry ${entry.itemName}:`, error);
-                  throw new Error(error || 'Qualification check failed');
-                }
-              }
+          const existingCount = await sql`
+            SELECT COUNT(*)::int AS c FROM event_entries WHERE payment_id = ${webhookData.m_payment_id}
+          ` as Array<{ c: number }>;
 
-              // Create event entry with payment reference
-              const eventEntry = await db.createEventEntry({
-                eventId: entry.eventId,
-                contestantId: entry.contestantId,
-                eodsaId: entry.eodsaId,
-                participantIds: entry.participantIds,
-                calculatedFee: entry.calculatedFee,
-                paymentStatus: 'paid', // Mark as paid since payment was successful
-                paymentMethod: 'payfast',
-                approved: true, // AUTO-APPROVE: Entries are automatically approved after successful payment
-                qualifiedForNationals: true,
-                itemNumber: undefined,
-                itemName: entry.itemName,
-                choreographer: entry.choreographer,
-                mastery: entry.mastery,
-                itemStyle: entry.itemStyle,
-                estimatedDuration: entry.estimatedDuration,
-                entryType: entry.entryType || 'live',
-                musicFileUrl: entry.musicFileUrl || undefined,
-                musicFileName: entry.musicFileName || undefined,
-                videoFileUrl: undefined,
-                videoFileName: undefined,
-                videoExternalUrl: entry.videoExternalUrl || undefined,
-                videoExternalType: (entry.videoExternalType && ['youtube', 'vimeo', 'other'].includes(entry.videoExternalType)) 
-                  ? entry.videoExternalType as 'youtube' | 'vimeo' | 'other' 
-                  : undefined
-              });
-
-              // Update the entry with payment ID
-              await sql`
-                UPDATE event_entries 
-                SET payment_id = ${webhookData.m_payment_id}
-                WHERE id = ${eventEntry.id}
-              `;
-
-              // Auto-create performance for this approved entry (idempotent)
-              try {
-                const existingPerformances = await db.getAllPerformances();
-                const alreadyExists = existingPerformances.some(p => p.eventEntryId === eventEntry.id);
-                if (!alreadyExists) {
-                  // Build participant names via unified dancer records when possible
-                  const participantNames: string[] = [];
-                  try {
-                    for (let i = 0; i < entry.participantIds.length; i++) {
-                      const pid = entry.participantIds[i];
-                      try {
-                        const dancer = await unifiedDb.getDancerById(pid);
-                        if (dancer?.name) {
-                          participantNames.push(dancer.name);
-                          continue;
-                        }
-                      } catch {}
-                      participantNames.push(`Participant ${i + 1}`);
-                    }
-                  } catch {
-                    entry.participantIds.forEach((_: any, i: number) => participantNames.push(`Participant ${i + 1}`));
-                  }
-
-                  await db.createPerformance({
-                    eventId: entry.eventId,
-                    eventEntryId: eventEntry.id,
-                    contestantId: entry.contestantId,
-                    title: entry.itemName,
-                    participantNames,
-                    duration: entry.estimatedDuration || 0,
-                    choreographer: entry.choreographer,
-                    mastery: entry.mastery,
-                    itemStyle: entry.itemStyle,
-                    status: 'scheduled',
-                    itemNumber: undefined
-                  });
-                }
-              } catch (perfErr) {
-                console.warn('⚠️ Failed to auto-create performance for entry', eventEntry.id, perfErr);
-              }
-
-              createdEntries.push({
-                entryId: eventEntry.id,
-                itemName: entry.itemName,
-                performanceType: entry.performanceType,
-                fee: entry.calculatedFee
-              });
-              
-              console.log(`✅ Auto-created entry ${eventEntry.id} successfully`);
-              
-            } catch (error: any) {
-              console.error(`❌ Error auto-creating entry ${i + 1}:`, error);
-            }
-          }
-          
-          // Log the automatic entry creation
           await sql`
             INSERT INTO payment_logs (payment_id, event_type, event_data, ip_address, user_agent)
             VALUES (
-              ${webhookData.m_payment_id}, 'auto_entries_created',
+              ${webhookData.m_payment_id},
+              ${reconcileResult.created.length > 0 ? 'auto_entries_created' : 'batch_entries_reconciled'},
               ${JSON.stringify({
-                created_count: createdEntries.length,
-                entries: createdEntries,
-                source: 'webhook_auto_creation'
+                pending_count: entriesData.length,
+                existing_count: existingCount[0]?.c ?? 0,
+                created_count: reconcileResult.created.length,
+                skipped_count: reconcileResult.skipped.length,
+                error_count: reconcileResult.errors.length,
+                created: reconcileResult.created,
+                skipped: reconcileResult.skipped,
+                errors: reconcileResult.errors.length > 0 ? reconcileResult.errors : undefined,
+                source: 'webhook_reconciliation',
               })},
-              ${clientIP}, ${request.headers.get('user-agent') || 'webhook'}
+              ${clientIP},
+              ${request.headers.get('user-agent') || 'webhook'}
             )
           `;
-          
-          console.log(`🎉 Successfully auto-created ${createdEntries.length} entries for payment ${webhookData.m_payment_id}`);
-          
+
+          console.log(
+            `🎉 Reconcile ${webhookData.m_payment_id}: +${reconcileResult.created.length} created, ` +
+              `${reconcileResult.skipped.length} skipped, ${reconcileResult.errors.length} errors ` +
+              `(${existingCount[0]?.c ?? 0}/${entriesData.length} in DB)`
+          );
         } catch (error) {
-          console.error(`💥 Failed to auto-create entries for payment ${webhookData.m_payment_id}:`, error);
-          
-          // Log the error
+          console.error(`💥 Failed to reconcile entries for payment ${webhookData.m_payment_id}:`, error);
           await sql`
             INSERT INTO payment_logs (payment_id, event_type, event_data, ip_address, user_agent)
             VALUES (
@@ -477,7 +314,6 @@ export async function POST(request: NextRequest) {
             )
           `;
         }
-      }
       }
       
       // Additional logic:

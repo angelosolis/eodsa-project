@@ -979,7 +979,8 @@ export const db = {
       videoExternalUrl: row.video_external_url,
       videoExternalType: row.video_external_type,
       performanceType: row.performance_type,
-      ageCategory: row.age_category
+      ageCategory: row.age_category,
+      paymentId: row.payment_id || undefined
     })) as EventEntry[];
   },
 

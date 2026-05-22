@@ -95,12 +95,17 @@ function PaymentSuccessContent() {
       const checkResponse = await fetch(`/api/payments/process-entries?payment_id=${paymentId}`);
       const checkData = await checkResponse.json();
 
-      if (checkData.success && checkData.entries.length > 0) {
-        // Entries already processed
+      if (checkData.success && checkData.isComplete) {
         setCreatedEntries(checkData.entries);
         setEntriesProcessed(true);
-        console.log('✅ Entries already processed:', checkData.entries);
+        console.log('✅ All entries already processed:', checkData.entries);
         return;
+      }
+
+      if (checkData.success && checkData.entries.length > 0 && !checkData.isComplete) {
+        console.log(
+          `⚠️ Partial entries (${checkData.count}/${checkData.expectedCount}) — reconciling missing items...`
+        );
       }
 
       // Get pending entries from session storage
