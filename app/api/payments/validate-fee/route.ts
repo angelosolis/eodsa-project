@@ -8,7 +8,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getSql } from '@/lib/database';
-import { calculateEventPricing, getFixedEntryPrice } from '@/lib/event-pricing';
+import { calculateEventPricing, getFixedEntryPrice, getParticipantCount } from '@/lib/event-pricing';
 
 export async function POST(request: NextRequest) {
   try {
@@ -92,15 +92,19 @@ export async function POST(request: NextRequest) {
       success: true,
       computedFee: feeResult.total,
       registrationFee: feeResult.registrationTotal,
-      entryFee: getFixedEntryPrice(performanceType, {
-        soloPrice: event.solo_price,
-        duetPrice: event.duet_price,
-        groupPrice: event.group_price
-      }),
+      entryFee: getFixedEntryPrice(
+        performanceType,
+        {
+          soloPrice: event.solo_price,
+          duetPrice: event.duet_price,
+          groupPrice: event.group_price,
+        },
+        getParticipantCount({ performanceType, participantIds: normalizedParticipantIds, eodsaId })
+      ),
       registrationCharged: feeResult.registrationTotal > 0,
       registrationWasAlreadyCharged: feeResult.registrationTotal === 0,
-      entryCount: 0,
-      breakdown: `Fixed ${performanceType} pricing`,
+      entryCount: normalizedParticipantIds.length,
+      breakdown: `${performanceType} pricing (per dancer for duet/trio/group)`,
       warnings: [],
       mismatchDetected,
       mismatchReason: mismatchDetected ? mismatchReason : undefined,

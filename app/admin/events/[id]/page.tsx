@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAlert } from '@/components/ui/custom-alert';
 import { calculateEODSAFee } from '@/lib/types';
-import { eventUsesFlatPricing, getFixedEntryPrice } from '@/lib/event-pricing';
+import { eventUsesFlatPricing, getFixedEntryPrice, getPerDancerRate } from '@/lib/event-pricing';
 import { getSql } from '@/lib/database';
 import { ThemeProvider, useTheme, getThemeClasses } from '@/components/providers/ThemeProvider';
 import { calculateAgeOnDate, getAgeCategoryFromAge } from '@/lib/types';
@@ -1621,10 +1621,10 @@ function EventParticipantsPage() {
               {paymentBatches.length > 0 && eventUsesFlatPricing(event || {}) && (
                 <div className={`mt-4 p-4 rounded-lg border ${theme === 'dark' ? 'bg-slate-800/60 border-slate-600' : 'bg-amber-50 border-amber-200'}`}>
                   <p className={`text-sm font-semibold ${themeClasses.textPrimary} mb-2`}>
-                    PayFast batch payments (flat pricing)
+                    PayFast batch payments
                   </p>
                   <p className={`text-xs ${themeClasses.textMuted} mb-3`}>
-                    Line fees on each entry are performance-only (flat solo/duet/group). Registration is charged once per dancer on the batch payment, not repeated on every row.
+                    Duet and group line totals are rate × dancers on that item. Registration is once per dancer on the batch payment. Stored fees on older rows may differ if pricing was corrected after payment.
                   </p>
                   <div className="space-y-2">
                     {paymentBatches.map((batch) => {
@@ -2558,19 +2558,35 @@ function FeeBreakdownComponent({ entry, event, allEntries }: { entry: EventEntry
           event.currency === 'USD' ? '$' : event.currency === 'EUR' ? '€' : event.currency === 'GBP' ? '£' : 'R';
 
         if (eventUsesFlatPricing(event)) {
-          const performanceFee = getFixedEntryPrice(performanceType, {
+          const rate = getPerDancerRate(performanceType, {
             soloPrice: event.soloPrice,
             duetPrice: event.duetPrice,
             groupPrice: event.groupPrice,
           });
+          const performanceFee = getFixedEntryPrice(
+            performanceType,
+            {
+              soloPrice: event.soloPrice,
+              duetPrice: event.duetPrice,
+              groupPrice: event.groupPrice,
+            },
+            participantCount
+          );
+          const breakdownText =
+            performanceType === 'Solo'
+              ? `Solo: ${currencySymbol}${rate.toFixed(2)}`
+              : `${performanceType}: ${currencySymbol}${rate.toFixed(2)} × ${participantCount} dancer${participantCount !== 1 ? 's' : ''} = ${currencySymbol}${performanceFee.toFixed(2)}`;
           setBreakdown({
             performanceFee,
             registrationFee: 0,
             totalFee: performanceFee,
-            breakdown: `Flat ${performanceType} fee (${currencySymbol}${performanceFee.toFixed(2)} per item, not per dancer)`,
+            breakdown: breakdownText,
             registrationBreakdown:
               'Registration (if charged) is included once on the PayFast batch total for each new dancer — not on this line.',
-            totalFeeDescription: `Stored line fee matches flat ${performanceType} pricing`,
+            totalFeeDescription:
+              performanceType === 'Solo'
+                ? 'Per solo item'
+                : `Per dancer on this ${performanceType.toLowerCase()} (${participantCount} dancers)`,
           });
           setLoadingBreakdown(false);
           return;

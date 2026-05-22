@@ -559,11 +559,16 @@ export default function CompetitionEntryPage() {
 
   const getStartingFee = (performanceType: string) => {
     if (!event) return 0;
-    return getFixedEntryPrice(performanceType, {
-      soloPrice: event.soloPrice,
-      duetPrice: event.duetPrice,
-      groupPrice: event.groupPrice
-    });
+    const limits = getParticipantLimits(performanceType);
+    return getFixedEntryPrice(
+      performanceType,
+      {
+        soloPrice: event.soloPrice,
+        duetPrice: event.duetPrice,
+        groupPrice: event.groupPrice,
+      },
+      limits.min
+    );
   };
 
   // Resolve a dancer's EODSA ID from an internal participant ID (studio mode)
@@ -746,12 +751,12 @@ export default function CompetitionEntryPage() {
         );
         return parts.net;
       }
-      return getFixedEntryPrice(performanceType, cfg);
+      return getFixedEntryPrice(performanceType, cfg, participantIds.length);
     }
     try {
       if (!currentForm.mastery) {
         console.warn('No mastery level selected, using default performance fee calculation');
-        return calculateFallbackEntryFee(performanceType, participantIds.length, participantIds);
+        return calculateFallbackEntryFee(performanceType, participantIds.length);
       }
 
       // Use smart fee calculation that accounts for registration fees
@@ -908,17 +913,21 @@ export default function CompetitionEntryPage() {
       return fee;
     } catch (error) {
       console.error('Error in smart fee calculation, falling back to basic calculation:', error);
-      return calculateFallbackEntryFee(performanceType, participantIds.length, participantIds);
+      return calculateFallbackEntryFee(performanceType, participantIds.length);
     }
   };
 
   // Fallback fee calculation for when smart calculation fails
-  const calculateFallbackEntryFee = (performanceType: string, participantCount: number, specificParticipantIds?: string[]) => {
-    return getFixedEntryPrice(performanceType, {
-      soloPrice: event?.soloPrice,
-      duetPrice: event?.duetPrice,
-      groupPrice: event?.groupPrice
-    });
+  const calculateFallbackEntryFee = (performanceType: string, participantCount: number) => {
+    return getFixedEntryPrice(
+      performanceType,
+      {
+        soloPrice: event?.soloPrice,
+        duetPrice: event?.duetPrice,
+        groupPrice: event?.groupPrice,
+      },
+      participantCount
+    );
   };
 
   const handleAddPerformanceType = (performanceType: string) => {
@@ -1222,7 +1231,7 @@ export default function CompetitionEntryPage() {
       } catch (err) {
         console.warn('SOLO_DEBUG: preview:error, using fallback', err);
         setPreviewFee(
-          calculateFallbackEntryFee(showAddForm || 'Solo', currentForm.participantIds.length, currentForm.participantIds)
+          calculateFallbackEntryFee(showAddForm || 'Solo', currentForm.participantIds.length)
         );
       }
     };

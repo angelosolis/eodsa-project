@@ -6,7 +6,12 @@
 
 import { createTransactionRecord } from './transaction-records';
 import { getSql } from './database';
-import { calculateEventPricing, getFixedEntryPrice, getPricingDancerKey } from './event-pricing';
+import {
+  calculateEventPricing,
+  getFixedEntryPrice,
+  getParticipantCount,
+  getPricingDancerKey,
+} from './event-pricing';
 
 export interface EntryFeeValidation {
   entryIndex: number;
@@ -110,13 +115,19 @@ export async function validateBatchEntryFees(
 
   for (let i = 0; i < normalizedEntries.length; i++) {
     const entry = normalizedEntries[i];
+    const participantCount = getParticipantCount(entry);
     const basePrice = getFixedEntryPrice(entry.performanceType, {
       soloPrice: event.solo_price,
       duetPrice: event.duet_price,
-      groupPrice: event.group_price
-    });
+      groupPrice: event.group_price,
+    }, participantCount);
     const lineDiscount = entryDiscounts[i] || 0;
     const computedFee = Math.max(0, basePrice - lineDiscount);
+    const typeLabel = (entry.performanceType || '').toLowerCase();
+    const breakdown =
+      typeLabel === 'solo'
+        ? `Solo ${basePrice}`
+        : `${entry.performanceType} (${participantCount} × rate = ${basePrice})`;
     validations.push({
       entryIndex: i,
       entry,
@@ -126,8 +137,8 @@ export async function validateBatchEntryFees(
       entryFee: basePrice,
       registrationCharged: false,
       registrationWasAlreadyCharged: false,
-      entryCount: 0,
-      breakdown: `Fixed ${entry.performanceType} price`,
+      entryCount: participantCount,
+      breakdown,
       warnings: [],
       isValid: true,
       mismatchDetected: false

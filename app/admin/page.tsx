@@ -3332,8 +3332,14 @@ function AdminDashboard() {
                 </div>
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                   <input type="number" min="0" step="0.01" value={newEvent.soloPrice || ''} onChange={(e) => setNewEvent(prev => ({ ...prev, soloPrice: parseFloat(e.target.value) || 0 }))} className={`w-full px-4 py-3 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.textPrimary}`} placeholder="Solo price" />
-                  <input type="number" min="0" step="0.01" value={newEvent.duetPrice || ''} onChange={(e) => setNewEvent(prev => ({ ...prev, duetPrice: parseFloat(e.target.value) || 0 }))} className={`w-full px-4 py-3 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.textPrimary}`} placeholder="Duet price" />
-                  <input type="number" min="0" step="0.01" value={newEvent.groupPrice || ''} onChange={(e) => setNewEvent(prev => ({ ...prev, groupPrice: parseFloat(e.target.value) || 0 }))} className={`w-full px-4 py-3 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.textPrimary}`} placeholder="Group price" />
+                  <div>
+                    <input type="number" min="0" step="0.01" value={newEvent.duetPrice || ''} onChange={(e) => setNewEvent(prev => ({ ...prev, duetPrice: parseFloat(e.target.value) || 0 }))} className={`w-full px-4 py-3 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.textPrimary}`} placeholder="Duet price per dancer" />
+                    <p className={`text-xs ${themeClasses.textMuted} mt-1`}>Per dancer (duet total = ×2)</p>
+                  </div>
+                  <div>
+                    <input type="number" min="0" step="0.01" value={newEvent.groupPrice || ''} onChange={(e) => setNewEvent(prev => ({ ...prev, groupPrice: parseFloat(e.target.value) || 0 }))} className={`w-full px-4 py-3 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.textPrimary}`} placeholder="Group price per dancer" />
+                    <p className={`text-xs ${themeClasses.textMuted} mt-1`}>Per dancer (group total = × number in group)</p>
+                  </div>
                   <div className="sm:col-span-2 lg:col-span-1">
                     <input type="number" min="0" step="0.01" value={newEvent.registrationFee || ''} onChange={(e) => setNewEvent(prev => ({ ...prev, registrationFee: parseFloat(e.target.value) || 0 }))} className={`w-full px-4 py-3 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.textPrimary}`} placeholder="Registration fee" />
                     <p className={`text-xs ${themeClasses.textMuted} mt-1`}>Charged once per dancer per event</p>
@@ -3903,8 +3909,14 @@ function AdminDashboard() {
                 </div>
                 <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
                   <input type="number" min="0" step="0.01" value={(editEventData as any).soloPrice || ''} onChange={(e) => setEditEventData(prev => ({ ...prev, soloPrice: parseFloat(e.target.value) || 0 }))} className={`w-full px-4 py-2 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.textPrimary}`} placeholder="Solo price" />
-                  <input type="number" min="0" step="0.01" value={(editEventData as any).duetPrice || ''} onChange={(e) => setEditEventData(prev => ({ ...prev, duetPrice: parseFloat(e.target.value) || 0 }))} className={`w-full px-4 py-2 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.textPrimary}`} placeholder="Duet price" />
-                  <input type="number" min="0" step="0.01" value={(editEventData as any).groupPrice || ''} onChange={(e) => setEditEventData(prev => ({ ...prev, groupPrice: parseFloat(e.target.value) || 0 }))} className={`w-full px-4 py-2 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.textPrimary}`} placeholder="Group price" />
+                  <div>
+                    <input type="number" min="0" step="0.01" value={(editEventData as any).duetPrice || ''} onChange={(e) => setEditEventData(prev => ({ ...prev, duetPrice: parseFloat(e.target.value) || 0 }))} className={`w-full px-4 py-2 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.textPrimary}`} placeholder="Duet price per dancer" />
+                    <p className={`text-xs ${themeClasses.textMuted} mt-1`}>Per dancer (duet total = ×2)</p>
+                  </div>
+                  <div>
+                    <input type="number" min="0" step="0.01" value={(editEventData as any).groupPrice || ''} onChange={(e) => setEditEventData(prev => ({ ...prev, groupPrice: parseFloat(e.target.value) || 0 }))} className={`w-full px-4 py-2 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.textPrimary}`} placeholder="Group price per dancer" />
+                    <p className={`text-xs ${themeClasses.textMuted} mt-1`}>Per dancer (group total = × number in group)</p>
+                  </div>
                   <div>
                     <input type="number" min="0" step="0.01" value={(editEventData as any).registrationFee || ''} onChange={(e) => setEditEventData(prev => ({ ...prev, registrationFee: parseFloat(e.target.value) || 0 }))} className={`w-full px-4 py-2 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.textPrimary}`} placeholder="Registration fee" />
                     <p className={`text-xs ${themeClasses.textMuted} mt-1`}>Charged once per dancer per event</p>

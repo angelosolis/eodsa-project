@@ -7,8 +7,11 @@ export interface PricingEntry {
 }
 
 export interface EventPricingConfig {
+  /** Per solo item (one dancer). */
   soloPrice?: number | null;
+  /** Per dancer in duet/trio. */
   duetPrice?: number | null;
+  /** Per dancer in group (4+). */
   groupPrice?: number | null;
   discountEnabled?: boolean | null;
   /** Every Nth solo (per dancer) receives `discount_amount` off that line (e.g. 3 → 3rd, 6th, 9th…). */
@@ -43,7 +46,18 @@ export function getPricingDancerKey(entry: PricingEntry, index: number): string 
   return `__unassigned_${index}`;
 }
 
-/** Event uses flat per-item prices (solo/duet/group) rather than legacy per-dancer columns. */
+/** Number of dancers billed on this line (duet/trio/group multiply by this). */
+export function getParticipantCount(entry: PricingEntry): number {
+  const ids = Array.isArray(entry.participantIds) ? entry.participantIds.filter(Boolean) : [];
+  if (ids.length > 0) return ids.length;
+  const normalized = (entry.performanceType || '').toLowerCase();
+  if (normalized === 'duet') return 2;
+  if (normalized === 'trio') return 3;
+  if (normalized === 'group') return 4;
+  return 1;
+}
+
+/** Event uses configured solo/duet/group price fields (not legacy-only columns). */
 export function eventUsesFlatPricing(event: {
   soloPrice?: number | null;
   duetPrice?: number | null;
@@ -56,7 +70,32 @@ export function eventUsesFlatPricing(event: {
   );
 }
 
-export function getFixedEntryPrice(entryType: string, event: EventPricingConfig): number {
+/**
+ * Performance fee for one entry line.
+ * Solo: flat soloPrice. Duet/Trio/Group: rate × participant count (rates are per dancer).
+ */
+export function getFixedEntryPrice(
+  entryType: string,
+  event: EventPricingConfig,
+  participantCount = 1
+): number {
+  const normalized = (entryType || '').toLowerCase();
+  const count = Math.max(1, Math.floor(participantCount) || 1);
+
+  if (normalized === 'solo') {
+    return toAmount(event.soloPrice, 0);
+  }
+  if (normalized === 'duet' || normalized === 'trio') {
+    return toAmount(event.duetPrice, 0) * count;
+  }
+  if (normalized === 'group') {
+    return toAmount(event.groupPrice, 0) * count;
+  }
+  return 0;
+}
+
+/** Per-dancer rate for display (solo returns full solo price). */
+export function getPerDancerRate(entryType: string, event: EventPricingConfig): number {
   const normalized = (entryType || '').toLowerCase();
   if (normalized === 'solo') return toAmount(event.soloPrice, 0);
   if (normalized === 'duet' || normalized === 'trio') return toAmount(event.duetPrice, 0);
@@ -73,7 +112,8 @@ export function getNetPerformanceLineParts(
   event: EventPricingConfig,
   soloOrdinal: number
 ): { gross: number; discount: number; net: number } {
-  const gross = getFixedEntryPrice(entry.performanceType, event);
+  const participantCount = getParticipantCount(entry);
+  const gross = getFixedEntryPrice(entry.performanceType, event, participantCount);
   const isSolo = (entry.performanceType || '').toLowerCase() === 'solo';
   const intervalN = Math.max(0, Math.floor(toAmount(event.discountMinEntries, 0)));
   const discCfg = Math.max(0, toAmount(event.discountAmount, 0));
@@ -94,8 +134,8 @@ export function getNetPerformanceLineParts(
 }
 
 /**
- * Flat line-item prices + **every Nth solo** discount per dancer (3rd/6th/9th when N=3).
- * Pass `existingSoloCountByDancer` with DB solo counts per participant id before this cart (so batch order + DB ordinals match checkout).
+ * Line-item prices + **every Nth solo** discount per dancer (3rd/6th/9th when N=3).
+ * Duet/trio/group: duetPrice/groupPrice are **per dancer** × participant count.
  */
 export function calculateEventPricing(
   entries: PricingEntry[],
@@ -107,7 +147,6 @@ export function calculateEventPricing(
   const entryDiscounts = new Array(safeEntries.length).fill(0);
   const itemizedEntries: EventPricingResult['itemizedEntries'] = [];
 
-  /** Running solo ordinal per dancer within this batch (starts after DB count). */
   const batchSoloAdded: Record<string, number> = {};
 
   let subtotal = 0;
@@ -115,21 +154,21 @@ export function calculateEventPricing(
 
   for (let i = 0; i < safeEntries.length; i++) {
     const entry = safeEntries[i];
-    const base = getFixedEntryPrice(entry.performanceType, event);
-    itemizedEntries.push({ index: i, type: entry.performanceType || 'Unknown', price: base });
-    subtotal += base;
-
     const key = getPricingDancerKey(entry, i);
     const isSolo = (entry.performanceType || '').toLowerCase() === 'solo';
 
-    if (!isSolo) continue;
-
-    const priorDb = Math.max(0, Math.floor(existingSoloCountByDancer[key] ?? 0));
-    const prevBatch = batchSoloAdded[key] ?? 0;
-    batchSoloAdded[key] = prevBatch + 1;
-    const soloOrdinal = priorDb + batchSoloAdded[key];
+    let soloOrdinal = 0;
+    if (isSolo) {
+      const priorDb = Math.max(0, Math.floor(existingSoloCountByDancer[key] ?? 0));
+      const prevBatch = batchSoloAdded[key] ?? 0;
+      batchSoloAdded[key] = prevBatch + 1;
+      soloOrdinal = priorDb + batchSoloAdded[key];
+    }
 
     const parts = getNetPerformanceLineParts(entry, event, soloOrdinal);
+    itemizedEntries.push({ index: i, type: entry.performanceType || 'Unknown', price: parts.net });
+    subtotal += parts.gross;
+
     if (parts.discount > 0) {
       entryDiscounts[i] = parts.discount;
       discount += parts.discount;
@@ -165,6 +204,6 @@ export function calculateEventPricing(
     discount,
     registrationTotal,
     total,
-    entryDiscounts
+    entryDiscounts,
   };
 }
