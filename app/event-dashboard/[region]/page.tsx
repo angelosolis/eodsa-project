@@ -5,6 +5,7 @@ import { useSearchParams, useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { PERFORMANCE_TYPES, EODSA_FEES, Event } from '@/lib/types';
 import CountdownTimer from '@/app/components/CountdownTimer';
+import EventPricingPanel from '@/app/components/EventPricingPanel';
 
 interface Contestant {
   id: string;
@@ -419,6 +420,9 @@ export default function NationalsEventsPage() {
                       </div>
                     </div>
                   </div>
+
+                  {/* Pricing */}
+                  <EventPricingPanel event={event} className="mb-6" />
 
                   {/* Registration Deadline */}
                   <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl mb-6">

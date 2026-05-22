@@ -5,6 +5,7 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { PERFORMANCE_TYPES, MASTERY_LEVELS, REGIONAL_MASTERY_LEVELS, ITEM_STYLES, Event } from '@/lib/types';
 import CountdownTimer from '@/app/components/CountdownTimer';
+import EventPricingPanel from '@/app/components/EventPricingPanel';
 import { useToast } from '@/components/ui/simple-toast';
 import MusicUpload from '@/components/MusicUpload';
 import { calculateEventPricing, getFixedEntryPrice, getNetPerformanceLineParts } from '@/lib/event-pricing';
@@ -1708,6 +1709,7 @@ export default function CompetitionEntryPage() {
       {/* Main Content */}
       {!qualificationBlocked && (
       <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+        <EventPricingPanel event={event} className="mb-6 lg:hidden" compact />
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Left Column - Performance Type Selection and Forms */}
           <div className="lg:col-span-2">
@@ -2539,15 +2541,18 @@ export default function CompetitionEntryPage() {
               </button>
             </div>
 
-            {/* Event Details */}
-            <div className="bg-slate-800/60 backdrop-blur-xl rounded-2xl border border-slate-700/50 p-6 mt-6">
-              <h3 className="text-xl font-semibold text-white mb-4">Event Details</h3>
-                             <div className="space-y-2 text-sm text-slate-300">
-                 <p><strong>Date:</strong> {event?.eventDate ? new Date(event.eventDate).toLocaleDateString() : 'TBD'}</p>
-                 <p><strong>Time:</strong> {event?.eventDate ? new Date(event.eventDate).toLocaleTimeString() : 'TBD'}</p>
-                 <p><strong>Venue:</strong> {event?.venue || 'TBD'}</p>
-                 <p><strong>Registration Deadline:</strong> {event?.registrationDeadline ? new Date(event.registrationDeadline).toLocaleDateString() : 'TBD'}</p>
-               </div>
+            {/* Event Details & Pricing */}
+            <div className="bg-slate-800/60 backdrop-blur-xl rounded-2xl border border-slate-700/50 p-6 mt-6 space-y-5">
+              <div>
+                <h3 className="text-xl font-semibold text-white mb-4">Event Details</h3>
+                <div className="space-y-2 text-sm text-slate-300">
+                  <p><strong>Date:</strong> {event?.eventDate ? new Date(event.eventDate).toLocaleDateString() : 'TBD'}</p>
+                  <p><strong>Time:</strong> {event?.eventDate ? new Date(event.eventDate).toLocaleTimeString() : 'TBD'}</p>
+                  <p><strong>Venue:</strong> {event?.venue || 'TBD'}</p>
+                  <p><strong>Registration Deadline:</strong> {event?.registrationDeadline ? new Date(event.registrationDeadline).toLocaleDateString() : 'TBD'}</p>
+                </div>
+              </div>
+              {event && <EventPricingPanel event={event} compact className="hidden lg:block" />}
             </div>
           </div>
         </div>
