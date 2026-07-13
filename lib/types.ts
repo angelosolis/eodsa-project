@@ -108,6 +108,11 @@ export interface Event {
   qualificationRequired?: boolean;
   qualificationSource?: 'NONE' | 'REGIONAL' | 'ANY_NATIONAL_LEVEL' | 'MANUAL' | 'CUSTOM' | null;
   minimumQualificationScore?: number | null;
+  // Event archive (orthogonal to lifecycle status)
+  isArchived?: boolean;
+  archivedAt?: string | null;
+  archivedBy?: string | null;
+  mediaPurgedAt?: string | null;
 }
 
 export interface EventEntry {

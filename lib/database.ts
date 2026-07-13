@@ -29,9 +29,17 @@ function createNeonFetch() {
 // Create database connection using Neon serverless driver
 // Only initialize if we have a DATABASE_URL (server-side only)
 let sql: ReturnType<typeof neon> | any = null;
-let isInitialized = false;
-let initializationPromise: Promise<void> | null = null;
 let usePgFallback = false;
+
+/** Survives Next.js HMR module reloads (module-level flags get reset). */
+type SchemaInitState = { done: boolean; promise: Promise<any> | null };
+function getSchemaInitState(): SchemaInitState {
+  const g = globalThis as typeof globalThis & { __eodsaSchemaInit?: SchemaInitState };
+  if (!g.__eodsaSchemaInit) {
+    g.__eodsaSchemaInit = { done: false, promise: null };
+  }
+  return g.__eodsaSchemaInit;
+}
 
 // Create a pg wrapper that mimics Neon's template literal syntax
 function createPgWrapper(pgClient: any) {
@@ -116,6 +124,19 @@ export const generateStudioRegistrationId = () => {
 
 // Initialize database tables for Phase 1 - only runs once per server instance
 export const initializeDatabase = async () => {
+  // Skip full schema migration after the first successful run.
+  // Use globalThis so Next.js HMR does not re-run 50+ ALTER round-trips (~30s)
+  // and time out History/archive reads.
+  const initState = getSchemaInitState();
+  if (initState.done) {
+    return db;
+  }
+  if (initState.promise) {
+    await initState.promise;
+    return db;
+  }
+
+  initState.promise = (async () => {
   try {
     console.log('🚀 Ensuring database schema is up to date...');
     const sqlClient = getSql();
@@ -180,6 +201,13 @@ export const initializeDatabase = async () => {
     await sqlClient`ALTER TABLE events ADD COLUMN IF NOT EXISTS qualification_required BOOLEAN NOT NULL DEFAULT FALSE`;
     await sqlClient`ALTER TABLE events ADD COLUMN IF NOT EXISTS qualification_source TEXT CHECK (qualification_source IN ('NONE', 'REGIONAL', 'ANY_NATIONAL_LEVEL', 'MANUAL', 'CUSTOM'))`;
     await sqlClient`ALTER TABLE events ADD COLUMN IF NOT EXISTS minimum_qualification_score INTEGER`;
+
+    // Event archive system (orthogonal to lifecycle status)
+    await sqlClient`ALTER TABLE events ADD COLUMN IF NOT EXISTS is_archived BOOLEAN NOT NULL DEFAULT FALSE`;
+    await sqlClient`ALTER TABLE events ADD COLUMN IF NOT EXISTS archived_at TEXT`;
+    await sqlClient`ALTER TABLE events ADD COLUMN IF NOT EXISTS archived_by TEXT`;
+    await sqlClient`ALTER TABLE events ADD COLUMN IF NOT EXISTS media_purged_at TEXT`;
+    await sqlClient`CREATE INDEX IF NOT EXISTS idx_events_is_archived_event_date ON events(is_archived, event_date)`;
 
     // Create event_manual_qualifications table
     await sqlClient`
@@ -286,52 +314,14 @@ export const initializeDatabase = async () => {
       )
     `;
     
-    // Add foreign key constraint only if event_entries table exists and has id as PRIMARY KEY
+    // Skip broken information_schema join (ambiguous constraint_name) — non-critical FK
     try {
-      // First, try to drop any existing invalid foreign key constraint
-      try {
-        await sqlClient`
-          ALTER TABLE transaction_records
-          DROP CONSTRAINT IF EXISTS transaction_records_entry_id_fkey
-        `;
-      } catch (dropError) {
-        // Ignore if constraint doesn't exist
-      }
-      
-      const eventEntriesCheck = await sqlClient`
-        SELECT column_name, constraint_name
-        FROM information_schema.table_constraints tc
-        JOIN information_schema.key_column_usage kcu 
-          ON tc.constraint_name = kcu.constraint_name
-        WHERE tc.table_name = 'event_entries' 
-          AND tc.constraint_type = 'PRIMARY KEY'
-          AND kcu.column_name = 'id'
-      ` as any[];
-      
-      if (eventEntriesCheck.length > 0) {
-        // Check if foreign key constraint already exists
-        const fkCheck = await sqlClient`
-          SELECT constraint_name
-          FROM information_schema.table_constraints
-          WHERE table_name = 'transaction_records'
-            AND constraint_type = 'FOREIGN KEY'
-            AND constraint_name LIKE '%entry_id%'
-        ` as any[];
-        
-        if (fkCheck.length === 0) {
-          await sqlClient`
-            ALTER TABLE transaction_records
-            ADD CONSTRAINT transaction_records_entry_id_fkey
-            FOREIGN KEY (entry_id) REFERENCES event_entries(id) ON DELETE SET NULL
-          `;
-          console.log('✅ Added foreign key constraint for transaction_records.entry_id');
-        }
-      } else {
-        console.warn('⚠️ event_entries table does not exist or id is not PRIMARY KEY - skipping foreign key constraint');
-      }
-    } catch (fkError) {
-      console.warn('⚠️ Could not add foreign key constraint for transaction_records.entry_id (non-critical):', fkError);
-      // Non-critical - table will work without the constraint
+      await sqlClient`
+        ALTER TABLE transaction_records
+        DROP CONSTRAINT IF EXISTS transaction_records_entry_id_fkey
+      `;
+    } catch {
+      // ignore
     }
 
     // Create indexes for transaction_records
@@ -563,13 +553,21 @@ export const initializeDatabase = async () => {
     `;
 
     console.log('✅ Database schema is up to date.');
-    
-    // Return the database object for use in API routes
-    return db; 
+    initState.done = true;
+    return db;
     
     } catch (error) {
     console.error('❌ Database initialization failed:', error);
     throw error; // Re-throw to fail the API request if db init fails
+  }
+  })();
+
+  try {
+    await initState.promise;
+    return db;
+  } catch (error) {
+    initState.promise = null;
+    throw error;
   }
 };
 
@@ -658,6 +656,54 @@ export async function getTotalJudgesForEvent(eventId: string, performanceId?: st
 }
 
 // Database operations
+
+function mapEventRow(row: any): Event {
+  return {
+    id: row.id,
+    name: row.name,
+    description: row.description,
+    region: row.region,
+    ageCategory: row.age_category,
+    performanceType: row.performance_type,
+    eventDate: row.event_date,
+    eventEndDate: row.event_end_date,
+    registrationDeadline: row.registration_deadline,
+    venue: row.venue,
+    status: row.status,
+    maxParticipants: row.max_participants,
+    entryFee: parseFloat(row.entry_fee),
+    createdBy: row.created_by,
+    createdAt: row.created_at,
+    registrationFeePerDancer: row.registration_fee_per_dancer != null ? parseFloat(row.registration_fee_per_dancer) : 300,
+    solo1Fee: row.solo_1_fee != null ? parseFloat(row.solo_1_fee) : 400,
+    solo2Fee: row.solo_2_fee != null ? parseFloat(row.solo_2_fee) : 750,
+    solo3Fee: row.solo_3_fee != null ? parseFloat(row.solo_3_fee) : 1050,
+    soloAdditionalFee: row.solo_additional_fee != null ? parseFloat(row.solo_additional_fee) : 100,
+    duoTrioFeePerDancer: row.duo_trio_fee_per_dancer != null ? parseFloat(row.duo_trio_fee_per_dancer) : 280,
+    groupFeePerDancer: row.group_fee_per_dancer != null ? parseFloat(row.group_fee_per_dancer) : 220,
+    largeGroupFeePerDancer: row.large_group_fee_per_dancer != null ? parseFloat(row.large_group_fee_per_dancer) : 190,
+    soloPrice: row.solo_price != null ? parseFloat(row.solo_price) : 0,
+    duetPrice: row.duet_price != null ? parseFloat(row.duet_price) : 0,
+    groupPrice: row.group_price != null ? parseFloat(row.group_price) : 0,
+    discountEnabled: row.discount_enabled ?? false,
+    discountMinEntries: row.discount_min_entries != null ? parseInt(row.discount_min_entries) : 0,
+    discountAmount: row.discount_amount != null ? parseFloat(row.discount_amount) : 0,
+    registrationFee: row.registration_fee != null ? parseFloat(row.registration_fee) : 0,
+    currency: row.currency || 'ZAR',
+    participationMode: row.participation_mode || 'hybrid',
+    certificateTemplateUrl: row.certificate_template_url || undefined,
+    numberOfJudges: row.number_of_judges != null ? parseInt(row.number_of_judges) : 4,
+    eventType: (row.event_type || 'REGIONAL_EVENT') as 'REGIONAL_EVENT' | 'NATIONAL_EVENT' | 'QUALIFIER_EVENT' | 'INTERNATIONAL_VIRTUAL_EVENT',
+    eventMode: (row.event_mode || 'HYBRID') as 'LIVE' | 'VIRTUAL' | 'HYBRID',
+    qualificationRequired: row.qualification_required ?? false,
+    qualificationSource: row.qualification_source || null,
+    minimumQualificationScore: row.minimum_qualification_score != null ? parseInt(row.minimum_qualification_score) : null,
+    isArchived: row.is_archived ?? false,
+    archivedAt: row.archived_at || null,
+    archivedBy: row.archived_by || null,
+    mediaPurgedAt: row.media_purged_at || null,
+  };
+}
 
 export const db = {
   // Contestants
@@ -3488,99 +3534,148 @@ export const db = {
     return createdEvent;
   },
 
-  async getAllEvents() {
+  async getAllEvents(options?: { includeArchived?: boolean; archivedOnly?: boolean }) {
     const sqlClient = getSql();
-    const result = await sqlClient`SELECT * FROM events ORDER BY event_date ASC` as any[];
-    return result.map((row: any) => ({
-      id: row.id,
-      name: row.name,
-      description: row.description,
-      region: row.region,
-      ageCategory: row.age_category,
-      performanceType: row.performance_type,
-      eventDate: row.event_date,
-      eventEndDate: row.event_end_date,
-      registrationDeadline: row.registration_deadline,
-      venue: row.venue,
-      status: row.status,
-      maxParticipants: row.max_participants,
-      entryFee: parseFloat(row.entry_fee),
-      createdBy: row.created_by,
-      createdAt: row.created_at,
-      registrationFeePerDancer: row.registration_fee_per_dancer != null ? parseFloat(row.registration_fee_per_dancer) : 300,
-      solo1Fee: row.solo_1_fee != null ? parseFloat(row.solo_1_fee) : 400,
-      solo2Fee: row.solo_2_fee != null ? parseFloat(row.solo_2_fee) : 750,
-      solo3Fee: row.solo_3_fee != null ? parseFloat(row.solo_3_fee) : 1050,
-      soloAdditionalFee: row.solo_additional_fee != null ? parseFloat(row.solo_additional_fee) : 100,
-      duoTrioFeePerDancer: row.duo_trio_fee_per_dancer != null ? parseFloat(row.duo_trio_fee_per_dancer) : 280,
-      groupFeePerDancer: row.group_fee_per_dancer != null ? parseFloat(row.group_fee_per_dancer) : 220,
-      largeGroupFeePerDancer: row.large_group_fee_per_dancer != null ? parseFloat(row.large_group_fee_per_dancer) : 190,
-      soloPrice: row.solo_price != null ? parseFloat(row.solo_price) : 0,
-      duetPrice: row.duet_price != null ? parseFloat(row.duet_price) : 0,
-      groupPrice: row.group_price != null ? parseFloat(row.group_price) : 0,
-      discountEnabled: row.discount_enabled ?? false,
-      discountMinEntries: row.discount_min_entries != null ? parseInt(row.discount_min_entries) : 0,
-      discountAmount: row.discount_amount != null ? parseFloat(row.discount_amount) : 0,
-      registrationFee: row.registration_fee != null ? parseFloat(row.registration_fee) : 0,
-      currency: row.currency || 'ZAR',
-      participationMode: row.participation_mode || 'hybrid',
-      certificateTemplateUrl: row.certificate_template_url || undefined,
-      numberOfJudges: row.number_of_judges != null ? parseInt(row.number_of_judges) : 4,
-      eventType: (row.event_type || 'REGIONAL_EVENT') as 'REGIONAL_EVENT' | 'NATIONAL_EVENT' | 'QUALIFIER_EVENT' | 'INTERNATIONAL_VIRTUAL_EVENT',
-      eventMode: (row.event_mode || 'HYBRID') as 'LIVE' | 'VIRTUAL' | 'HYBRID',
-      qualificationRequired: row.qualification_required ?? false,
-      qualificationSource: row.qualification_source || null,
-      minimumQualificationScore: row.minimum_qualification_score != null ? parseInt(row.minimum_qualification_score) : null
-    })) as Event[];
+    const includeArchived = options?.includeArchived === true;
+    const archivedOnly = options?.archivedOnly === true;
+
+    let result: any[];
+    if (archivedOnly) {
+      result = await sqlClient`
+        SELECT * FROM events
+        WHERE COALESCE(is_archived, false) = true
+        ORDER BY COALESCE(archived_at, event_date) DESC
+      ` as any[];
+    } else if (includeArchived) {
+      result = await sqlClient`
+        SELECT * FROM events
+        ORDER BY event_date ASC
+      ` as any[];
+    } else {
+      result = await sqlClient`
+        SELECT * FROM events
+        WHERE COALESCE(is_archived, false) = false
+        ORDER BY event_date ASC
+      ` as any[];
+    }
+
+    return result.map(mapEventRow) as Event[];
   },
 
   async getEventById(eventId: string) {
     const sqlClient = getSql();
     const result = await sqlClient`SELECT * FROM events WHERE id = ${eventId}` as any[];
     if (result.length === 0) return null;
-    
-    const row = result[0];
-    return {
-      id: row.id,
-      name: row.name,
-      description: row.description,
-      region: row.region,
-      ageCategory: row.age_category,
-      performanceType: row.performance_type,
-      eventDate: row.event_date,
-      eventEndDate: row.event_end_date,
-      registrationDeadline: row.registration_deadline,
-      venue: row.venue,
-      status: row.status,
-      maxParticipants: row.max_participants,
-      entryFee: parseFloat(row.entry_fee),
-      createdBy: row.created_by,
-      createdAt: row.created_at,
-      registrationFeePerDancer: row.registration_fee_per_dancer != null ? parseFloat(row.registration_fee_per_dancer) : 300,
-      solo1Fee: row.solo_1_fee != null ? parseFloat(row.solo_1_fee) : 400,
-      solo2Fee: row.solo_2_fee != null ? parseFloat(row.solo_2_fee) : 750,
-      solo3Fee: row.solo_3_fee != null ? parseFloat(row.solo_3_fee) : 1050,
-      soloAdditionalFee: row.solo_additional_fee != null ? parseFloat(row.solo_additional_fee) : 100,
-      duoTrioFeePerDancer: row.duo_trio_fee_per_dancer != null ? parseFloat(row.duo_trio_fee_per_dancer) : 280,
-      groupFeePerDancer: row.group_fee_per_dancer != null ? parseFloat(row.group_fee_per_dancer) : 220,
-      largeGroupFeePerDancer: row.large_group_fee_per_dancer != null ? parseFloat(row.large_group_fee_per_dancer) : 190,
-      soloPrice: row.solo_price != null ? parseFloat(row.solo_price) : 0,
-      duetPrice: row.duet_price != null ? parseFloat(row.duet_price) : 0,
-      groupPrice: row.group_price != null ? parseFloat(row.group_price) : 0,
-      discountEnabled: row.discount_enabled ?? false,
-      discountMinEntries: row.discount_min_entries != null ? parseInt(row.discount_min_entries) : 0,
-      discountAmount: row.discount_amount != null ? parseFloat(row.discount_amount) : 0,
-      registrationFee: row.registration_fee != null ? parseFloat(row.registration_fee) : 0,
-      currency: row.currency || 'ZAR',
-      participationMode: row.participation_mode || 'hybrid',
-      certificateTemplateUrl: row.certificate_template_url || undefined,
-      numberOfJudges: row.number_of_judges != null ? parseInt(row.number_of_judges) : 4,
-      eventType: (row.event_type || 'REGIONAL_EVENT') as 'REGIONAL_EVENT' | 'NATIONAL_EVENT' | 'QUALIFIER_EVENT' | 'INTERNATIONAL_VIRTUAL_EVENT',
-      eventMode: (row.event_mode || 'HYBRID') as 'LIVE' | 'VIRTUAL' | 'HYBRID',
-      qualificationRequired: row.qualification_required ?? false,
-      qualificationSource: row.qualification_source || null,
-      minimumQualificationScore: row.minimum_qualification_score != null ? parseInt(row.minimum_qualification_score) : null
-    } as Event;
+    return mapEventRow(result[0]);
+  },
+
+  async archiveEvent(eventId: string, archivedBy: string, options?: { force?: boolean }) {
+    const sqlClient = getSql();
+    const event = await this.getEventById(eventId);
+    if (!event) {
+      throw new Error('Event not found');
+    }
+    if (event.isArchived) {
+      throw new Error('Event is already archived');
+    }
+
+    const isCompleted = event.status === 'completed';
+
+    if (!options?.force && !isCompleted) {
+      throw new Error('Only completed events can be archived.');
+    }
+
+    const now = new Date();
+    const archivedAt = now.toISOString();
+    await sqlClient`
+      UPDATE events
+      SET is_archived = true,
+          archived_at = ${archivedAt},
+          archived_by = ${archivedBy}
+      WHERE id = ${eventId}
+    `;
+
+    return this.getEventById(eventId);
+  },
+
+  async restoreEvent(eventId: string) {
+    const sqlClient = getSql();
+    const event = await this.getEventById(eventId);
+    if (!event) {
+      throw new Error('Event not found');
+    }
+    if (!event.isArchived) {
+      throw new Error('Event is not archived');
+    }
+
+    await sqlClient`
+      UPDATE events
+      SET is_archived = false,
+          archived_at = NULL,
+          archived_by = NULL
+      WHERE id = ${eventId}
+    `;
+
+    return this.getEventById(eventId);
+  },
+
+  async getEventMediaUrls(eventId: string): Promise<{ url: string; source: string; entryId?: string; performanceId?: string }[]> {
+    const sqlClient = getSql();
+    const entries = await sqlClient`
+      SELECT id, music_file_url, video_file_url, video_external_url
+      FROM event_entries
+      WHERE event_id = ${eventId}
+    ` as any[];
+    const performances = await sqlClient`
+      SELECT id, music_file_url, video_external_url
+      FROM performances
+      WHERE event_id = ${eventId}
+    ` as any[];
+
+    const urls: { url: string; source: string; entryId?: string; performanceId?: string }[] = [];
+    for (const row of entries) {
+      if (row.music_file_url) urls.push({ url: row.music_file_url, source: 'entry_music', entryId: row.id });
+      if (row.video_file_url) urls.push({ url: row.video_file_url, source: 'entry_video', entryId: row.id });
+      // video_external_url is usually YouTube/Vimeo — not Cloudinary; skip for destroy but still clear
+      if (row.video_external_url && row.video_external_url.includes('cloudinary.com')) {
+        urls.push({ url: row.video_external_url, source: 'entry_video_external', entryId: row.id });
+      }
+    }
+    for (const row of performances) {
+      if (row.music_file_url) urls.push({ url: row.music_file_url, source: 'performance_music', performanceId: row.id });
+      if (row.video_external_url && row.video_external_url.includes('cloudinary.com')) {
+        urls.push({ url: row.video_external_url, source: 'performance_video', performanceId: row.id });
+      }
+    }
+    return urls;
+  },
+
+  async clearEventMediaUrls(eventId: string) {
+    const sqlClient = getSql();
+    const purgedAt = new Date().toISOString();
+    await sqlClient`
+      UPDATE event_entries
+      SET music_file_url = NULL,
+          music_file_name = NULL,
+          video_file_url = NULL,
+          video_file_name = NULL,
+          video_external_url = NULL,
+          video_external_type = NULL
+      WHERE event_id = ${eventId}
+    `;
+    await sqlClient`
+      UPDATE performances
+      SET music_file_url = NULL,
+          music_file_name = NULL,
+          video_external_url = NULL,
+          video_external_type = NULL
+      WHERE event_id = ${eventId}
+    `;
+    await sqlClient`
+      UPDATE events
+      SET media_purged_at = ${purgedAt}
+      WHERE id = ${eventId}
+    `;
   },
 
   // NEW: Judge Event Assignment methods
@@ -3607,6 +3702,9 @@ export const db = {
     const event = await this.getEventById(assignment.eventId);
     if (!event) {
       throw new Error('Event not found');
+    }
+    if (event.isArchived) {
+      throw new Error('Cannot assign judges to an archived event. Restore the event first.');
     }
     
     // Check how many judges are already assigned to this event
@@ -3962,13 +4060,14 @@ export const db = {
     const sqlClient = getSql();
     const now = new Date();
     
-    // Update events based on current time
+    // Update events based on current time (skip archived events)
     // 1. Set to 'registration_open' if current time is before registration deadline and status is 'upcoming'
     await sqlClient`
       UPDATE events 
       SET status = 'registration_open' 
       WHERE status = 'upcoming' 
       AND registration_deadline > ${now.toISOString()}
+      AND COALESCE(is_archived, false) = false
     `;
     
     // 2. Set to 'registration_closed' if registration deadline has passed but event hasn't started
@@ -3978,6 +4077,7 @@ export const db = {
       WHERE status IN ('upcoming', 'registration_open') 
       AND registration_deadline <= ${now.toISOString()} 
       AND event_date > ${now.toISOString()}
+      AND COALESCE(is_archived, false) = false
     `;
     
     // 3. Set to 'in_progress' if event has started
@@ -3987,6 +4087,7 @@ export const db = {
       WHERE status != 'completed' 
       AND event_date <= ${now.toISOString()} 
       AND event_date > ${new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString()}
+      AND COALESCE(is_archived, false) = false
     `;
     
     // 4. Set to 'completed' if event was more than 24 hours ago
@@ -3995,6 +4096,7 @@ export const db = {
       SET status = 'completed' 
       WHERE status != 'completed' 
       AND event_date <= ${new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString()}
+      AND COALESCE(is_archived, false) = false
     `;
     
     console.log('✅ Event statuses updated based on current date/time');
@@ -4004,6 +4106,13 @@ export const db = {
     const event = await this.getEventById(eventId);
     if (!event) {
       return { canRegister: false, reason: 'Event not found' };
+    }
+
+    if (event.isArchived) {
+      return {
+        canRegister: false,
+        reason: 'This event has been archived and is no longer accepting registrations.'
+      };
     }
     
     const now = new Date();
@@ -6522,8 +6631,9 @@ export const unifiedDb = {
   },
 
   // Get all competition entries for a studio's dancers
-  async getStudioEntries(studioId: string) {
+  async getStudioEntries(studioId: string, options?: { scope?: 'current' | 'history' | 'all' }) {
     const sqlClient = getSql();
+    const scope = options?.scope || 'all';
     
     // First get all dancers belonging to the studio
     const studioDancers = await this.getStudioDancers(studioId);
@@ -6534,6 +6644,7 @@ export const unifiedDb = {
     // QUERY BOTH event_entries AND nationals_event_entries tables
     const regularEntries = await sqlClient`
       SELECT ee.*, e.name as event_name, e.region, e.event_date, e.venue, e.performance_type,
+             COALESCE(e.is_archived, false) as is_archived,
              COALESCE(c.name, d.name, 'Studio Entry') as contestant_name, 
              CASE 
                WHEN c.type IS NOT NULL THEN c.type 
@@ -6558,6 +6669,7 @@ export const unifiedDb = {
              e.event_date, 
              e.venue, 
              e.performance_type,
+             COALESCE(e.is_archived, false) as is_archived,
              COALESCE(c.name, d.name, 'Studio Entry') as contestant_name, 
              CASE 
                WHEN c.type IS NOT NULL THEN c.type 
@@ -6574,7 +6686,12 @@ export const unifiedDb = {
       ORDER BY nee.submitted_at DESC
     ` as any[];
     
-    const result = [...regularEntries, ...nationalsEntries];
+    let result = [...regularEntries, ...nationalsEntries];
+    if (scope === 'current') {
+      result = result.filter((row: any) => !row.is_archived);
+    } else if (scope === 'history') {
+      result = result.filter((row: any) => row.is_archived);
+    }
     
     // Enhance entries with participant names
     const enhancedEntries = await Promise.all(
@@ -6636,7 +6753,8 @@ export const unifiedDb = {
             videoFileUrl: row.video_file_url,
             videoFileName: row.video_file_name,
             videoExternalUrl: row.video_external_url,
-            videoExternalType: row.video_external_type
+            videoExternalType: row.video_external_type,
+            isArchived: row.is_archived ?? false
           };
         } catch (error) {
           console.error(`Error processing entry ${row.id}:`, error);

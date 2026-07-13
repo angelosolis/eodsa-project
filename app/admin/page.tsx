@@ -46,6 +46,10 @@ interface Event {
   discountAmount?: number;
   registrationFee?: number;
   currency?: string;
+  isArchived?: boolean;
+  archivedAt?: string | null;
+  archivedBy?: string | null;
+  mediaPurgedAt?: string | null;
 }
 
 interface Judge {
@@ -199,6 +203,9 @@ function AdminDashboard() {
   const [studioApplications, setStudioApplications] = useState<StudioApplication[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [activeTab, setActiveTab] = useState<'events' | 'users' | 'dancers' | 'studios' | 'music-tracking' | 'assignments'>('events');
+  const [archiveConfirmEvent, setArchiveConfirmEvent] = useState<Event | null>(null);
+  const [archiveConfirmText, setArchiveConfirmText] = useState('');
+  const [isArchivingEvent, setIsArchivingEvent] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const { success, error, warning, info } = useToast();
   const { showAlert, showConfirm, showPrompt } = useAlert();
@@ -428,7 +435,16 @@ function AdminDashboard() {
     fetchData();
   }, [router]);
 
-  // Auto-refresh music tracking data when tab is opened
+  // Legacy deep-link: History moved to Backend tools
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('tab') === 'history') {
+      router.replace('/backend/archived');
+    }
+  }, [router]);
+
+  // Auto-refresh music tracking when tab is opened
   useEffect(() => {
     if (activeTab === 'music-tracking') {
       const eventId = selectedMusicTrackingEventId === 'all' ? undefined : selectedMusicTrackingEventId;
@@ -470,7 +486,7 @@ function AdminDashboard() {
         console.error('Error fetching events:', error);
         setEvents([]);
       }),
-      
+
       fetch('/api/admin/dancers').then(async (res) => {
         const data = await res.json();
         if (data.success) setDancers(data.dancers || []);
@@ -1023,9 +1039,54 @@ function AdminDashboard() {
     }
   };
 
+  const handleArchiveEventRequest = (event: Event) => {
+    if (event.status !== 'completed') {
+      warning('Only completed events can be archived.');
+      return;
+    }
+    setArchiveConfirmEvent(event);
+    setArchiveConfirmText('');
+  };
+
+  const handleArchiveEventConfirm = async () => {
+    if (!archiveConfirmEvent || archiveConfirmText !== 'ARCHIVE') return;
+    setIsArchivingEvent(true);
+    try {
+      const session = localStorage.getItem('adminSession');
+      if (!session) {
+        error('Session expired. Please log in again.');
+        return;
+      }
+      const adminData = JSON.parse(session);
+      const response = await fetch(`/api/events/${archiveConfirmEvent.id}/archive`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          confirmation: 'ARCHIVE',
+          adminSession: session,
+          adminId: adminData.id
+        })
+      });
+      const data = await response.json();
+      if (data.success) {
+        success(`“${archiveConfirmEvent.name}” archived. Find it under Backend → Archived.`);
+        setArchiveConfirmEvent(null);
+        setArchiveConfirmText('');
+        fetchData();
+      } else {
+        error(data.error || 'Failed to archive event');
+      }
+    } catch (err) {
+      console.error('Error archiving event:', err);
+      error('Error archiving event. Please try again.');
+    } finally {
+      setIsArchivingEvent(false);
+    }
+  };
+
   const handleDeleteEvent = async (event: Event) => {
     showConfirm(
-      `Are you sure you want to delete "${event.name}"? This action cannot be undone and will remove all associated entries, payments, and data.`,
+      `Are you sure you want to delete "${event.name}"? Prefer Archive for finished competitions so historical data is preserved. This action cannot be undone and will remove associated entries, payments, and data.`,
       async () => {
         setIsDeletingEvent(true);
 
@@ -2213,18 +2274,63 @@ function AdminDashboard() {
             </nav>
         </div>
 
-        {/* Events Tab - Enhanced */}
+        {/* Events Tab */}
         {activeTab === 'events' && (
           <EventsTabContent
             events={events}
             setShowCreateEventModal={setShowCreateEventModal}
             handleEditEvent={handleEditEvent}
-            handleDeleteEvent={handleDeleteEvent}
+            handleArchiveEvent={handleArchiveEventRequest}
             theme={theme}
             themeClasses={themeClasses}
           />
         )}
 
+        {/* Archive confirmation modal */}
+        {archiveConfirmEvent && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+            <div className={`${themeClasses.cardBg} max-w-md w-full rounded-2xl border ${themeClasses.cardBorder} p-6 shadow-2xl`}>
+              <h3 className={`text-lg font-bold ${themeClasses.textPrimary} mb-2`}>Archive Event</h3>
+              <p className={`text-sm ${themeClasses.textSecondary} mb-4`}>
+                This event will be removed from all active dashboards.
+                <br /><br />
+                No data will be deleted.
+                <br /><br />
+                Restore it later from Backend → Archived.
+                <br /><br />
+                Type <span className="font-mono font-bold">ARCHIVE</span> to continue.
+              </p>
+              <p className={`text-sm font-semibold ${themeClasses.textPrimary} mb-2`}>{archiveConfirmEvent.name}</p>
+              <input
+                type="text"
+                value={archiveConfirmText}
+                onChange={(e) => setArchiveConfirmText(e.target.value)}
+                placeholder="Type ARCHIVE"
+                className={`w-full px-3 py-2 rounded-lg border ${themeClasses.cardBorder} ${themeClasses.cardBg} ${themeClasses.textPrimary} mb-4`}
+                autoFocus
+              />
+              <div className="flex justify-end gap-2">
+                <button
+                  onClick={() => { setArchiveConfirmEvent(null); setArchiveConfirmText(''); }}
+                  className={`px-4 py-2 rounded-lg ${themeClasses.textSecondary}`}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleArchiveEventConfirm}
+                  disabled={archiveConfirmText !== 'ARCHIVE' || isArchivingEvent}
+                  className={`px-4 py-2 rounded-lg text-white font-semibold ${
+                    archiveConfirmText === 'ARCHIVE' && !isArchivingEvent
+                      ? 'bg-amber-600 hover:bg-amber-700'
+                      : 'bg-gray-400 cursor-not-allowed'
+                  }`}
+                >
+                  {isArchivingEvent ? 'Archiving…' : 'Archive'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Dancers Tab - Enhanced */}
         {activeTab === 'dancers' && (
@@ -2505,7 +2611,7 @@ function AdminDashboard() {
                               onChange={(e) => {
                                 const val = e.target.value; (async () => { try { await (async () => {
                                   const eventId = val; if (!eventId) return;
-                                  if (!confirm('Archive media for this event? This clears music and video links.')) return;
+                                  if (!confirm('Clear media links for this event? This removes music and video URLs from entries but does not delete Cloudinary files. To free storage, archive the event then use Purge Media.')) return;
                                   try {
                                     const session = localStorage.getItem('adminSession');
                                     const adminId = session ? JSON.parse(session).id : undefined;
@@ -2526,9 +2632,9 @@ function AdminDashboard() {
                               }}
                               className="ml-2 px-2 py-1.5 border rounded-md text-xs"
                               defaultValue=""
-                              title="Archive clears music and videos for selected event"
+                              title="Clear music/video links for selected event (does not delete Cloudinary files — use Purge Media on archived events)"
                             >
-                              <option value="" disabled>Archive Event Media…</option>
+                              <option value="" disabled>Clear Event Media Links…</option>
                               {events.map(ev => (
                                 <option key={ev.id} value={ev.id}>{ev.name}</option>
                               ))}
@@ -5527,12 +5633,19 @@ interface EventsTabContentProps {
   events: Event[];
   setShowCreateEventModal: (show: boolean) => void;
   handleEditEvent: (event: Event) => void;
-  handleDeleteEvent: (event: Event) => void;
+  handleArchiveEvent: (event: Event) => void;
   theme: string;
   themeClasses: any;
 }
 
-function EventsTabContent({ events, setShowCreateEventModal, handleEditEvent, handleDeleteEvent, theme, themeClasses }: EventsTabContentProps) {
+function EventsTabContent({
+  events,
+  setShowCreateEventModal,
+  handleEditEvent,
+  handleArchiveEvent,
+  theme,
+  themeClasses
+}: EventsTabContentProps) {
   const { isEnabled: isPhase2Enabled } = usePhase2Feature();
   
   return (
@@ -5546,31 +5659,29 @@ function EventsTabContent({ events, setShowCreateEventModal, handleEditEvent, ha
               </div>
               <h2 className={`text-lg sm:text-xl font-bold ${themeClasses.textPrimary}`}>Events</h2>
               <div className={`px-2 sm:px-3 py-1 ${theme === 'dark' ? 'bg-indigo-900/80 text-indigo-200' : 'bg-indigo-100 text-indigo-800'} rounded-full text-xs sm:text-sm font-medium`}>
-                {events.length} events
+                {events.length}
               </div>
             </div>
-            <div className="flex items-center space-x-2">
-              <button
-                onClick={() => {
-                  if (!isPhase2Enabled) {
-                    alert('This feature is temporarily unavailable.');
-                    return;
-                  }
-                  setShowCreateEventModal(true);
-                }}
-                disabled={!isPhase2Enabled}
-                className={`inline-flex items-center space-x-1 sm:space-x-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg sm:rounded-xl transition-all duration-200 text-sm sm:text-base font-medium ${
-                  isPhase2Enabled
-                    ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white hover:from-indigo-600 hover:to-purple-700 transform hover:scale-105 shadow-lg'
-                    : 'bg-gray-500/50 text-gray-400 cursor-not-allowed opacity-50'
-                }`}
-                title={!isPhase2Enabled ? 'This feature is temporarily unavailable.' : ''}
-              >
-                <span>➕</span>
-                <span className="hidden sm:inline">Create Event</span>
-                <span className="sm:hidden">Create</span>
-              </button>
-            </div>
+            <button
+              onClick={() => {
+                if (!isPhase2Enabled) {
+                  alert('This feature is temporarily unavailable.');
+                  return;
+                }
+                setShowCreateEventModal(true);
+              }}
+              disabled={!isPhase2Enabled}
+              className={`inline-flex items-center space-x-1 sm:space-x-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg sm:rounded-xl transition-all duration-200 text-sm sm:text-base font-medium ${
+                isPhase2Enabled
+                  ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white hover:from-indigo-600 hover:to-purple-700 transform hover:scale-105 shadow-lg'
+                  : 'bg-gray-500/50 text-gray-400 cursor-not-allowed opacity-50'
+              }`}
+              title={!isPhase2Enabled ? 'This feature is temporarily unavailable.' : ''}
+            >
+              <span>➕</span>
+              <span className="hidden sm:inline">Create Event</span>
+              <span className="sm:hidden">Create</span>
+            </button>
           </div>
         </div>
 
@@ -5727,24 +5838,32 @@ function EventsTabContent({ events, setShowCreateEventModal, handleEditEvent, ha
                           href={`/admin/events/${event.id}`}
                           className={`${theme === 'dark' ? 'text-indigo-400 hover:text-indigo-300' : 'text-indigo-500 hover:text-indigo-700'} text-xs sm:text-sm font-medium`}
                         >
-                          <span className="hidden sm:inline">👥 View</span>
-                          <span className="sm:hidden">👥</span>
+                          Open
                         </Link>
                         <button
                           onClick={() => handleEditEvent(event)}
                           className={`${theme === 'dark' ? 'text-blue-400 hover:text-blue-300' : 'text-blue-500 hover:text-blue-700'} text-xs sm:text-sm font-medium transition-colors`}
                           title="Edit Event"
                         >
-                          <span className="hidden sm:inline">✏️ Edit</span>
-                          <span className="sm:hidden">✏️</span>
+                          Edit
                         </button>
                         <button
-                          onClick={() => handleDeleteEvent(event)}
-                          className={`${theme === 'dark' ? 'text-red-400 hover:text-red-300' : 'text-red-500 hover:text-red-700'} text-xs sm:text-sm font-medium transition-colors`}
-                          title="Delete Event"
+                          onClick={() => handleArchiveEvent(event)}
+                          disabled={event.status !== 'completed'}
+                          className={`text-xs sm:text-sm font-medium transition-colors ${
+                            event.status === 'completed'
+                              ? theme === 'dark'
+                                ? 'text-amber-400 hover:text-amber-300'
+                                : 'text-amber-600 hover:text-amber-800'
+                              : 'text-gray-500 cursor-not-allowed opacity-40'
+                          }`}
+                          title={
+                            event.status === 'completed'
+                              ? 'Archive completed event'
+                              : 'Available once the event is completed'
+                          }
                         >
-                          <span className="hidden sm:inline">🗑️ Delete</span>
-                          <span className="sm:hidden">🗑️</span>
+                          Archive
                         </button>
                       </div>
                     </td>

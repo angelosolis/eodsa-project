@@ -8,6 +8,10 @@ export async function GET(request: NextRequest) {
     
     const { searchParams } = new URL(request.url);
     const studioId = searchParams.get('studioId');
+    const scopeParam = searchParams.get('scope');
+    const scope = (scopeParam === 'current' || scopeParam === 'history' || scopeParam === 'all')
+      ? scopeParam
+      : 'all';
 
     if (!studioId) {
       return NextResponse.json(
@@ -16,11 +20,12 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const entries = await unifiedDb.getStudioEntries(studioId);
+    const entries = await unifiedDb.getStudioEntries(studioId, { scope });
 
     return NextResponse.json({
       success: true,
-      entries
+      entries,
+      scope
     });
   } catch (error) {
     console.error('Error getting studio entries:', error);

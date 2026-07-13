@@ -12,18 +12,39 @@ async function ensureDbInitialized() {
   }
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    // Ensure database is initialized (adds missing columns like number_of_judges)
+    const { searchParams } = new URL(request.url);
+    const scope = (searchParams.get('scope') || 'active').toLowerCase();
+
+    // History/archived reads must stay fast — skip heavy schema migration + status rollover
+    if (scope === 'archived') {
+      const events = await database.getAllEvents({ archivedOnly: true });
+      return NextResponse.json({
+        success: true,
+        events,
+        scope: 'archived'
+      });
+    }
+
     await ensureDbInitialized();
-    
-    // Update event statuses based on current date/time before fetching
-    await database.updateEventStatuses();
-    
-    const events = await database.getAllEvents();
+
+    // Status rollover only matters for live/active dashboards
+    if (scope !== 'all') {
+      await database.updateEventStatuses();
+    }
+
+    let events;
+    if (scope === 'all') {
+      events = await database.getAllEvents({ includeArchived: true });
+    } else {
+      events = await database.getAllEvents();
+    }
+
     return NextResponse.json({
       success: true,
-      events
+      events,
+      scope: scope === 'all' ? 'all' : 'active'
     });
   } catch (error) {
     console.error('Error fetching events:', error);

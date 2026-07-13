@@ -73,6 +73,7 @@ interface CompetitionEntry {
   hasPerformance?: boolean;
   performanceId?: string | null;
   scoresPublished?: boolean;
+  isArchived?: boolean;
 }
 
 // Music entry interface for studio music uploads
@@ -107,11 +108,13 @@ export default function StudioDashboardPage() {
   const [videoEntries, setVideoEntries] = useState<MusicEntry[]>([]);
   const [scores, setScores] = useState<any[]>([]);
   const [certificates, setCertificates] = useState<any[]>([]);
-  const [activeTab, setActiveTab] = useState<'dancers' | 'entries' | 'uploads' | 'scores' | 'certificates'>('dancers');
+  const [activeTab, setActiveTab] = useState<'dancers' | 'entries' | 'entry-history' | 'uploads' | 'scores' | 'certificates'>('dancers');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
-  const [events, setEvents] = useState<Array<{id: string; name: string}>>([]);
+  const [events, setEvents] = useState<Array<{id: string; name: string; isArchived?: boolean}>>([]);
+  const [historyEntries, setHistoryEntries] = useState<CompetitionEntry[]>([]);
   const [selectedEventId, setSelectedEventId] = useState<string>('all');
+  const [selectedHistoryEventId, setSelectedHistoryEventId] = useState<string>('all');
   const [showAddDancerModal, setShowAddDancerModal] = useState(false);
   const [addDancerEodsaId, setAddDancerEodsaId] = useState('');
   const [addingDancer, setAddingDancer] = useState(false);
@@ -215,11 +218,11 @@ export default function StudioDashboardPage() {
 
   const loadEvents = async () => {
     try {
-      const response = await fetch('/api/events');
+      const response = await fetch('/api/events?scope=all');
       if (response.ok) {
         const data = await response.json();
         if (data.success) {
-          setEvents(data.events.map((e: any) => ({ id: e.id, name: e.name })));
+          setEvents(data.events.map((e: any) => ({ id: e.id, name: e.name, isArchived: e.isArchived })));
         }
       }
     } catch (error) {
@@ -241,9 +244,10 @@ export default function StudioDashboardPage() {
       setIsLoading(true);
       
       // Load accepted dancers, competition entries, music entries, video entries, scores, and certificates
-      const [dancersResponse, entriesResponse, musicEntriesResponse, videoEntriesResponse, scoresResponse, certificatesResponse] = await Promise.all([
+      const [dancersResponse, entriesResponse, historyEntriesResponse, musicEntriesResponse, videoEntriesResponse, scoresResponse, certificatesResponse] = await Promise.all([
         fetch(`/api/studios/dancers-new?studioId=${studioId}`),
-        fetch(`/api/studios/entries?studioId=${studioId}`),
+        fetch(`/api/studios/entries?studioId=${studioId}&scope=current`),
+        fetch(`/api/studios/entries?studioId=${studioId}&scope=history`),
         fetch(`/api/studios/music-entries?studioId=${studioId}`),
         fetch(`/api/studios/video-entries?studioId=${studioId}`),
         fetch(`/api/studios/scores?studioId=${studioId}`),
@@ -252,6 +256,7 @@ export default function StudioDashboardPage() {
 
       const dancersData = await dancersResponse.json();
       const entriesData = await entriesResponse.json();
+      const historyEntriesData = await historyEntriesResponse.json();
       const musicEntriesData = await musicEntriesResponse.json();
       const videoEntriesData = await videoEntriesResponse.json();
       const scoresData = await scoresResponse.json();
@@ -294,6 +299,12 @@ export default function StudioDashboardPage() {
       } else {
         console.error('Failed to load entries:', entriesData.error);
         setCompetitionEntries([]);
+      }
+
+      if (historyEntriesData.success) {
+        setHistoryEntries(historyEntriesData.entries || []);
+      } else {
+        setHistoryEntries([]);
       }
 
       if (musicEntriesData.success) {
@@ -1047,20 +1058,32 @@ export default function StudioDashboardPage() {
     return competitionEntries.filter(entry => entry.eventId === selectedEventId);
   };
 
+  const getFilteredHistoryEntries = () => {
+    if (selectedHistoryEventId === 'all') return historyEntries;
+    return historyEntries.filter(entry => entry.eventId === selectedHistoryEventId);
+  };
+
+  const activeEventIds = new Set(events.filter(e => !e.isArchived).map(e => e.id));
+
   const getFilteredUploads = () => {
-    const allUploads = [...musicEntries, ...videoEntries];
+    // Uploads tab only shows active (non-archived) events
+    const allUploads = [...musicEntries, ...videoEntries].filter(entry =>
+      activeEventIds.size === 0 || activeEventIds.has(entry.eventId)
+    );
     if (selectedEventId === 'all') return allUploads;
     return allUploads.filter(entry => entry.eventId === selectedEventId);
   };
 
   const getFilteredMusicEntries = () => {
-    if (selectedEventId === 'all') return musicEntries;
-    return musicEntries.filter(entry => entry.eventId === selectedEventId);
+    const active = musicEntries.filter(entry => activeEventIds.size === 0 || activeEventIds.has(entry.eventId));
+    if (selectedEventId === 'all') return active;
+    return active.filter(entry => entry.eventId === selectedEventId);
   };
 
   const getFilteredVideoEntries = () => {
-    if (selectedEventId === 'all') return videoEntries;
-    return videoEntries.filter(entry => entry.eventId === selectedEventId);
+    const active = videoEntries.filter(entry => activeEventIds.size === 0 || activeEventIds.has(entry.eventId));
+    if (selectedEventId === 'all') return active;
+    return active.filter(entry => entry.eventId === selectedEventId);
   };
 
   const getFilteredScores = () => {
@@ -1333,7 +1356,17 @@ export default function StudioDashboardPage() {
                   : 'text-gray-300 hover:text-white hover:bg-gray-700'
               }`}
             >
-              My Entries ({getFilteredEntries().length}{selectedEventId !== 'all' ? `/${competitionEntries.length}` : ''})
+              Current Entries ({getFilteredEntries().length}{selectedEventId !== 'all' ? `/${competitionEntries.length}` : ''})
+            </button>
+            <button
+              onClick={() => setActiveTab('entry-history')}
+              className={`flex-shrink-0 sm:flex-1 px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium whitespace-nowrap rounded-md transition-colors ${
+                activeTab === 'entry-history'
+                  ? 'bg-purple-600 text-white'
+                  : 'text-gray-300 hover:text-white hover:bg-gray-700'
+              }`}
+            >
+              Entry History ({getFilteredHistoryEntries().length}{selectedHistoryEventId !== 'all' ? `/${historyEntries.length}` : ''})
             </button>
             <button
               onClick={() => setActiveTab('uploads')}
@@ -1670,14 +1703,14 @@ export default function StudioDashboardPage() {
           </div>
         )}
 
-        {/* My Entries Tab */}
+        {/* Current Entries Tab */}
         {activeTab === 'entries' && (
           <div className="bg-gray-800/80 rounded-2xl border border-gray-700/20 overflow-hidden">
             <div className="p-6 border-b border-gray-700">
               <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
                 <div>
-                  <h3 className="text-xl font-bold text-white">Competition Entries</h3>
-                  <p className="text-gray-400 text-sm mt-1">View and manage competition entries for your dancers</p>
+                  <h3 className="text-xl font-bold text-white">Current Events</h3>
+                  <p className="text-gray-400 text-sm mt-1">Active competition entries for your dancers</p>
                 </div>
                 <div className="flex gap-2">
                   <select
@@ -1685,8 +1718,8 @@ export default function StudioDashboardPage() {
                     onChange={(e) => setSelectedEventId(e.target.value)}
                     className="px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-sm text-white focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
                   >
-                    <option value="all">All Events</option>
-                    {events.map(event => (
+                    <option value="all">All Active Events</option>
+                    {events.filter(e => !e.isArchived).map(event => (
                       <option key={event.id} value={event.id}>{event.name}</option>
                     ))}
                   </select>
@@ -1801,6 +1834,85 @@ export default function StudioDashboardPage() {
                         <div className="px-3 py-1 text-xs text-gray-400 italic bg-gray-800/50 rounded-lg border border-gray-700">
                           💡 Only admins can remove entries
                         </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Entry History Tab */}
+        {activeTab === 'entry-history' && (
+          <div className="bg-gray-800/80 rounded-2xl border border-gray-700/20 overflow-hidden">
+            <div className="p-4 sm:p-6 border-b border-gray-700">
+              <div className="flex flex-col gap-4">
+                <div>
+                  <h3 className="text-xl font-bold text-white">Entry History</h3>
+                  <p className="text-gray-400 text-sm mt-1">Past archived events — scores and certificates remain available</p>
+                </div>
+                <div className="flex flex-col sm:flex-row gap-2 w-full">
+                  <select
+                    value={selectedHistoryEventId}
+                    onChange={(e) => setSelectedHistoryEventId(e.target.value)}
+                    className="w-full sm:flex-1 min-w-0 px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-sm text-white focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                  >
+                    <option value="all">All Archived Events</option>
+                    {events.filter(e => e.isArchived).map(event => (
+                      <option key={event.id} value={event.id}>{event.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
+            {getFilteredHistoryEntries().length === 0 ? (
+              <div className="p-8 text-center text-gray-400">
+                <p className="text-lg mb-2">No archived entries yet</p>
+                <p className="text-sm">When an admin archives an event, those entries appear here.</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-gray-700">
+                {getFilteredHistoryEntries().map((entry) => (
+                  <div key={entry.id} className="p-4 sm:p-6">
+                    <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex flex-wrap items-center gap-2 mb-2">
+                          <h4 className="text-lg font-semibold text-white">{entry.eventName}</h4>
+                          <span className="px-2 py-0.5 text-xs rounded-full bg-slate-700 text-slate-200">Archived</span>
+                          {entry.approved && (
+                            <span className="px-2 py-0.5 text-xs rounded-full bg-green-900/50 text-green-300">Approved</span>
+                          )}
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
+                          <div>
+                            <span className="text-gray-400">Contestant:</span>
+                            <span className="text-white ml-2">{entry.contestantName}</span>
+                          </div>
+                          <div>
+                            <span className="text-gray-400">Item:</span>
+                            <span className="text-white ml-2">{entry.itemName}</span>
+                          </div>
+                          <div>
+                            <span className="text-gray-400">Style:</span>
+                            <span className="text-white ml-2">{entry.itemStyle}</span>
+                          </div>
+                          <div>
+                            <span className="text-gray-400">Event Date:</span>
+                            <span className="text-white ml-2">{entry.eventDate ? new Date(entry.eventDate).toLocaleDateString() : '—'}</span>
+                          </div>
+                          <div>
+                            <span className="text-gray-400">Fee:</span>
+                            <span className="text-white ml-2">R{entry.calculatedFee}</span>
+                          </div>
+                          <div>
+                            <span className="text-gray-400">Payment:</span>
+                            <span className="text-white ml-2">{entry.paymentStatus}</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="text-xs text-gray-500 italic">
+                        Read-only historical record
                       </div>
                     </div>
                   </div>

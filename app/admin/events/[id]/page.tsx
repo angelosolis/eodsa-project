@@ -37,6 +37,10 @@ interface Event {
   duetPrice?: number;
   groupPrice?: number;
   registrationFee?: number;
+  isArchived?: boolean;
+  archivedAt?: string | null;
+  archivedBy?: string | null;
+  mediaPurgedAt?: string | null;
 }
 
 interface PaymentBatchSummary {
@@ -150,6 +154,7 @@ function EventParticipantsPage() {
     judged: 0,
     notScored: 0
   });
+  const [isRestoring, setIsRestoring] = useState(false);
   const [entrySearchTerm, setEntrySearchTerm] = useState('');
   const performancesSectionRef = useRef<HTMLDivElement>(null);
   
@@ -1108,38 +1113,58 @@ function EventParticipantsPage() {
         }),
       });
 
-      if (response.ok) {
-        const result = await response.json();
-        
-        // Update local state
-        setEntries(prev => prev.map(entry => 
-          entry.id === selectedEntry.id 
-            ? { 
-                ...entry, 
-                paymentStatus: status,
-                paymentReference: status === 'paid' ? paymentReference : undefined,
-                paymentMethod: status === 'paid' ? paymentMethod : undefined,
-                paymentDate: status === 'paid' ? new Date().toISOString() : undefined
-              }
-            : entry
-        ));
-        
+      const result = await response.json();
+
+      if (result.success) {
         showAlert(result.message, 'success');
         setShowPaymentModal(false);
-        
-        // Reset form
-        setPaymentReference('');
-        setPaymentMethod('bank_transfer');
         setSelectedEntry(null);
+        // Refresh entries
+        const entriesResponse = await fetch(`/api/events/${eventId}/entries`);
+        const entriesData = await entriesResponse.json();
+        if (entriesData.success) {
+          setEntries(entriesData.entries);
+        }
       } else {
-        const error = await response.json();
-        showAlert(`Failed to update payment: ${error.error}`, 'error');
+        showAlert(`Failed to update payment: ${result.error}`, 'error');
       }
-    } catch (error) {
-      console.error('Error updating payment:', error);
+    } catch (err) {
+      console.error('Error updating payment:', err);
       showAlert('Failed to update payment status', 'error');
     } finally {
       setUpdatingPayment(false);
+    }
+  };
+
+  const handleRestoreEvent = async () => {
+    setIsRestoring(true);
+    try {
+      const session = localStorage.getItem('adminSession');
+      if (!session) {
+        showAlert('Session expired. Please log in again.', 'error');
+        return;
+      }
+      const adminData = JSON.parse(session);
+      const response = await fetch(`/api/events/${eventId}/restore`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          adminSession: session,
+          adminId: adminData.id
+        })
+      });
+      const data = await response.json();
+      if (data.success) {
+        showAlert('Event restored to active dashboards.', 'success');
+        setEvent(data.event);
+      } else {
+        showAlert(data.error || 'Failed to restore event', 'error');
+      }
+    } catch (err) {
+      console.error('Error restoring event:', err);
+      showAlert('Failed to restore event', 'error');
+    } finally {
+      setIsRestoring(false);
     }
   };
 
@@ -1396,12 +1421,12 @@ function EventParticipantsPage() {
                 <p className={`${themeClasses.textSecondary} font-medium`}>{event?.name || 'Loading...'}</p>
               </div>
             </div>
-            <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-3">
               <Link
                 href={`/admin/events/${eventId}/teams`}
                 className={`px-4 py-2 ${themeClasses.buttonPrimary} rounded-lg font-semibold transition-all duration-200 hover:shadow-md`}
               >
-                👥 Event Teams
+                Event Teams
               </Link>
               <ThemeToggle />
               
@@ -1418,6 +1443,32 @@ function EventParticipantsPage() {
       </header>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {event?.isArchived && (
+          <div className={`mb-6 text-sm ${themeClasses.textMuted}`}>
+            This event is in the archive
+            {event.archivedAt ? ` · ${new Date(event.archivedAt).toLocaleDateString()}` : ''}.
+            {' '}
+            <button
+              type="button"
+              onClick={handleRestoreEvent}
+              disabled={isRestoring}
+              className={`font-medium underline-offset-2 hover:underline disabled:opacity-50 ${
+                theme === 'dark' ? 'text-emerald-400' : 'text-emerald-700'
+              }`}
+            >
+              {isRestoring ? 'Restoring…' : 'Restore'}
+            </button>
+            {' · '}
+            <Link
+              href="/backend/archived"
+              className={`font-medium underline-offset-2 hover:underline ${
+                theme === 'dark' ? 'text-indigo-400' : 'text-indigo-700'
+              }`}
+            >
+              Backend → Archived
+            </Link>
+          </div>
+        )}
         {/* Event Details Card - Cleaned Up */}
         {event && (
           <div className={`${themeClasses.cardBg} ${themeClasses.cardRadius} ${themeClasses.cardShadow} overflow-hidden border ${themeClasses.cardBorder} mb-8`}>

@@ -103,6 +103,14 @@ export default function BackendDashboard() {
                 <span className="text-2xl mb-2 group-hover:scale-110 transition-transform">⚖️</span>
                 <span className="text-xs text-green-400 font-medium">Judge Portal</span>
               </Link>
+              <Link href="/backend/archived" className="flex flex-col items-center p-3 bg-slate-600/20 rounded-lg hover:bg-slate-600/30 transition-colors group">
+                <span className="text-2xl mb-2 group-hover:scale-110 transition-transform">📦</span>
+                <span className="text-xs text-slate-300 font-medium">Archived</span>
+              </Link>
+              <Link href="/backend/logs" className="flex flex-col items-center p-3 bg-violet-600/20 rounded-lg hover:bg-violet-600/30 transition-colors group">
+                <span className="text-2xl mb-2 group-hover:scale-110 transition-transform">📋</span>
+                <span className="text-xs text-violet-300 font-medium">Logs</span>
+              </Link>
               {phase2Portals.map((portal) => (
                 <PortalLink key={portal.href} {...portal} />
               ))}

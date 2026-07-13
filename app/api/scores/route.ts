@@ -29,6 +29,18 @@ export async function POST(request: Request) {
     // Check if this judge has already scored this performance
     const existingScore = await db.getScoreByJudgeAndPerformance(judgeId, performanceId);
 
+    // Block new scores for archived events
+    const performanceRecord = await db.getPerformanceById(performanceId);
+    if (performanceRecord?.eventId) {
+      const event = await db.getEventById(performanceRecord.eventId);
+      if (event?.isArchived) {
+        return NextResponse.json(
+          { success: false, error: 'This event has been archived. New scores cannot be submitted.' },
+          { status: 403 }
+        );
+      }
+    }
+
     let score;
     if (existingScore) {
       // SECURITY: Prevent judges from editing submitted scores
