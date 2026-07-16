@@ -1,18 +1,40 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { usePhase2Feature } from '@/hooks/usePhase2Feature';
-import { useState } from 'react';
 
 export default function BackendDashboard() {
+  const router = useRouter();
   const { isEnabled: isPhase2Enabled, isLoading } = usePhase2Feature();
+  const [authorized, setAuthorized] = useState(false);
   const [batchFixLoading, setBatchFixLoading] = useState(false);
   const [batchFixReport, setBatchFixReport] = useState<any>(null);
   const [nameFixLoading, setNameFixLoading] = useState(false);
   const [nameFixReport, setNameFixReport] = useState<any>(null);
   const [oldName, setOldName] = useState('Esmari Cnradie');
   const [newName, setNewName] = useState('Esmari Conradie');
-  
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/auth/admin-session', { method: 'GET' });
+        if (!res.ok) {
+          router.replace('/portal/admin?next=/backend');
+          return;
+        }
+        if (!cancelled) setAuthorized(true);
+      } catch {
+        router.replace('/portal/admin?next=/backend');
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [router]);
+
   // Portal links that should be disabled when Phase 2 is disabled
   const phase2Portals = [
     { href: '/portal/backstage', icon: '🎭', label: 'Backstage Manager', color: 'purple' },
@@ -21,7 +43,7 @@ export default function BackendDashboard() {
     { href: '/portal/media', icon: '📸', label: 'Media Portal', color: 'pink' },
     { href: '/admin/sound-tech', icon: '🎵', label: 'Sound Tech', color: 'indigo' },
     { href: '/admin/notifications', icon: '📧', label: 'Admin Notifications', color: 'emerald' },
-    { href: 'https://www.avalondance.co.za/event-type-manager', icon: '🗂️', label: 'Event Type Manager', color: 'yellow', external: true }
+    { href: '/event-type-manager', icon: '🗂️', label: 'Event Type Manager', color: 'yellow', external: false }
   ];
 
   const PortalLink = ({ href, icon, label, color, external = false }: { href: string; icon: string; label: string; color: string; external?: boolean }) => {
@@ -75,6 +97,14 @@ export default function BackendDashboard() {
     );
   };
 
+  if (!authorized) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 flex items-center justify-center">
+        <p className="text-gray-300 text-sm">Verifying admin access…</p>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -87,6 +117,7 @@ export default function BackendDashboard() {
             Backend Dashboard
           </h1>
           <p className="text-gray-300 text-lg">Staff & Official Management Portal</p>
+          <p className="text-xs text-amber-300/80 mt-2">Admin access only</p>
         </div>
 
         {/* Main Content */}

@@ -1,6 +1,11 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/database';
 import bcrypt from 'bcryptjs';
+import {
+  ADMIN_SESSION_COOKIE,
+  adminCookieOptions,
+  createAdminSessionToken
+} from '@/lib/admin-session';
 
 export async function POST(request: Request) {
   try {
@@ -14,35 +19,24 @@ export async function POST(request: Request) {
       );
     }
 
-    // Find judge by email using database
-    console.log('🌍 DATABASE_URL:', process.env.DATABASE_URL ? 'Set' : 'Not set');
-    
     const judge = await db.getJudgeByEmail(email);
-    console.log('🔍 Login attempt:', { email, foundUser: !!judge });
-    
+
     if (!judge) {
-      console.log('❌ User not found:', email);
       return NextResponse.json(
         { success: false, error: 'Invalid email or password' },
         { status: 401 }
       );
     }
 
-    console.log('👤 Found user:', { id: judge.id, email: judge.email, hasPassword: !!judge.password });
-
-    // Verify password
     const isValidPassword = await bcrypt.compare(password, judge.password);
-    console.log('🔐 Password check:', { email, isValid: isValidPassword });
-    
+
     if (!isValidPassword) {
-      console.log('❌ Invalid password for:', email);
       return NextResponse.json(
         { success: false, error: 'Invalid email or password' },
         { status: 401 }
       );
     }
 
-    // Return judge session data (without password)
     const judgeSession = {
       id: judge.id,
       name: judge.name,
@@ -50,10 +44,22 @@ export async function POST(request: Request) {
       isAdmin: judge.isAdmin
     };
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       judge: judgeSession
     });
+
+    // Server-side Admin cookie — required for /backend, /admin, etc.
+    if (judge.isAdmin) {
+      const token = await createAdminSessionToken({
+        id: judge.id,
+        email: judge.email,
+        name: judge.name
+      });
+      response.cookies.set(ADMIN_SESSION_COOKIE, token, adminCookieOptions());
+    }
+
+    return response;
   } catch (error) {
     console.error('Authentication error:', error);
     return NextResponse.json(
@@ -61,4 +67,4 @@ export async function POST(request: Request) {
       { status: 500 }
     );
   }
-} 
+}

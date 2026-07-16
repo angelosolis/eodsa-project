@@ -1771,8 +1771,13 @@ function AdminDashboard() {
 
 
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     localStorage.removeItem('adminSession');
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' });
+    } catch {
+      // still leave the page even if cookie clear fails
+    }
     router.push('/portal/admin');
   };
 
