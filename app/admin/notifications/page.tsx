@@ -7,6 +7,7 @@ import { ThemeToggle } from '@/components/ui/ThemeToggle';
 import { useToast } from '@/components/ui/simple-toast';
 import { usePhase2Feature } from '@/hooks/usePhase2Feature';
 import FeatureUnavailable from '@/components/FeatureUnavailable';
+import { AdminAccessSplash, useRequireAdminSession } from '@/hooks/useRequireAdminSession';
 
 type RecipientGroup =
   | 'dancers'
@@ -33,10 +34,7 @@ function AdminNotificationsPageContent() {
   const themeClasses = getThemeClasses(theme);
   const { isEnabled: isPhase2Enabled, isLoading: isLoadingFlag } = usePhase2Feature();
   const { success, error, info } = useToast();
-  
-  if (!isLoadingFlag && !isPhase2Enabled) {
-    return <FeatureUnavailable featureName="Admin Notifications" />;
-  }
+  const { authorized, checking, admin } = useRequireAdminSession();
 
   const [user, setUser] = useState<any>(null);
   const [isLoadingUser, setIsLoadingUser] = useState(true);
@@ -69,31 +67,20 @@ function AdminNotificationsPageContent() {
     { id: 'Northern Cape', name: 'Northern Cape' }
   ];
 
-  // Admin auth check
+  // Admin cookie session
   useEffect(() => {
-    const session = localStorage.getItem('adminSession');
-    if (!session) {
-      router.push('/portal/admin');
-      return;
-    }
-
-    try {
-      const userData = JSON.parse(session);
-      setUser(userData);
-      if (!userData.isAdmin) {
-        router.push('/portal/admin');
-        return;
-      }
-    } catch {
-      router.push('/portal/admin');
-      return;
-    } finally {
+    if (checking) return;
+    if (!authorized || !admin) {
       setIsLoadingUser(false);
+      return;
     }
-  }, [router]);
+    setUser(admin);
+    setIsLoadingUser(false);
+  }, [authorized, checking, admin]);
 
   // Load events for the event participants selector
   useEffect(() => {
+    if (!authorized) return;
     const loadEvents = async () => {
       setIsLoadingEvents(true);
       try {
@@ -116,7 +103,7 @@ function AdminNotificationsPageContent() {
     };
 
     loadEvents();
-  }, []);
+  }, [authorized]);
 
   // Keep editor in sync when bodyHtml changes (e.g. on initial load / reset)
   useEffect(() => {
@@ -193,14 +180,13 @@ function AdminNotificationsPageContent() {
     }
   };
 
-  if (isLoadingUser) {
+  if (!isLoadingFlag && !isPhase2Enabled) {
+    return <FeatureUnavailable featureName="Admin Notifications" />;
+  }
+
+  if (checking || !authorized || isLoadingUser) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-950">
-        <div className="text-center space-y-3">
-          <div className="h-10 w-10 rounded-full border-2 border-indigo-400 border-t-transparent animate-spin mx-auto" />
-          <p className="text-slate-300 text-sm">Loading admin notifications...</p>
-        </div>
-      </div>
+      <AdminAccessSplash message={isLoadingUser || checking ? 'Verifying admin access…' : 'Redirecting…'} />
     );
   }
 

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { usePhase2Feature } from '@/hooks/usePhase2Feature';
 import FeatureUnavailable from '@/components/FeatureUnavailable';
+import { AdminAccessSplash, useRequireAdminSession } from '@/hooks/useRequireAdminSession';
 
 interface EventEntry {
   id: string;
@@ -24,6 +25,7 @@ interface EventEntry {
 
 export default function EventTypeManagerPage() {
   const { isEnabled: isPhase2Enabled, isLoading: isLoadingFlag } = usePhase2Feature();
+  const { authorized, checking } = useRequireAdminSession();
   const [entries, setEntries] = useState<EventEntry[]>([]);
   const [filteredEntries, setFilteredEntries] = useState<EventEntry[]>([]);
   const [events, setEvents] = useState<any[]>([]);
@@ -36,15 +38,10 @@ export default function EventTypeManagerPage() {
   const [errorMessage, setErrorMessage] = useState('');
 
   useEffect(() => {
-    if (!isLoadingFlag && !isPhase2Enabled) {
-      return;
-    }
+    if (checking || !authorized) return;
+    if (!isLoadingFlag && !isPhase2Enabled) return;
     loadData();
-  }, [isLoadingFlag, isPhase2Enabled]);
-  
-  if (!isLoadingFlag && !isPhase2Enabled) {
-    return <FeatureUnavailable featureName="Event Type Manager" />;
-  }
+  }, [isLoadingFlag, isPhase2Enabled, authorized, checking]);
 
   useEffect(() => {
     applyFilters();
@@ -169,6 +166,14 @@ export default function EventTypeManagerPage() {
     live: Array.isArray(entries) ? entries.filter(e => e.entryType === 'live').length : 0,
     virtual: Array.isArray(entries) ? entries.filter(e => e.entryType === 'virtual').length : 0,
   };
+
+  if (!isLoadingFlag && !isPhase2Enabled) {
+    return <FeatureUnavailable featureName="Event Type Manager" />;
+  }
+
+  if (checking || !authorized) {
+    return <AdminAccessSplash />;
+  }
 
   if (isLoading) {
     return (

@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import ForgotPasswordLink from '@/app/components/ForgotPasswordLink';
 
@@ -13,7 +13,6 @@ function AdminPortalLogin() {
   });
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [isSyncing, setIsSyncing] = useState(true);
   const [error, setError] = useState('');
 
   const nextParam = searchParams.get('next');
@@ -21,56 +20,6 @@ function AdminPortalLogin() {
     nextParam && nextParam.startsWith('/') && !nextParam.startsWith('//')
       ? nextParam
       : '/admin';
-
-  // Mint httpOnly cookie from legacy localStorage session when possible
-  useEffect(() => {
-    let cancelled = false;
-
-    const syncExistingSession = async () => {
-      try {
-        const cookieCheck = await fetch('/api/auth/admin-session', { method: 'GET' });
-        if (cookieCheck.ok) {
-          if (!cancelled) router.replace(nextPath);
-          return;
-        }
-
-        const raw = localStorage.getItem('adminSession');
-        if (!raw) {
-          if (!cancelled) setIsSyncing(false);
-          return;
-        }
-
-        const parsed = JSON.parse(raw);
-        if (!parsed?.isAdmin || !parsed?.id) {
-          localStorage.removeItem('adminSession');
-          if (!cancelled) setIsSyncing(false);
-          return;
-        }
-
-        const res = await fetch('/api/auth/admin-session', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ adminSession: raw })
-        });
-        const data = await res.json();
-        if (data.success) {
-          localStorage.setItem('adminSession', JSON.stringify(data.admin));
-          if (!cancelled) router.replace(nextPath);
-          return;
-        }
-
-        localStorage.removeItem('adminSession');
-      } catch {
-        // show login form
-      }
-      if (!cancelled) setIsSyncing(false);
-    };
-
-    syncExistingSession();
-    return () => {
-      cancelled = true;
-    };
-  }, [router, nextPath]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -107,14 +56,6 @@ function AdminPortalLogin() {
     }));
   };
 
-  if (isSyncing) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-emerald-900 via-teal-900 to-cyan-900 flex items-center justify-center">
-        <p className="text-emerald-100 text-sm">Checking admin session…</p>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-emerald-900 via-teal-900 to-cyan-900 relative overflow-hidden">
       <div className="absolute inset-0">
@@ -132,7 +73,7 @@ function AdminPortalLogin() {
             <p className="text-emerald-300 text-sm sm:text-base px-4">System Administration Portal</p>
             {nextParam && (
               <p className="text-amber-200 text-xs mt-2 px-4">
-                Admin login required to access internal tools
+                Enter your Admin email and password to continue
               </p>
             )}
           </div>

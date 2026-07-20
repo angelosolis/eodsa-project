@@ -10,6 +10,7 @@ import RealtimeUpdates from '@/components/RealtimeUpdates';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
 import { usePhase2Feature } from '@/hooks/usePhase2Feature';
 import FeatureUnavailable from '@/components/FeatureUnavailable';
+import { AdminAccessSplash, useRequireAdminSession } from '@/hooks/useRequireAdminSession';
 
 interface EventEntry {
   id: string;
@@ -56,15 +57,12 @@ function SoundTechPage() {
   const { theme } = useTheme();
   const themeClasses = getThemeClasses(theme);
   const { isEnabled: isPhase2Enabled, isLoading: isLoadingFlag } = usePhase2Feature();
+  const { authorized, checking } = useRequireAdminSession();
   const router = useRouter();
   const { success, error } = useToast();
   const [entries, setEntries] = useState<EventEntry[]>([]);
   const [events, setEvents] = useState<Event[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  
-  if (!isLoadingFlag && !isPhase2Enabled) {
-    return <FeatureUnavailable featureName="Sound Tech" />;
-  }
   const [selectedEvent, setSelectedEvent] = useState<string>('all');
   const [entryTypeFilter, setEntryTypeFilter] = useState<string>('live');
   const [searchTerm, setSearchTerm] = useState('');
@@ -79,12 +77,7 @@ function SoundTechPage() {
   } | null>(null);
 
   useEffect(() => {
-    // Check admin authentication
-    const session = localStorage.getItem('adminSession');
-    if (!session) {
-      router.push('/portal/admin');
-      return;
-    }
+    if (!authorized) return;
 
     // Load local completion state from localStorage
     const savedCompletions = localStorage.getItem('soundDeskCompletions');
@@ -98,7 +91,7 @@ function SoundTechPage() {
     }
 
     fetchData();
-  }, [router]);
+  }, [authorized]);
 
   // Save completion state to localStorage whenever it changes
   useEffect(() => {
@@ -347,6 +340,13 @@ function SoundTechPage() {
       await fetchData();
     }
   };
+
+  if (!isLoadingFlag && !isPhase2Enabled) {
+    return <FeatureUnavailable featureName="Sound Tech" />;
+  }
+  if (checking || !authorized) {
+    return <AdminAccessSplash />;
+  }
 
   return (
     <RealtimeUpdates

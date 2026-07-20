@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { useToast } from '@/components/ui/simple-toast';
 import { useAlert } from '@/components/ui/custom-alert';
+import { AdminAccessSplash, useRequireAdminSession } from '@/hooks/useRequireAdminSession';
 
 interface ArchivedEvent {
   id: string;
@@ -18,9 +18,9 @@ interface ArchivedEvent {
 }
 
 export default function BackendArchivedPage() {
-  const router = useRouter();
   const { success, error } = useToast();
   const { showConfirm } = useAlert();
+  const { authorized, checking, admin } = useRequireAdminSession();
 
   const [events, setEvents] = useState<ArchivedEvent[]>([]);
   const [loading, setLoading] = useState(true);
@@ -31,23 +31,9 @@ export default function BackendArchivedPage() {
   const [restoringId, setRestoringId] = useState<string | null>(null);
 
   useEffect(() => {
-    const session = localStorage.getItem('adminSession');
-    if (!session) {
-      router.push('/portal/admin');
-      return;
-    }
-    try {
-      const admin = JSON.parse(session);
-      if (!admin.isAdmin) {
-        router.push('/backend');
-        return;
-      }
-    } catch {
-      router.push('/portal/admin');
-      return;
-    }
+    if (!authorized) return;
     loadArchived();
-  }, [router]);
+  }, [authorized]);
 
   const loadArchived = async () => {
     setLoading(true);
@@ -77,15 +63,16 @@ export default function BackendArchivedPage() {
 
   const restore = async (event: ArchivedEvent) => {
     showConfirm(`Restore “${event.name}” to the active Events list?`, async () => {
+      if (!admin?.id) {
+        error('Admin session expired. Please log in again.');
+        return;
+      }
       setRestoringId(event.id);
       try {
-        const session = localStorage.getItem('adminSession');
-        if (!session) return;
-        const admin = JSON.parse(session);
         const res = await fetch(`/api/events/${event.id}/restore`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ adminSession: session, adminId: admin.id })
+          body: JSON.stringify({ adminId: admin.id, adminSession: admin })
         });
         const data = await res.json();
         if (data.success) {
@@ -104,18 +91,19 @@ export default function BackendArchivedPage() {
 
   const confirmPurge = async () => {
     if (!purgeEvent || purgeText !== 'PURGE') return;
+    if (!admin?.id) {
+      error('Admin session expired. Please log in again.');
+      return;
+    }
     setPurging(true);
     try {
-      const session = localStorage.getItem('adminSession');
-      if (!session) return;
-      const admin = JSON.parse(session);
       const res = await fetch(`/api/events/${purgeEvent.id}/purge-media`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           confirmation: 'PURGE',
-          adminSession: session,
-          adminId: admin.id
+          adminId: admin.id,
+          adminSession: admin
         })
       });
       const data = await res.json();
@@ -135,6 +123,10 @@ export default function BackendArchivedPage() {
   };
 
   const purgedCount = events.filter((e) => e.mediaPurgedAt).length;
+
+  if (checking || !authorized) {
+    return <AdminAccessSplash />;
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900">

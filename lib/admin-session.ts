@@ -5,6 +5,8 @@
 
 export const ADMIN_SESSION_COOKIE = 'eodsa_admin_session';
 export const ADMIN_SESSION_MAX_AGE_SEC = 60 * 60 * 12; // 12 hours
+/** Bump to invalidate cookies minted before password-only login was enforced. */
+export const ADMIN_SESSION_VERSION = 2;
 
 export type AdminSessionPayload = {
   id: string;
@@ -12,6 +14,7 @@ export type AdminSessionPayload = {
   name?: string;
   isAdmin: true;
   exp: number;
+  v: number;
 };
 
 function getSecret(): string {
@@ -80,7 +83,8 @@ export async function createAdminSessionToken(admin: {
     email: admin.email,
     name: admin.name,
     isAdmin: true,
-    exp: Math.floor(Date.now() / 1000) + ADMIN_SESSION_MAX_AGE_SEC
+    exp: Math.floor(Date.now() / 1000) + ADMIN_SESSION_MAX_AGE_SEC,
+    v: ADMIN_SESSION_VERSION
   };
   const body = toBase64Url(new TextEncoder().encode(JSON.stringify(payload)));
   const sig = await hmacSign(body);
@@ -101,6 +105,7 @@ export async function verifyAdminSessionToken(
     const json = new TextDecoder().decode(fromBase64Url(body));
     const payload = JSON.parse(json) as AdminSessionPayload;
     if (!payload?.isAdmin || !payload.id || !payload.exp) return null;
+    if (payload.v !== ADMIN_SESSION_VERSION) return null;
     if (payload.exp < Math.floor(Date.now() / 1000)) return null;
     return payload;
   } catch {

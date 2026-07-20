@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { useToast } from '@/components/ui/simple-toast';
+import { AdminAccessSplash, useRequireAdminSession } from '@/hooks/useRequireAdminSession';
 
 interface ActivityLog {
   id: string;
@@ -15,8 +15,8 @@ interface ActivityLog {
 }
 
 export default function BackendLogsPage() {
-  const router = useRouter();
   const { error } = useToast();
+  const { authorized, checking, admin } = useRequireAdminSession();
 
   const [logs, setLogs] = useState<ActivityLog[]>([]);
   const [loading, setLoading] = useState(true);
@@ -24,23 +24,9 @@ export default function BackendLogsPage() {
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
 
   useEffect(() => {
-    const session = localStorage.getItem('adminSession');
-    if (!session) {
-      router.push('/portal/admin');
-      return;
-    }
-    try {
-      const admin = JSON.parse(session);
-      if (!admin.isAdmin) {
-        router.push('/backend');
-        return;
-      }
-    } catch {
-      router.push('/portal/admin');
-      return;
-    }
+    if (!authorized) return;
     loadLogs();
-  }, [router]);
+  }, [authorized]);
 
   const loadLogs = async () => {
     setLoading(true);
@@ -48,8 +34,7 @@ export default function BackendLogsPage() {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 12000);
     try {
-      const session = localStorage.getItem('adminSession');
-      const adminId = session ? JSON.parse(session).id : '';
+      const adminId = admin?.id || '';
       const res = await fetch(
         `/api/admin/activity-logs?limit=100&adminId=${encodeURIComponent(adminId || '')}`,
         { signal: controller.signal }
@@ -77,6 +62,10 @@ export default function BackendLogsPage() {
   const categories = Array.from(new Set(logs.map((l) => l.category))).sort();
   const filtered =
     categoryFilter === 'all' ? logs : logs.filter((l) => l.category === categoryFilter);
+
+  if (checking || !authorized) {
+    return <AdminAccessSplash />;
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900">
